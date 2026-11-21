@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
 import { useQueryClient } from "@tanstack/react-query";
@@ -111,6 +112,7 @@ export function KanbanBoard({
   somenteLeitura = false,
 }: KanbanBoardProps) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   const useExternal = stagesProp !== undefined && leadsProp !== undefined;
   const queryResult = useBoard(useExternal ? null : pipelineId);
   // O funil INTEIRO, sem o filtro da página: com `leads` vindo de fora esse
@@ -382,6 +384,7 @@ export function KanbanBoard({
       <div
         className="flex min-h-0 flex-1 items-start gap-3 overflow-auto px-4 pb-4"
         data-quadro-do-funil
+        data-rd-pipeline={rd("quadro")}
       >
         {/* A FAIXA entre o rolo e as colunas (#3030). O contêiner de fora é o
             único que rola; esta faixa é quem dá altura às colunas. Com o

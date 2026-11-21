@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { Draggable } from "@hello-pangea/dnd";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { MouseEvent } from "react";
@@ -115,6 +116,7 @@ export function KanbanCard({
   linhas,
 }: KanbanCardProps) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   // Mover etapa é permissão por perfil (a rota é quem barra): sem ela o card não arrasta.
   const podeMover = usePermission("negocios.mover");
   const value = formatValor(card.valueCents, card.currency);
@@ -196,6 +198,7 @@ export function KanbanCard({
           // `data-densidade` é o observável da densidade: o teste de tela mede
           // o card, não o estado do React.
           data-densidade={denso ? "compacta" : "confortavel"}
+          data-rd-pipeline={rd("cartao")}
           className={cn(
             "group relative overflow-hidden rounded-md border border-border bg-surface",
             denso ? "py-1.5 pl-2.5 pr-2" : "py-2.5 pl-3 pr-3",
@@ -285,6 +288,7 @@ export function KanbanCard({
                 // Compacto: UMA linha, com o texto inteiro no `title` (e no
                 // dossiê). O dado não some — some a segunda linha.
                 title={denso ? card.title : undefined}
+                data-rd-pipeline={rd("cartao-titulo")}
                 className={cn(
                   "text-sm font-medium leading-5 text-text",
                   denso ? "line-clamp-1 h-5" : "line-clamp-2 h-10",
@@ -406,6 +410,7 @@ export function KanbanCard({
 
           {/* ④ dono (+ selo de tarefas) · ⑤ tempo no estágio */}
           <div
+            data-rd-pipeline={rd("cartao-rodape")}
             className={cn(
               "flex items-center justify-between gap-2",
               denso ? "mt-1 h-5" : "mt-1 h-6",

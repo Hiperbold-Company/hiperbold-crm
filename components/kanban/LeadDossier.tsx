@@ -1,5 +1,6 @@
 "use client";
 
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useEffect, useRef, useState } from "react";
 
@@ -115,6 +116,7 @@ export function LeadDossier({
 }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  const rd = useMarcaDoPipeline();
   // Sem prop, nenhum botão: quem abre o dossiê TEM o funil em mão (o quadro, a
   // lista e o calendário passam `atalhos`) e é de lá que sai o `settings`. Ler
   // o cache do react-query aqui dentro custaria um `QueryClientProvider`
@@ -203,13 +205,17 @@ export function LeadDossier({
         // têm a mesma aparência, e no dossiê a segunda é ainda mais crível —
         // negócio sem novidade é um estado normal.
         data-refetch-divergencias={timeline.seguranca.divergencias}
+        data-rd-pipeline={rd("ficha")}
       >
         <SheetHeader className="pb-3">
           <SheetTitle className="text-base leading-6">{lead.title}</SheetTitle>
         </SheetHeader>
 
         {/* ① cabeçalho vivo */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-3 text-xs">
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-3 text-xs"
+          data-rd-pipeline={rd("ficha-resumo")}
+        >
           <span className="font-medium tabular-nums text-text">
             {formatValor(lead.value_cents, lead.currency)}
           </span>
