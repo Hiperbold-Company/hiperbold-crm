@@ -38,7 +38,7 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
       data-moldura="redesign"
       className="sticky top-[var(--faixas-de-cima,0px)] z-20 flex min-h-14 items-center gap-2 border-b border-border bg-surface px-3 md:px-6"
     >
-      <div className="flex min-w-0 items-center gap-2 md:hidden">
+      <div className={cn("flex min-w-0 items-center gap-2", abas.length > 0 && "md:hidden")}>
         {nav.titulo && (
           <span className="truncate text-base font-semibold">{t(nav.titulo)}</span>
         )}
