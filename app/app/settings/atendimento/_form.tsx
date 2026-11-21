@@ -33,6 +33,7 @@ import {
   type RoutingMode,
 } from "@/lib/schemas/routing";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 export interface AtendimentoConfig {
   mode: RoutingMode;
@@ -159,6 +160,7 @@ function Escolha({
 }
 
 export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [form, setForm] = useState<AtendimentoConfig>(initial);
   const [salvo, setSalvo] = useState<AtendimentoConfig>(initial);
@@ -193,7 +195,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
 
   return (
     <form onSubmit={salvar} className="flex max-w-3xl flex-col gap-6" data-testid="form-atendimento">
-      <Card className="space-y-4 p-4">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4">
         <div>
           <h2 className="text-sm font-semibold">{t("Quem recebe o cliente novo")}</h2>
           <p className="text-xs text-muted-foreground">
@@ -256,7 +258,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         ) : null}
       </Card>
 
-      <Card className="space-y-4 p-4">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4">
         <div>
           <h2 className="text-sm font-semibold">{t("O que cada atendente enxerga")}</h2>
           <p className="text-xs text-muted-foreground">
@@ -292,7 +294,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         ) : null}
       </Card>
 
-      <Card className="space-y-4 p-4" data-testid="devolucao-ao-agente">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4" data-testid="devolucao-ao-agente">
         <div>
           <h2 className="text-sm font-semibold">{t("Quando a pessoa some, a IA volta?")}</h2>
           <p className="text-xs text-muted-foreground">
@@ -347,7 +349,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         ) : null}
       </Card>
 
-      <Card className="space-y-4 p-4" data-testid="silencio-apos-resposta-pelo-celular">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4" data-testid="silencio-apos-resposta-pelo-celular">
         <div>
           <h2 className="text-sm font-semibold">
             {t("Quando alguém responde pelo celular, a IA espera quanto tempo?")}
@@ -381,7 +383,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         </div>
       </Card>
 
-      <Card className="space-y-4 p-4" data-testid="conversa-fica-com-quem-atendeu">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4" data-testid="conversa-fica-com-quem-atendeu">
         <div>
           <h2 className="text-sm font-semibold">
             {t("Quando alguém responde, a conversa fica com essa pessoa?")}
@@ -413,7 +415,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         </label>
       </Card>
 
-      <Card className="space-y-4 p-4" data-testid="conexao-ao-abrir">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4" data-testid="conexao-ao-abrir">
         <div>
           <h2 className="text-sm font-semibold">{t("Por qual conexão o atendente abre a conversa")}</h2>
           <p className="text-xs text-muted-foreground">
@@ -440,7 +442,7 @@ export function AtendimentoForm({ initial }: { initial: AtendimentoConfig }) {
         </div>
       </Card>
 
-      <Card className="space-y-4 p-4" data-testid="dono-ao-mover">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-4 p-4" data-testid="dono-ao-mover">
         <div>
           <h2 className="text-sm font-semibold">{t("Negócio sem responsável")}</h2>
           <p className="text-xs text-muted-foreground">

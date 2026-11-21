@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
 import { ajustarLogo } from "@/lib/branding/ajuste-de-logo";
 import { lonaDoNavegador } from "@/lib/branding/lona-do-navegador";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 interface Props {
   /** A URL pública da logo hoje gravada, ou `null`. */
@@ -41,6 +42,7 @@ const RAZAO_DO_TETO =
   "O logo precisa ter até 512 KB. Arquivo maior vai inteiro para o navegador em toda página.";
 
 export function LogoDaEmpresaForm({ logoUrl, nome, marcaPropriaLigada }: Props) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const router = useRouter();
   const entrada = useRef<HTMLInputElement>(null);
@@ -108,7 +110,7 @@ export function LogoDaEmpresaForm({ logoUrl, nome, marcaPropriaLigada }: Props) 
 
   return (
     <div id="logo-da-empresa" className="max-w-2xl scroll-mt-6" data-logo-da-empresa="">
-      <Card className="space-y-3 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
         <h2 className="text-sm font-medium">{t("Logo da empresa")}</h2>
         <p className="text-xs text-muted-foreground">
           {t("A logo aparece num círculo ao lado do nome da empresa, no seletor de empresas do menu. Sem logo, o círculo mostra as iniciais.")}

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
 import { lerInterface } from "@/lib/navigation/interface";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 interface Props {
   /** O que está gravado hoje em `organizations.interface_settings`. */
@@ -30,6 +31,7 @@ interface Props {
  * concede nem tira acesso. Desligada é o padrão de quem nunca abriu esta tela.
  */
 export function InboxDaEmpresaForm({ initial }: Props) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [ligado, setLigado] = useState(() => lerInterface(initial).settings.bloquearAteAssumir === true);
   const [isPending, startTransition] = useTransition();
@@ -47,7 +49,7 @@ export function InboxDaEmpresaForm({ initial }: Props) {
   }
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-4">
       <h2 className="text-sm font-medium">{t("Inbox")}</h2>
       <p className="text-xs text-muted-foreground">
         {t(

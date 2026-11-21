@@ -4842,3 +4842,157 @@
   }
 }
 /* redesign: plataforma — fim ─────────────────────── */
+
+/* redesign: ajustes ───────────────────────────────
+   Equipe, Meu plano e as seções de Configurações no redesign Hiperbold,
+   protótipo v49 (Equipe, MeuPlano, Faturamento, Tags e afins).
+
+   Os componentes são os de sempre; com a chave ligada cada peça ganha
+   `data-rd-ajustes="<peça>"` (`lib/redesign/ajustes.ts`). TODA regra começa por
+   `[data-redesign="ligado"]` — desligada, nenhuma casa, e
+   `tests/unit/redesign-ajustes.test.tsx` cobra isso. Não mexe em max-width nem
+   em padding de raiz que a tela já declara; o cartão em si (borda, raio) vem
+   do bloco `redesign: configuracoes`.
+   ───────────────────────────────────────────── */
+
+/* O cabeçalho: título 22/26 em 700 e a frase de apoio em cinza. */
+[data-redesign="ligado"] [data-rd-ajustes="cabecalho"] h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: normal;
+  color: var(--color-text);
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-ajustes="cabecalho"] h1 {
+    font-size: 26px;
+  }
+}
+[data-redesign="ligado"] [data-rd-ajustes="cabecalho"] p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* As abas da Equipe: sublinhado no ativo, como o protótipo, em vez de pílula. */
+[data-redesign="ligado"] [data-rd-ajustes="abas"] {
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0;
+  gap: 20px;
+  justify-content: flex-start;
+}
+[data-redesign="ligado"] [data-rd-ajustes="abas"] [data-slot="tabs-trigger"] {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  padding-inline: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-ajustes="abas"] [data-slot="tabs-trigger"]:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-ajustes="abas"] [data-slot="tabs-trigger"][data-state="active"] {
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* A lista de pessoas e de convites: cartão de 12px, cabeçalho em caixa-alta, linhas separadas por fio. */
+[data-redesign="ligado"] [data-rd-ajustes="lista"] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+[data-redesign="ligado"] [data-rd-ajustes="lista"] [data-slot="table-head"] {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-ajustes="lista"] [data-slot="table-row"] {
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-ajustes="lista"] [data-slot="table-row"]:hover {
+  background: var(--color-surface-elevated);
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-ajustes="lista"] [data-slot="table-head"] {
+    padding-block: 10px;
+  }
+  [data-redesign="ligado"] [data-rd-ajustes="lista"] [data-slot="table-cell"] {
+    padding-block: 12px;
+  }
+}
+
+/* Convites pendentes: título de seção com peso e a frase de apoio no tom certo. */
+[data-redesign="ligado"] [data-rd-ajustes="convites"] > div:first-child h2 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-ajustes="convites"] > div:first-child p {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+/* Seção de formulário (cartão de Configurações): rótulo 14/500 e campo de borda forte, raio 8. */
+[data-redesign="ligado"] [data-rd-ajustes="secao"] label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-ajustes="secao"] input:is([type="text"], [type="url"], [type="email"], [type="number"], [type="search"], [type="password"], [type="tel"]),
+[data-redesign="ligado"] [data-rd-ajustes="secao"] textarea {
+  border-color: var(--color-border-strong);
+  border-radius: 8px;
+}
+[data-redesign="ligado"] [data-rd-ajustes="secao"] input:is([type="text"], [type="url"], [type="email"], [type="number"], [type="search"], [type="password"], [type="tel"]):focus-visible,
+[data-redesign="ligado"] [data-rd-ajustes="secao"] textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-ajustes="secao"] :is(input, textarea):disabled {
+  opacity: 0.55;
+}
+[data-redesign="ligado"] [data-rd-ajustes="secao"] [data-slot="card-title"] {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* Meu plano: cartões de plano e de uso, linhas separadas por fio e barras de 8px. */
+[data-redesign="ligado"] [data-rd-ajustes="cartao-do-plano"],
+[data-redesign="ligado"] [data-rd-ajustes="cartao-de-uso"] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-ajustes="cartao-de-uso"] [data-slot="card-title"],
+[data-redesign="ligado"] [data-rd-ajustes="cartao-do-plano"] [data-slot="card-title"] {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+[data-redesign="ligado"] [data-rd-ajustes="linha-de-uso"] > div:first-child > span:first-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-ajustes="barra-de-uso"] {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-elevated);
+}
+/* redesign: ajustes — fim ─────────────────────── */

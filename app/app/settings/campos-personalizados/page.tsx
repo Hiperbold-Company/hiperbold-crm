@@ -16,6 +16,8 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { CamposPersonalizadosClient } from "./_client";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignLigado } from "@/lib/redesign/chave";
 
 export const metadata = { title: "Campos Personalizados" };
 export const dynamic = "force-dynamic";
@@ -37,7 +39,7 @@ export default async function CamposPersonalizadosPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto md:p-6">
-      <header>
+      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Campos Personalizados")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t(

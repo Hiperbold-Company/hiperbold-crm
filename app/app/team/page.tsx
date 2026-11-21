@@ -15,6 +15,8 @@ import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { SectorsClient } from "./_components/SectorsClient";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignLigado } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Equipe" };
@@ -55,9 +57,11 @@ export default async function TeamPage({
   const isAdmin = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
   const isManager = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
 
+  const rd = marcaDosAjustes(redesignLigado());
+
   return (
-    <div className="flex h-full flex-col gap-6 md:p-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div data-rd-ajustes={rd("pagina")} className="flex h-full flex-col gap-6 md:p-6">
+      <header data-rd-ajustes={rd("cabecalho")} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">{t("Equipe")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -73,7 +77,7 @@ export default async function TeamPage({
       </header>
 
       <Tabs defaultValue={abaInicial === "permissions" && !isManager ? "members" : abaInicial} className="flex flex-1 flex-col">
-        <TabsList>
+        <TabsList data-rd-ajustes={rd("abas")}>
           <TabsTrigger value="members">{t("Membros")}</TabsTrigger>
           <TabsTrigger value="attendants">{t("Atendimento")}</TabsTrigger>
           {/* Permissões por perfil: gerente vê em modo leitura (sabe o que pode),

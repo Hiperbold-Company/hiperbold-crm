@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
 import { perfilDaEmpresaSchema, TAMANHO_MAXIMO_DO_QUE_FAZ } from "@/lib/schemas/perfil-da-empresa";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 interface Props {
   /** `onboarding_state.welcome.o_que_faz` hoje, ou vazio. */
@@ -18,6 +19,7 @@ interface Props {
 
 /** Configurações › Empresa › "O que a empresa faz": o passo "Perfil da empresa" do Início termina aqui. */
 export function PerfilDaEmpresaForm({ initial }: Props) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [oQueFaz, setOQueFaz] = useState(initial);
   const [isPending, startTransition] = useTransition();
@@ -38,7 +40,7 @@ export function PerfilDaEmpresaForm({ initial }: Props) {
 
   return (
     <form id="perfil-da-empresa" onSubmit={salvar} className="max-w-2xl scroll-mt-6">
-      <Card className="space-y-3 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
         <h2 className="text-sm font-medium">{t("Perfil da empresa")}</h2>
         <p className="text-xs text-muted-foreground">
           {t("Conte, do seu jeito, o que sua empresa faz. O agente de IA usa isso para falar do seu negócio. O fuso horário fica logo acima.")}

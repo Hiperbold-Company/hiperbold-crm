@@ -90,6 +90,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { redesignLigado } from "@/lib/redesign/chave";
 import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assinaturaCancelada, estadoDoReembolso, type EstadoDoReembolso } from "@/lib/billing/reembolso/regras";
 import { pagamentosReembolsaveis } from "@/lib/billing/reembolso/elegiveis";
@@ -230,6 +231,7 @@ export default async function PlanoEUsoPage() {
       : { tipo: "oculto" };
 
   const rd = marcaDasConfiguracoes(redesignLigado());
+  const ra = marcaDosAjustes(redesignLigado());
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
@@ -281,7 +283,7 @@ export default async function PlanoEUsoPage() {
         </div>
       )}
 
-      <Card>
+      <Card data-rd-ajustes={ra("cartao-de-uso")}>
         <CardContent className="divide-y divide-border/60 p-6">
           {linhas.map((linha) => (
             <LinhaDeUso key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
@@ -289,7 +291,7 @@ export default async function PlanoEUsoPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-rd-ajustes={ra("cartao-de-uso")}>
         <CardHeader>
           <CardTitle>{t("O que o plano inclui")}</CardTitle>
         </CardHeader>
@@ -300,7 +302,7 @@ export default async function PlanoEUsoPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-rd-ajustes={ra("cartao-de-uso")}>
         <CardHeader>
           <CardTitle>{t("Tokens de IA")}</CardTitle>
         </CardHeader>
@@ -369,7 +371,7 @@ function CartaoDaAssinatura({
   const semPlano = contratoSemPlano(contrato);
 
   return (
-    <Card>
+    <Card data-rd-ajustes={marcaDosAjustes(redesignLigado())("cartao-do-plano")}>
       <CardHeader>
         <CardTitle>{t("Assinatura")}</CardTitle>
       </CardHeader>
@@ -495,7 +497,7 @@ function CartaoDeAssinaturaEPagamento({
   });
 
   return (
-    <Card>
+    <Card data-rd-ajustes={marcaDosAjustes(redesignLigado())("cartao-do-plano")}>
       <CardHeader>
         <CardTitle>{t("Assinatura e pagamento")}</CardTitle>
       </CardHeader>
@@ -664,7 +666,7 @@ function LinhaDeUso({
   const rotulo = t(ROTULO_DA_CHAVE[linha.chave]);
 
   return (
-    <div className="space-y-1.5 py-3 first:pt-0">
+    <div data-rd-ajustes={marcaDosAjustes(redesignLigado())("linha-de-uso")} className="space-y-1.5 py-3 first:pt-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium">{rotulo}</span>
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -684,7 +686,12 @@ function LinhaDeUso({
       </div>
 
       {linha.percentual !== null && (
-        <Progress valor={linha.percentual} rotulo={rotulo} tom={linha.estourou ? "erro" : "marca"} />
+        <Progress
+          data-rd-ajustes={marcaDosAjustes(redesignLigado())("barra-de-uso")}
+          valor={linha.percentual}
+          rotulo={rotulo}
+          tom={linha.estourou ? "erro" : "marca"}
+        />
       )}
 
       {linha.chave === "etapas_por_funil" && (
@@ -740,6 +747,7 @@ function LinhaDoRecurso({
 }) {
   return (
     <div
+      data-rd-ajustes={marcaDosAjustes(redesignLigado())("linha-de-uso")}
       className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0"
       data-testid={`recurso-do-plano-${linha.chave}`}
     >
@@ -822,7 +830,12 @@ function SecaoTokensDeIA({
         )}
 
         {carteira.percentual !== null && (
-          <Progress valor={carteira.percentual} rotulo={t("Consumo do mês")} tom={carteira.estourou ? "erro" : "marca"} />
+          <Progress
+            data-rd-ajustes={marcaDosAjustes(redesignLigado())("barra-de-uso")}
+            valor={carteira.percentual}
+            rotulo={t("Consumo do mês")}
+            tom={carteira.estourou ? "erro" : "marca"}
+          />
         )}
 
         {carteira.saldoNegativo && (
