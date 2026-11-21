@@ -3,6 +3,7 @@
 import { DownloadSimple, Trash, X } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 
 /** A barra que aparece com a seleção: quantos, excluir, exportar, limpar. */
 export function BarraDeSelecaoDeContatos({
@@ -23,11 +24,13 @@ export function BarraDeSelecaoDeContatos({
   onLimpar: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDoRedesign();
   return (
     <div
       role="region"
       aria-label={t("Ações em lote")}
       data-barra-de-selecao
+      data-rd-contatos={rd("selecao")}
       className="flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent/10 p-2"
     >
       <span className="px-1 text-sm font-medium" aria-live="polite">

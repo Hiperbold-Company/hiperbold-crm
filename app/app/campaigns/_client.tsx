@@ -17,11 +17,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCampanhas } from "@/hooks/campanhas/useCampanhas";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 import { Megaphone, Plus } from "@/lib/ui/icons";
 import { STATUS_DA_CAMPANHA } from "@/lib/campanhas/tipos";
 
 export function ListaDeCampanhas() {
   const t = useT();
+  const rd = useMarcaDoRedesign();
   // A data segue quem está lendo, não o idioma de quem escreveu a tela.
   const idioma = useTagDeIdioma();
   const [status, setStatus] = useState<string>("");
@@ -30,11 +32,11 @@ export function ListaDeCampanhas() {
   const campanhas = useMemo(() => q.data?.pages.flatMap((p) => p.data) ?? [], [q.data]);
 
   return (
-    <div className="space-y-4 p-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4 p-6" data-rd-contatos={rd("campanhas")}>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-rd-contatos={rd("cabecalho")}>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Campanhas")}</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight" data-rd-contatos={rd("titulo-area")}>{t("Campanhas")}</h1>
+          <p className="text-sm text-muted-foreground" data-rd-contatos={rd("subtitulo-area")}>
             {t("Escolha o público, escreva a mensagem e acompanhe quem recebeu.")}
           </p>
         </div>
@@ -51,12 +53,13 @@ export function ListaDeCampanhas() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2" data-rd-contatos={rd("filtros")}>
         <label className="text-sm text-muted-foreground" htmlFor="filtro-status">
           {t("Situação")}
         </label>
         <select
           id="filtro-status"
+          data-rd-contatos={rd("campo")}
           className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -96,15 +99,16 @@ export function ListaDeCampanhas() {
         </Card>
       ) : (
         <>
-          <Card className="divide-y divide-border">
+          <Card className="divide-y divide-border" data-rd-contatos={rd("lista-de-cartoes")}>
             {campanhas.map((c) => (
               <Link
                 key={c.id}
                 href={`/app/campaigns/${c.id}`}
                 className="flex flex-col gap-2 p-4 transition-colors hover:bg-surface-elevated sm:flex-row sm:items-center sm:justify-between"
+                data-rd-contatos={rd("item")}
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{c.name}</p>
+                  <p className="truncate font-medium" data-rd-contatos={rd("item-nome")}>{c.name}</p>
                   <p className="text-sm text-muted-foreground">
                     {c.snapshot_eligible > 0
                       ? `${c.snapshot_eligible} ${t("contatos na lista")}`

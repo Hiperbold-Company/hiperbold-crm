@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 
 interface BatchRow {
   id: string;
@@ -29,6 +30,7 @@ interface BatchRow {
 
 export function ImportsListClient() {
   const t = useT();
+  const rd = useMarcaDoRedesign();
   const [rows, setRows] = useState<BatchRow[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -66,15 +68,15 @@ export function ImportsListClient() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-semibold">{t("Importações")}</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="flex flex-col gap-4 p-4 md:p-6" data-rd-contatos={rd("importacoes")}>
+      <div data-rd-contatos={rd("cabecalho")}>
+        <h1 className="text-xl font-semibold" data-rd-contatos={rd("titulo-area")}>{t("Importações")}</h1>
+        <p className="text-sm text-muted-foreground" data-rd-contatos={rd("subtitulo-area")}>
           {t("CSV ou XLSX com empresa, CNPJ, pessoa, cargo, telefone e e-mail.")}
         </p>
       </div>
 
-      <Card className="flex flex-wrap items-end gap-3 p-4">
+      <Card className="flex flex-wrap items-end gap-3 p-4" data-rd-contatos={rd("envio")}>
         <div className="grid gap-1.5">
           <label className="text-sm font-medium">{t("Arquivo")}</label>
           <Input
@@ -89,7 +91,7 @@ export function ImportsListClient() {
         {message ? <p className="w-full text-sm text-muted-foreground">{message}</p> : null}
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden" data-rd-contatos={rd("tabela")}>
         <Table>
           <TableHeader>
             <TableRow>
