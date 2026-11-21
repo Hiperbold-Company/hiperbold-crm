@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 import { Check, PencilSimple, Tag, Users, X } from "@/lib/ui/icons";
 import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
@@ -75,6 +76,7 @@ export function BarraDeContatosEmLote({
   onLimpar,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDoRedesign();
   /** Um diálogo só para as duas faces da etiqueta: `add` ou `remove`. */
   const [etiquetaAberta, setEtiquetaAberta] = useState<false | "add" | "remove">(false);
   const [tag, setTag] = useState("");
@@ -125,6 +127,7 @@ export function BarraDeContatosEmLote({
       role="toolbar"
       aria-label={t("Ações em lote")}
       data-testid="barra-de-contatos-em-lote"
+      data-rd-contatos={rd("lote")}
     >
       <span className="mr-1 text-xs font-medium text-foreground">
         {quantidade === 1

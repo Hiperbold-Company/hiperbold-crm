@@ -6,6 +6,7 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import type { Locale } from "date-fns";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -196,6 +197,7 @@ export function ContactsTable({
 }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoRedesign();
   const orgAtiva = useActiveOrg();
   const clientesLigado = orgAtiva?.cliente_pela_agenda === true;
   // O autocompletar de etiquetas do diálogo de edição (issue #2732): o mesmo
@@ -274,7 +276,7 @@ export function ContactsTable({
 
   return (
     <>
-    <Table className="max-md:block">
+    <Table className="max-md:block" data-rd-contatos={rd("tabela-contatos")}>
       <TableHeader className="max-md:hidden">
         <TableRow>
           {selecao && (
@@ -565,7 +567,7 @@ export function ContactsTable({
     </Table>
 
     <AlertDialog open={alvo !== null} onOpenChange={(open) => { if (!open) setAlvo(null); }}>
-      <AlertDialogContent>
+      <AlertDialogContent data-rd-contatos={rd("dialogo-excluir")}>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("Excluir contato?")}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -579,7 +581,7 @@ export function ContactsTable({
               Agenda — é lá que o compromisso é cancelado.
             */}
             {avisoDeVinculo ? (
-              <span className="mt-2 block text-sm font-medium text-warning-fg">
+              <span className="mt-2 block text-sm font-medium text-warning-fg" data-rd-contatos={rd("aviso-vinculo")}>
                 {avisoDeVinculo}{" "}
                 <Link href="/app/agenda" className="underline">
                   {t("Abrir Agenda")}
