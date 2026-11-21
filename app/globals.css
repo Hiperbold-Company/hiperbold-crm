@@ -4553,7 +4553,7 @@
   font-size: 17px;
   font-weight: 700;
 }
-[data-redesign="ligado"] [data-rd-sistema="documento"] a {
+[data-redesign="ligado"] [data-rd-sistema="documento"] a:not([data-slot="button"]) {
   color: var(--color-accent);
 }
 
