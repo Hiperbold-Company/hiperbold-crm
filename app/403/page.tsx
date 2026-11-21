@@ -1,3 +1,5 @@
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,15 +20,17 @@ export default async function ForbiddenPage() {
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
 
+  const rd = marcaDoSistema(redesignLigado());
+
   return (
     <IdiomaProvider locale={idioma}>
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <Card className="w-full max-w-md p-8 text-center">
-          <h1 className="text-2xl font-semibold">{traduzir("403 — Sem permissão", idioma)}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <main className="flex min-h-screen items-center justify-center p-8" data-rd-sistema={rd("pagina")}>
+        <Card className="w-full max-w-md p-8 text-center" data-rd-sistema={rd("cartao")}>
+          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>{traduzir("403 — Sem permissão", idioma)}</h1>
+          <p className="mt-2 text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
             {traduzir("Você não tem acesso a essa área.", idioma)}
           </p>
-          <div className="mt-6 flex justify-center gap-2">
+          <div className="mt-6 flex justify-center gap-2" data-rd-sistema={rd("acoes")}>
             <Button asChild variant="outline">
               <Link href="/">{traduzir("Voltar", idioma)}</Link>
             </Button>

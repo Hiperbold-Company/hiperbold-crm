@@ -4570,3 +4570,139 @@
   }
 }
 /* redesign: entrar — fim ─────────────────────── */
+
+/* redesign: sistema ───────────────────────────────
+   As páginas de sistema e públicas no redesign Hiperbold, protótipo v49
+   (PaginasSistema, PaginaSistema404/500/Suspensa, PaginaPrivacidade,
+   PaginaExclusaoDados): cartão centrado de 16px de raio sobre o fundo da
+   página, título de 24px em negrito, texto em cinza e ação no rodapé.
+
+   As páginas são as de sempre; com a chave ligada elas ganham
+   `data-rd-sistema="<peça>"` (`lib/redesign/sistema.ts`). TODA regra começa
+   por `[data-redesign="ligado"]` — desligada, nenhuma casa, e
+   `tests/unit/redesign-sistema.test.tsx` cobra isso. Só variáveis de cor que
+   já existem. Fora de `@layer` de propósito (vence os utilitários).
+   ───────────────────────────────────────────────────────────────────────── */
+
+[data-redesign="ligado"] [data-rd-sistema="pagina"] {
+  background: var(--color-bg);
+  padding: 32px 20px;
+}
+[data-redesign="ligado"] [data-rd-sistema="cartao"] {
+  width: 100%;
+  max-width: 480px;
+  padding: 28px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+[data-redesign="ligado"] [data-rd-sistema="titulo"] {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="texto"] {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-sistema="destaque"] {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="acoes"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-sistema="acoes"] :is(a, button) {
+  min-height: 46px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-sistema="aviso"] {
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-elevated);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="codigo"] {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--color-surface-elevated);
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="erro-id"] {
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="marca"] {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+/* ── Páginas legais: cabeçalho, voltar e documento de leitura ── */
+[data-redesign="ligado"] [data-rd-sistema="cabecalho"] {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-sistema="voltar"] {
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-rd-sistema="voltar"]:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+[data-redesign="ligado"] [data-rd-sistema="voltar"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  border-radius: 4px;
+}
+[data-redesign="ligado"] [data-rd-sistema="documento"] {
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="documento"] h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+[data-redesign="ligado"] [data-rd-sistema="documento"] h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-sistema="documento"] a:not([data-slot="button"]) {
+  color: var(--color-accent);
+}
+
+@media (min-width: 640px) {
+  [data-redesign="ligado"] [data-rd-sistema="cartao"] {
+    padding: 36px 32px;
+  }
+  [data-redesign="ligado"] [data-rd-sistema="documento"] {
+    padding: 36px 40px;
+  }
+}
+/* redesign: sistema — fim ─────────────────────── */

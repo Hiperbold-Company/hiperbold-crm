@@ -1,3 +1,5 @@
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -35,12 +37,14 @@ export default async function AcessoRevogadoPage() {
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
 
+  const rd = marcaDoSistema(redesignLigado());
+
   return (
     <IdiomaProvider locale={idioma}>
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <Card className="w-full max-w-md space-y-4 p-8 text-center">
-          <h1 className="text-2xl font-semibold">{traduzir("Acesso revogado", idioma)}</h1>
-          <p className="text-sm text-muted-foreground">
+      <main className="flex min-h-screen items-center justify-center p-8" data-rd-sistema={rd("pagina")}>
+        <Card className="w-full max-w-md space-y-4 p-8 text-center" data-rd-sistema={rd("cartao")}>
+          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>{traduzir("Acesso revogado", idioma)}</h1>
+          <p className="text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
             {traduzir(
               "Seu acesso a esta organização foi retirado. Se você acredita que isso é um engano, fale com quem administra a empresa — só ela pode devolvê-lo.",
               idioma,
@@ -56,13 +60,13 @@ export default async function AcessoRevogadoPage() {
             `lib/auth/public-paths.ts`), então abrir o link daqui funciona. O que
             faltava era alguém dizer isso.
           */}
-          <p className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm">
+          <p className="rounded-md border border-warning/30 bg-warning-bg px-4 py-3 text-sm" data-rd-sistema={rd("aviso")}>
             {traduzir(
               "Recebeu um convite novo? Abra o link que chegou no seu e-mail — ele funciona mesmo com esta tela aberta, e devolve o seu acesso.",
               idioma,
             )}
           </p>
-          <form action={signOut}>
+          <form action={signOut} data-rd-sistema={rd("acoes")}>
             <Button type="submit" className="w-full">
               {traduzir("Sair", idioma)}
             </Button>
