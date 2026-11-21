@@ -2190,6 +2190,13 @@
   background: var(--color-surface);
   color: var(--color-text-muted);
 }
+/* Fechar do painel lateral (Sheet): o componente usa focus:ring, que acende no
+   foco programático de abertura e deixava um contorno no X a cada painel aberto.
+   No redesign o anel fica só para o teclado (focus-visible). */
+[data-redesign="ligado"] [data-slot="sheet-content"] > button.absolute:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
 /* redesign: componentes — fim */
 
 /* redesign: chat ──────────────────────────────────────────────────────────
