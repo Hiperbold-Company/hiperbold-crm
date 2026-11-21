@@ -38,6 +38,22 @@ export function estaEm(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/**
+ * Telas que o catálogo não lista com o próprio caminho, mas que pertencem a um
+ * destino dele: o quadro de um funil (`/app/pipelines/<id>`) é o Pipeline.
+ * Sem isto a moldura não acha a tela atual e, no celular, a faixa fica sem nome.
+ */
+const CAMINHOS_DE_OUTRO_DESTINO: ReadonlyArray<readonly [string, string]> = [
+  ["/app/pipelines", "/app/kanban"],
+];
+
+export function caminhoNoCatalogo(pathname: string): string {
+  for (const [de, para] of CAMINHOS_DE_OUTRO_DESTINO) {
+    if (estaEm(pathname, de)) return para;
+  }
+  return pathname;
+}
+
 export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
   const pathname = usePathname() ?? "";
   const { user, activeOrg } = useAuth();
@@ -59,8 +75,9 @@ export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
     items: visiveis.filter((d) => d.group === group.id),
   })).filter((g) => g.items.length > 0);
 
+  const caminho = caminhoNoCatalogo(pathname);
   const atual = visiveis
-    .filter((d) => estaEm(pathname, d.href))
+    .filter((d) => estaEm(caminho, d.href))
     .sort((a, b) => b.href.length - a.href.length)[0];
 
   const abasDaArea = atual

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -131,6 +132,7 @@ export function SecaoDoDossie({
   className,
 }: Props) {
   const temConteudoRecolhido = conteudoRecolhido !== undefined;
+  const rd = useMarcaDoPipeline();
 
   return (
     <section
@@ -138,6 +140,7 @@ export function SecaoDoDossie({
       // ORDEM, e aberta ou fechada — sem depender de classe de estilo.
       data-secao={id}
       data-recolhida={recolhida ? "sim" : "nao"}
+      data-rd-pipeline={rd("secao")}
       className={cn("border-b border-border py-3", className)}
     >
       <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">

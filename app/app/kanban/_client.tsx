@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useState } from "react";
 import Link from "next/link";
 
@@ -111,6 +112,7 @@ export function FunisClient({
   bloqueioImportacao?: BloqueioDoBotao;
 }) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   /**
    * O funil de clientes só tem efeito com a regra "Clientes pela agenda" ligada
    * (migration 0262): desligada, o roteamento ignora a marca. Botão e selo
@@ -493,7 +495,7 @@ export function FunisClient({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-rd-pipeline={rd("funis")}>
       {(podeGerenciar || podeImportar) && (
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           {/* A porta da importação fica AQUI, e não numa tela própria: é desta

@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 import { CartaoDaEmpresa } from "./MarcaECartaoDaEmpresa";
 import { TEMAS } from "./MenuDoUsuarioNovo";
-import { estaEm, useNavegacaoDaMoldura } from "./navegacao";
+import { caminhoNoCatalogo, estaEm, useNavegacaoDaMoldura } from "./navegacao";
 import { TodasAsSecoes } from "./TodasAsSecoes";
 
 /**
@@ -71,7 +71,7 @@ export function BarraInferiorNova() {
       <ul className="flex items-stretch px-1 pt-1.5 pb-2">
         {abas.map((aba) => {
           const Icone = aba.icon;
-          const aqui = estaEm(nav.pathname, aba.href);
+          const aqui = estaEm(caminhoNoCatalogo(nav.pathname), aba.href);
           return (
             <li key={aba.href} className="flex min-w-0 flex-1">
               <Link

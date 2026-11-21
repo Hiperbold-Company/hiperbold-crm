@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { CartaoDaEmpresa, MarcaDoMenu } from "./MarcaECartaoDaEmpresa";
 import { MenuDoUsuarioNovo } from "./MenuDoUsuarioNovo";
-import { estaEm, useNavegacaoDaMoldura } from "./navegacao";
+import { caminhoNoCatalogo, estaEm, useNavegacaoDaMoldura } from "./navegacao";
 import { TodasAsSecoes } from "./TodasAsSecoes";
 
 /** Item do trilho: ícone com rótulo curto embaixo (recolhido) ou em linha (aberto). */
@@ -81,7 +81,7 @@ export function MenuLateral({ collapsed }: { collapsed: boolean }) {
         <ul className="flex flex-col gap-0.5">
           {nav.itens.map((item) => {
             const Icone = item.icon;
-            const ativo = estaEm(nav.pathname, item.href);
+            const ativo = estaEm(caminhoNoCatalogo(nav.pathname), item.href);
             return (
               <li key={item.href}>
                 <Link

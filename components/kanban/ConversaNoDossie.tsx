@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -124,6 +125,7 @@ function BlocoDaConversa({
   seletor?: ReactNode;
 }) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
 
   const preview = conversa.preview?.trim();
 
@@ -133,7 +135,7 @@ function BlocoDaConversa({
   // abre a conversa nesta aba; o quadrado, só com o ícone, abre a MESMA
   // conversa numa nova aba e deixa o funil onde estava.
   return (
-    <div className="mt-3 space-y-2">
+    <div className="mt-3 space-y-2" data-rd-pipeline={rd("conversa")}>
     <div className="flex items-stretch gap-2">
       {janela}
       <Link
