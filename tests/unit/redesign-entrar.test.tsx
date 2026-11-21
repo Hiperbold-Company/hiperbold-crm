@@ -68,6 +68,27 @@ describe("redesign: entrar, DOM", () => {
     for (const p of ["pagina", "cabecalho", "conteudo"]) expect(fonte).toContain(`rd("${p}")`);
   });
 
+  it("o painel de marca só existe com a chave ligada, com o nome da instalação (o logo fica no topo do formulário)", async () => {
+    h.ligado = false;
+    const off = await montar();
+    expect(off.container.querySelector("aside")).toBeNull();
+    off.unmount();
+    h.ligado = true;
+    const { container } = await montar();
+    const painel = container.querySelector('aside[data-rd-entrar="painel"]');
+    expect(painel).toBeTruthy();
+    expect(painel?.textContent).toBe("Marca X");
+    expect(painel?.querySelector("img")).toBeNull();
+    // o logo testado pelos e2e continua único
+    expect(container.querySelectorAll('[data-testid="logo-da-fachada"]')).toHaveLength(1);
+  });
+
+  it("/get-started marca página, cartão e painel pela mesma regra", () => {
+    const fonte = readFileSync(join(process.cwd(), "app/get-started/page.tsx"), "utf8");
+    expect(fonte).toContain("marcaDeEntrar(redesignLigado())");
+    for (const p of ["pagina", "cartao", "painel"]) expect(fonte).toContain(`rd("${p}")`);
+  });
+
   it("marcaDeEntrar: ligada devolve a peça, desligada undefined", () => {
     expect(marcaDeEntrar(true)("cartao")).toBe("cartao");
     expect(marcaDeEntrar(false)("cartao")).toBeUndefined();

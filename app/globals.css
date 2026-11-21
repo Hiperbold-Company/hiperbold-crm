@@ -4604,6 +4604,47 @@
     font-size: 24px;
   }
 }
+/* ── Painel de marca (lado direito, só no computador), como no protótipo:
+   formulário à esquerda, sem moldura, com o logo no topo; painel azul à direita ── */
+[data-redesign="ligado"] [data-rd-entrar="painel"] {
+  display: none;
+}
+@media (min-width: 981px) {
+  [data-redesign="ligado"] [data-rd-entrar="pagina"]:has(> [data-rd-entrar="painel"]) {
+    padding-right: calc(46% + 24px);
+    background: var(--color-surface);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="pagina"]:has(> [data-rd-entrar="painel"]) [data-rd-entrar="cartao"] {
+    border-color: transparent;
+    box-shadow: none;
+    background: transparent;
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 46%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 48px 56px;
+    overflow: hidden;
+    color: var(--color-accent-fg);
+    background:
+      radial-gradient(circle at 85% 8%, rgb(255 255 255 / 0.14), transparent 42%),
+      radial-gradient(circle at 12% 92%, rgb(255 255 255 / 0.08), transparent 46%),
+      linear-gradient(150deg, var(--color-accent) 0%, var(--color-accent-hover) 100%);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="painel"] p {
+    margin: 0;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+}
 /* redesign: entrar — fim ─────────────────────── */
 
 /* redesign: sistema ───────────────────────────────

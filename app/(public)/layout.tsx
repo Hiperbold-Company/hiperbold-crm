@@ -66,6 +66,11 @@ export default async function PublicLayout({ children }: { children: React.React
         className="flex min-h-screen items-center justify-center bg-background p-6"
         data-rd-entrar={rd("pagina")}
       >
+        {rd("painel") ? (
+          <aside data-rd-entrar={rd("painel")} aria-hidden="true">
+            <p>{marca.nome}</p>
+          </aside>
+        ) : null}
         <div className="w-full max-w-sm space-y-6" data-rd-entrar={rd("cartao")}>
           {marca.logoUrl || marca.logoDarkUrl ? (
             <div className="flex justify-center" data-rd-entrar={rd("logo")}>

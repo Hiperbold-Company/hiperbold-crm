@@ -11,6 +11,8 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { lerCadastroNaTela, planoInicialDoSeletor } from "@/lib/cobranca/cadastro";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { redesignLigado } from "@/lib/redesign/chave";
+import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 /**
  * A saída do beco: quem confirmou o e-mail e ficou sem organização termina o
@@ -57,6 +59,7 @@ export default async function GetStartedPage() {
   // O nome em texto vem do resolvedor do BANCO (`marcaDaSaida`), não do
   // `branding()` — o banco vence e o `.env` é o piso.
   const marca = await marcaDaSaida(null);
+  const rd = marcaDeEntrar(redesignLigado());
 
   // Os planos do cadastro (#2846): quem chega aqui sem plano escolhido (conta
   // nova pelo Google, ou cadastro anterior à cobrança) escolhe agora. Vem
@@ -70,8 +73,19 @@ export default async function GetStartedPage() {
 
   return (
     <IdiomaProvider locale={idiomaDaTela(user.idioma)}>
-      <main className="bg-muted/40 flex min-h-screen items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md space-y-6 rounded-lg border bg-background p-6 shadow-sm">
+      <main
+        className="bg-muted/40 flex min-h-screen items-center justify-center px-4 py-10"
+        data-rd-entrar={rd("pagina")}
+      >
+        {rd("painel") ? (
+          <aside data-rd-entrar={rd("painel")} aria-hidden="true">
+            <p>{marca.nome}</p>
+          </aside>
+        ) : null}
+        <div
+          className="w-full max-w-md space-y-6 rounded-lg border bg-background p-6 shadow-sm"
+          data-rd-entrar={rd("cartao")}
+        >
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
               {marca.nome}
