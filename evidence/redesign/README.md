@@ -1499,6 +1499,77 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/X3-entrar/depois-ligada/pub_signup-pt-BR-celular.png`
 - `evidence/redesign/X3-entrar/depois-ligada/pub_signup-pt-BR-desktop.png`
 
+## X5-variante
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/X5-variante/antes/ai_followups-en-celular.png`
+- `evidence/redesign/X5-variante/antes/ai_followups-en-desktop.png`
+- `evidence/redesign/X5-variante/antes/ai_followups-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/antes/ai_followups-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/antes/extensions-en-celular.png`
+- `evidence/redesign/X5-variante/antes/extensions-en-desktop.png`
+- `evidence/redesign/X5-variante/antes/extensions-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/antes/extensions-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/antes/kanban-en-celular.png`
+- `evidence/redesign/X5-variante/antes/kanban-en-desktop.png`
+- `evidence/redesign/X5-variante/antes/kanban-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/antes/kanban-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/antes/pipeline-en-celular.png`
+- `evidence/redesign/X5-variante/antes/pipeline-en-desktop.png`
+- `evidence/redesign/X5-variante/antes/pipeline-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/antes/pipeline-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/antes/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/X5-variante/antes/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/X5-variante/antes/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/antes/settings_tenant_pipelines-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/X5-variante/depois-desligada/ai_followups-en-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/ai_followups-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/ai_followups-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/ai_followups-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/extensions-en-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/extensions-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/extensions-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/extensions-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/kanban-en-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/kanban-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/kanban-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/kanban-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/pipeline-en-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/pipeline-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/pipeline-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/pipeline-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-desligada/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-desligada/settings_tenant_pipelines-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/X5-variante/depois-ligada/ai_followups-en-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/ai_followups-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/ai_followups-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/ai_followups-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/extensions-en-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/extensions-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/extensions-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/extensions-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/kanban-en-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/kanban-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/kanban-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/kanban-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/pipeline-en-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/pipeline-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/pipeline-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/pipeline-pt-BR-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/X5-variante/depois-ligada/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/X5-variante/depois-ligada/settings_tenant_pipelines-pt-BR-desktop.png`
+
 ## X6-painel-entrar
 
 ### Antes (main, sem a mudança)
