@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { AlertsBell } from "@/components/shell/AlertsBell";
 import { AvisoDePropostaEmDestaque } from "@/components/shell/AvisoDePropostaEmDestaque";
@@ -32,6 +33,20 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
   const nav = useNavegacaoDaMoldura();
   const intencao = usePrefetchPorIntencao();
   const abas = nav.abasDaArea.length >= 2 ? nav.abasDaArea : [];
+  const faixa = useRef<HTMLElement>(null);
+
+  // Áreas com muitas abas (Configurações) passam da largura: a aba da tela
+  // atual pode nascer fora da vista. Rola só a faixa (nunca a página) até ela.
+  useEffect(() => {
+    const n = faixa.current;
+    const aba = n?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!n || !aba) return;
+    const inicio = aba.offsetLeft - n.offsetLeft;
+    const fim = inicio + aba.offsetWidth;
+    if (inicio < n.scrollLeft || fim > n.scrollLeft + n.clientWidth) {
+      n.scrollLeft = Math.max(0, inicio - 24);
+    }
+  }, [nav.pathname]);
 
   return (
     <header
@@ -44,6 +59,7 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
         )}
       </div>
       <nav
+        ref={faixa}
         aria-label={t("Seções da área")}
         className="hidden min-w-0 flex-1 self-stretch overflow-x-auto md:flex"
       >
