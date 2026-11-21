@@ -45,6 +45,7 @@ import { DESFECHOS, statusCancelavel } from "@/lib/followup/vocabulario";
 import { useFollowupEnrollment, useIntervirNoFollowup } from "@/hooks/followup/useFollowupEnrollment";
 import { useCancelFollowupEnrollment } from "@/hooks/followup/useFollowupQueue";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRoteamento } from "@/lib/redesign/roteamento";
 
 import { PlanoDeTempoBloco } from "./PlanoDeTempo";
 
@@ -167,6 +168,7 @@ function LinhaDoTempo({
 }
 
 export function DossieDoFollowup({ id, canWrite }: Props) {
+  const rd = useMarcaDoRoteamento();
   const localeDaData = useLocaleDeData();
   const t = useT();
   const { data, isLoading, isError } = useFollowupEnrollment(id);
@@ -211,21 +213,22 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header className="flex flex-col gap-3">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-roteamento={rd("pagina")}>
+      <header className="flex flex-col gap-3" data-rd-roteamento={rd("cabecalho")}>
         <Link
           href="/app/ai/followups"
           className="inline-flex w-fit items-center gap-1 text-sm text-text-muted hover:text-text"
+          data-rd-roteamento={rd("voltar")}
         >
           <CaretLeft size={14} aria-hidden /> {t("Fila de follow-ups")}
         </Link>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{data.contact.name}</h1>
-          <Badge variant={tomDoStatus(data.status)} data-testid="dossie-status">
+          <h1 className="text-2xl font-semibold tracking-tight" data-rd-roteamento={rd("titulo")}>{data.contact.name}</h1>
+          <Badge variant={tomDoStatus(data.status)} data-testid="dossie-status" data-rd-roteamento={rd("estado")}>
             {rotuloDoStatus(data.status, t)}
           </Badge>
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4" data-rd-roteamento={rd("dossie-resumo")}>
           <Campo rotulo={t("Fluxo")}>{data.flow.name ?? t("Fluxo removido")}</Campo>
           <Campo rotulo={t("Agente")}>{data.agent_name ?? t("Nenhum agente fixado")}</Campo>
           <Campo rotulo={t("Começou")}>{absoluta(data.started_at, localeDaData)}</Campo>
@@ -233,7 +236,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
         </div>
       </header>
 
-      <section className="rounded-md border border-border p-4" data-testid="dossie-onde-esta">
+      <section className="rounded-md border border-border p-4" data-testid="dossie-onde-esta" data-rd-roteamento={rd("dossie-secao")}>
         <h2 className="mb-2 text-sm font-medium">{t("Onde está agora")}</h2>
         <div className="flex flex-col gap-1">
           <p className="text-sm text-text">
@@ -299,7 +302,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
       </section>
 
       {canWrite && (
-        <section className="flex flex-wrap gap-2" data-testid="dossie-acoes">
+        <section className="flex flex-wrap gap-2" data-testid="dossie-acoes" data-rd-roteamento={rd("dossie-acoes")}>
           {podePausar && (
             <Button
               variant="outline"
@@ -390,7 +393,7 @@ export function DossieDoFollowup({ id, canWrite }: Props) {
         decididoRelativo={relativa(data.plano_de_tempo?.decidido_em ?? null, localeDaData)}
       />
 
-      <section className="rounded-md border border-border p-4">
+      <section className="rounded-md border border-border p-4" data-rd-roteamento={rd("dossie-secao")}>
         <h2 className="mb-1 text-sm font-medium">{t("O que já aconteceu")}</h2>
         <LinhaDoTempo
           eventos={data.eventos}

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { descreveEspera, type TimingPlan } from "@/lib/followup/plano-de-tempo";
 import type { NoDoDossie } from "@/lib/followup/eventos-legiveis";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRoteamento } from "@/lib/redesign/roteamento";
 
 interface Props {
   plano: TimingPlan | null;
@@ -26,11 +27,12 @@ interface Props {
  */
 export function PlanoDeTempoBloco({ plano, nos, decididoRelativo }: Props) {
   const t = useT();
+  const rd = useMarcaDoRoteamento();
   if (!plano) return null;
   const porId = Object.fromEntries(nos.map((n) => [n.id, n]));
 
   return (
-    <section className="rounded-md border border-border p-4" data-testid="dossie-plano-de-tempo">
+    <section className="rounded-md border border-border p-4" data-testid="dossie-plano-de-tempo" data-rd-roteamento={rd("dossie-secao")}>
       <header className="mb-3">
         <h2 className="text-sm font-medium">{t("O tempo que o agente escolheu")}</h2>
         <p className="text-xs text-text-muted">
