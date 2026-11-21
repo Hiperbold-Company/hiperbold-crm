@@ -2415,6 +2415,36 @@
   font-size: 16px;
   font-weight: 600;
 }
+/* A data não fica presa no topo (protótipo): presa, cobria a primeira bolha. */
+[data-redesign="ligado"] [data-rd-chat="dia-linha"] {
+  position: static;
+}
+/* Busca na linha inteira; filtros numa faixa que rola de lado, sem cortar o texto. */
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-chat="linha-busca"] {
+    flex-wrap: wrap;
+  }
+  [data-redesign="ligado"] [data-rd-chat="caixa-busca"] {
+    flex: 1 1 100%;
+  }
+  [data-redesign="ligado"] [data-rd-chat="seletores"] {
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -12px;
+    padding: 0 12px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="seletores"] > * {
+    flex: none;
+    width: auto;
+    max-width: none;
+  }
+  [data-redesign="ligado"] [data-rd-chat="seletores"] [data-slot="select-value"],
+  [data-redesign="ligado"] [data-rd-chat="seletores"] > * span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+}
 [data-redesign="ligado"] [data-rd-chat="dia"] {
   padding: 4px 12px;
   border: 1px solid var(--color-border);
