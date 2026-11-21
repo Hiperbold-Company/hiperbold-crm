@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { List } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
+import { useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 interface AdminShellProps {
   userEmail: string;
@@ -73,6 +74,7 @@ export function AdminShell({
   children,
 }: AdminShellProps) {
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Mesmo padrão de `app/app/_components/AppShell.tsx`: ajuste de estado
   // durante o render, não em `useEffect` (ver comentário lá).
@@ -85,7 +87,7 @@ export function AdminShell({
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen w-full flex-col bg-background">
+      <div className="flex min-h-screen w-full flex-col bg-background" data-rd-plataforma={rd("casca")}>
         <PlatformModeBanner />
         {/* Logo abaixo da tarja do modo plataforma: as duas são o topo
             persistente deste painel — ver a medição de largura em
@@ -105,7 +107,10 @@ export function AdminShell({
                 carrega também a BUSCA (⌘K), que é o que o painel não tinha e o
                 app do tenant já tinha. Ela existe nos dois tamanhos: no desktop
                 a busca fica à direita e o hambúrguer some. */}
-            <header className="flex h-14 items-center gap-2 border-b bg-background px-3">
+            <header
+              className="flex h-14 items-center gap-2 border-b bg-background px-3"
+              data-rd-plataforma={rd("topo")}
+            >
               <Button
                 type="button"
                 variant="ghost"
@@ -127,7 +132,12 @@ export function AdminShell({
                 `AppShell` (ver comentário lá): se algo estourar a largura, a
                 PÁGINA não rola de lado; quem precisa de scroll horizontal é
                 o componente específico, contido nele mesmo. */}
-            <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">{children}</main>
+            <main
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6"
+              data-rd-plataforma={rd("conteudo")}
+            >
+              {children}
+            </main>
           </div>
         </div>
       </div>
