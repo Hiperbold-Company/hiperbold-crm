@@ -4528,11 +4528,11 @@
 }
 
 /* ── Links ── */
-[data-redesign="ligado"] [data-rd-entrar="cartao"] a {
+[data-redesign="ligado"] [data-rd-entrar="cartao"] a:not([data-slot="button"]) {
   color: var(--color-accent);
   text-underline-offset: 4px;
 }
-[data-redesign="ligado"] [data-rd-entrar="cartao"] a:hover {
+[data-redesign="ligado"] [data-rd-entrar="cartao"] a:not([data-slot="button"]):hover {
   color: var(--color-accent-hover);
 }
 
