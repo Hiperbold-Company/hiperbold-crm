@@ -3374,7 +3374,7 @@
   display: contents;
 }
 
-/* A página: coluna centrada de 1040px (o protótipo usa 840; tabelas como Chaves de integração pedem mais). */
+/* A página: coluna centrada de 880px nos formulários (protótipo Main: 840 + respiro); página com tabela usa a largura toda, como Tags e Equipe no protótipo. */
 [data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
   box-sizing: border-box;
   width: 100%;
@@ -3383,8 +3383,11 @@
 }
 @media (min-width: 768px) {
   [data-redesign="ligado"] [data-rd-configuracoes="area"] > div {
-    max-width: 1040px;
+    max-width: 880px;
     padding: 32px 32px 40px;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:has(table) {
+    max-width: none;
   }
 }
 
