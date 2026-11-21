@@ -14,6 +14,7 @@ import {
   type OfficialChannelState,
 } from "@/hooks/channels/useOfficialChannel";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { copyToClipboard } from "@/lib/clipboard";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
@@ -85,12 +86,13 @@ export function WebhookDoNumeroOficial({
   channelSessionId?: string;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const registrarWebhook = useRegistrarWebhookOficial(channelSessionId);
   if (!estado.webhook) return null;
   return (
-    <Card className="flex flex-col gap-3 p-4" data-testid="webhook-do-numero-oficial">
+    <Card className="flex flex-col gap-3 p-4" data-testid="webhook-do-numero-oficial" data-rd-dialogos={rd("secao")}>
       <div>
-        <h2 className="font-medium">
+        <h2 className="font-medium" data-rd-dialogos={rd("secao-titulo")}>
           {estado.webhookRegistro?.registrado
             ? t("Webhook registrado pela instalação")
             : t("Cole isto no painel da Meta")}
@@ -247,6 +249,7 @@ export function FormularioOficialManual({
   channelSessionId?: string;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const conectar = useConnectOfficialChannel();
   const [form, setForm] = useState({ phone_number_id: "", waba_id: "", token: "" });
   const travadoPeloPlano = !jaConectado && Boolean(bloqueio?.desabilitado);
@@ -263,8 +266,8 @@ export function FormularioOficialManual({
   }
 
   return (
-    <Card className="p-4" data-testid="formulario-oficial-manual">
-      <h2 className="font-medium">
+    <Card className="p-4" data-testid="formulario-oficial-manual" data-rd-dialogos={rd("secao")}>
+      <h2 className="font-medium" data-rd-dialogos={rd("secao-titulo")}>
         {jaConectado ? t("Trocar credencial") : t("Conectar canal oficial")}
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
@@ -275,7 +278,7 @@ export function FormularioOficialManual({
       </p>
 
       <form onSubmit={enviar} className="mt-4 flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
           <Label htmlFor={`pnid${channelSessionId ?? ""}`}>{t("ID do número de telefone")}</Label>
           <Input
             id={`pnid${channelSessionId ?? ""}`}
@@ -285,7 +288,7 @@ export function FormularioOficialManual({
             required
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
           <Label htmlFor={`waba${channelSessionId ?? ""}`}>
             {t("ID da conta do WhatsApp Business")}
           </Label>
@@ -297,7 +300,7 @@ export function FormularioOficialManual({
             required
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
           <Label htmlFor={`tok${channelSessionId ?? ""}`}>{t("Token de acesso")}</Label>
           <Input
             id={`tok${channelSessionId ?? ""}`}

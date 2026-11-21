@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 
 /**
@@ -24,6 +25,7 @@ export function PairingOptions({
   telefoneExemplo?: string;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const exemploDoPais = useTelefoneExemplo();
   const id = useId();
   const [mode, setMode] = useState<"qr" | "code">("qr");
@@ -74,7 +76,7 @@ export function PairingOptions({
   }
   return (
     <div className="w-full space-y-4">
-      <div className="flex justify-center gap-2" role="group" aria-label={t("Forma de conectar")}>
+      <div className="flex justify-center gap-2" role="group" aria-label={t("Forma de conectar")} data-rd-dialogos={rd("forma")}>
         <Button
           type="button"
           variant={mode === "qr" ? "default" : "outline"}
@@ -144,7 +146,7 @@ export function PairingOptions({
             </p>
           )}
           {code && (
-            <div role="status" className="space-y-2 rounded-md border bg-muted/40 p-4 text-center">
+            <div role="status" className="space-y-2 rounded-md border bg-muted/40 p-4 text-center" data-rd-dialogos={rd("codigo")}>
               <p
                 className="font-mono text-2xl font-semibold tracking-widest"
                 aria-label={t("Código de pareamento")}

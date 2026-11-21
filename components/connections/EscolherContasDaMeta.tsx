@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 
@@ -71,6 +72,7 @@ export function EscolherContasDaMeta({
   aoConcluir: (resultado: ResultadoDaEscolha) => void;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
   const [busca, setBusca] = useState("");
 
@@ -119,9 +121,9 @@ export function EscolherContasDaMeta({
   return (
     <Dialog open onOpenChange={(aberto) => !aberto && !confirmar.isPending && cancelar()}>
       <DialogContent data-testid="escolher-contas-meta">
-        <DialogHeader>
-          <DialogTitle>{t("Escolha quais páginas conectar nesta empresa")}</DialogTitle>
-          <DialogDescription>
+        <DialogHeader data-rd-dialogos={rd("cabecalho")}>
+          <DialogTitle data-rd-dialogos={rd("titulo")}>{t("Escolha quais páginas conectar nesta empresa")}</DialogTitle>
+          <DialogDescription data-rd-dialogos={rd("descricao")}>
             {t("Conecte só as páginas desta empresa. Páginas de outros clientes devem ser conectadas na empresa deles.")}
           </DialogDescription>
         </DialogHeader>
@@ -152,13 +154,14 @@ export function EscolherContasDaMeta({
             {visiveis.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("Nenhuma página encontrada para esta pesquisa.")}</p>
             ) : (
-              <ul className="flex max-h-80 flex-col gap-1 overflow-y-auto" data-testid="lista-de-contas-meta">
+              <ul className="flex max-h-80 flex-col gap-1 overflow-y-auto" data-testid="lista-de-contas-meta" data-rd-dialogos={rd("lista")}>
                 {visiveis.map((c) => {
                   const titulo = c.nome ?? (c.usuario ? `@${c.usuario}` : t("Conta sem nome"));
                   const marcada = marcadas.has(c.id);
                   return (
                     <li key={c.id}>
                       <label
+                        data-rd-dialogos={rd("item")}
                         className={
                           c.em_outra_empresa
                             ? "flex cursor-not-allowed items-start gap-3 rounded-md border p-3 opacity-60"
@@ -197,7 +200,7 @@ export function EscolherContasDaMeta({
           </div>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter data-rd-dialogos={rd("rodape")}>
           <Button variant="outline" onClick={cancelar} disabled={confirmar.isPending}>
             {t("Cancelar")}
           </Button>

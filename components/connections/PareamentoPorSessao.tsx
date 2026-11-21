@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { ArrowsClockwise, CheckCircle, CircleNotch } from "@/lib/ui/icons";
@@ -39,6 +40,7 @@ export function PareamentoPorSessao({
   onForcePair: (sessionId: string) => Promise<void>;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const [status, setStatus] = useState<string>("STARTING");
   const [tick, setTick] = useState(0);
   const [pairing, setPairing] = useState(false);
@@ -109,6 +111,7 @@ export function PareamentoPorSessao({
           src={`/api/v1/channel-sessions/${sessionId}/qr?t=${tick}`}
           alt={t("QR Code para conectar WhatsApp")}
           className="h-64 w-64 rounded-md border bg-white p-2"
+          data-rd-dialogos={rd("qr")}
         />
         } />
       ) : status === "WORKING" ? (
@@ -175,12 +178,13 @@ export function QrDialog({
   onForcePair: (sessionId: string) => Promise<void>;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
+        <DialogHeader data-rd-dialogos={rd("cabecalho")}>
+          <DialogTitle data-rd-dialogos={rd("titulo")}>{title}</DialogTitle>
+          <DialogDescription data-rd-dialogos={rd("descricao")}>
             {t(
               "Escolha QR Code ou código de pareamento e confirme no WhatsApp do celular.",
             )}

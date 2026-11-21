@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { CodigoNoCelular } from "./PareamentoQrClient";
 
 /**
@@ -54,6 +55,7 @@ export function ReconectarConexao({
   aoAbrirSozinho?: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const [aberto, setAberto] = useState(false);
   const [sessao, setSessao] = useState<Aguardando | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -208,7 +210,7 @@ export function ReconectarConexao({
 
       {aberto && sessao && (
         <div className="flex flex-col gap-4 rounded-lg border p-3" data-testid="reconectar-painel">
-          <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <ol className="list-decimal space-y-1 pl-5 text-sm" data-rd-dialogos={rd("passos")}>
             <li>{t("Abra o WhatsApp no celular.")}</li>
             <li>{t("Vá em Dispositivos conectados.")}</li>
             <li>{t("Toque em Conectar dispositivo e aponte a câmera para o QR Code.")}</li>
@@ -220,7 +222,7 @@ export function ReconectarConexao({
                 {erro}
               </p>
             ) : sessao.codigo && !parouDeAtualizar ? (
-              <div className="flex flex-col items-center gap-2" data-testid="reconectar-codigo">
+              <div className="flex flex-col items-center gap-2" data-testid="reconectar-codigo" data-rd-dialogos={rd("codigo")}>
                 <p className="text-center text-xs text-muted-foreground">
                   {t(
                     "No WhatsApp, em Dispositivos conectados, escolha conectar com número de telefone e digite este código:",
@@ -237,6 +239,7 @@ export function ReconectarConexao({
                 alt={t("QR Code para conectar o WhatsApp")}
                 className="h-64 w-64 rounded-md border bg-white p-2"
                 data-testid="reconectar-qr-imagem"
+                data-rd-dialogos={rd("qr")}
               />
             ) : parouDeAtualizar ? (
               <p className="text-sm text-muted-foreground" data-testid="reconectar-qr-expirado">
@@ -253,7 +256,7 @@ export function ReconectarConexao({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" data-rd-dialogos={rd("acoes")}>
             {erro ? (
               <Button onClick={() => void pedir(false)} disabled={ocupado}>
                 {t("Tentar de novo")}
