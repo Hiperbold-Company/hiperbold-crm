@@ -123,7 +123,7 @@ describe("redesign: peças novas de Tarefas, Planos e Agentes", () => {
     const p = pecas(container, "data-rd-metricas");
     expect(p).toContain("agentes-tipo");
     expect(p).toContain("agente-operacao");
-    expect(container.querySelector('[data-rd-metricas="agentes-tipo"]')?.textContent?.trim()).toBe("Agente com ferramentas");
+    expect(container.querySelector('[data-rd-metricas="agentes-tipo"]')?.textContent?.trim()).toBe("Com ferramentas");
   });
 
   it("o editor de planos: sem marca desligado; com marca ligado", async () => {
