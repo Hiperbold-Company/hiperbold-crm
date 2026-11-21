@@ -4475,6 +4475,11 @@
   letter-spacing: -0.01em;
   color: var(--color-text);
 }
+/* Alinhado à esquerda com a marca, como no protótipo; o rodapé ("Lembrou a senha?") segue centralizado */
+[data-redesign="ligado"] [data-rd-entrar="cartao"] h1,
+[data-redesign="ligado"] [data-rd-entrar="cartao"] h1 + p {
+  text-align: left;
+}
 [data-redesign="ligado"] [data-rd-entrar="cartao"] h1 + p {
   font-size: 15px;
   line-height: 1.5;
