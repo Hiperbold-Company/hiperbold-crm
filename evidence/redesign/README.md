@@ -917,3 +917,38 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-en-desktop.png`
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-pt-BR-celular.png`
 - `evidence/redesign/D3-plataforma/depois-ligada/_admin_users-pt-BR-desktop.png`
+
+## E5-componentes
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/E5-componentes/antes/kanban-en-celular.png`
+- `evidence/redesign/E5-componentes/antes/kanban-en-desktop.png`
+- `evidence/redesign/E5-componentes/antes/kanban-pt-BR-celular.png`
+- `evidence/redesign/E5-componentes/antes/kanban-pt-BR-desktop.png`
+- `evidence/redesign/E5-componentes/antes/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/E5-componentes/antes/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/E5-componentes/antes/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/E5-componentes/antes/settings_tenant_pipelines-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/E5-componentes/depois-desligada/kanban-en-celular.png`
+- `evidence/redesign/E5-componentes/depois-desligada/kanban-en-desktop.png`
+- `evidence/redesign/E5-componentes/depois-desligada/kanban-pt-BR-celular.png`
+- `evidence/redesign/E5-componentes/depois-desligada/kanban-pt-BR-desktop.png`
+- `evidence/redesign/E5-componentes/depois-desligada/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/E5-componentes/depois-desligada/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/E5-componentes/depois-desligada/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/E5-componentes/depois-desligada/settings_tenant_pipelines-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/E5-componentes/depois-ligada/kanban-en-celular.png`
+- `evidence/redesign/E5-componentes/depois-ligada/kanban-en-desktop.png`
+- `evidence/redesign/E5-componentes/depois-ligada/kanban-pt-BR-celular.png`
+- `evidence/redesign/E5-componentes/depois-ligada/kanban-pt-BR-desktop.png`
+- `evidence/redesign/E5-componentes/depois-ligada/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/E5-componentes/depois-ligada/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/E5-componentes/depois-ligada/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/E5-componentes/depois-ligada/settings_tenant_pipelines-pt-BR-desktop.png`
