@@ -1058,3 +1058,98 @@ Arquivo gerado por `node evidence/redesign/gerar-indice.mjs`. Não edite à mão
 - `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-en-desktop.png`
 - `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-pt-BR-celular.png`
 - `evidence/redesign/E3-dialogos-conexoes/depois-ligada/dlg_gerenciar-pt-BR-desktop.png`
+
+## E4-configuracoes
+
+### Antes (main, sem a mudança)
+
+- `evidence/redesign/E4-configuracoes/antes/settings_atendimento-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_atendimento-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_atendimento-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_atendimento-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_plano-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_plano-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_plano-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_plano-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_security-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_security-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_security-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_security-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tags-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tags-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tags-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tags-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/settings_tenant_pipelines-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/team-en-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/team-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/antes/team-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/antes/team-pt-BR-desktop.png`
+
+### Depois, com a chave desligada (tem de ser igual ao antes)
+
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_atendimento-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_atendimento-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_atendimento-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_atendimento-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_plano-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_plano-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_plano-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_plano-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_security-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_security-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_security-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_security-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tags-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tags-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tags-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tags-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/settings_tenant_pipelines-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/team-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/team-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/team-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-desligada/team-pt-BR-desktop.png`
+
+### Depois, com a chave ligada (visual novo)
+
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_atendimento-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_atendimento-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_atendimento-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_atendimento-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_plano-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_plano-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_plano-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_plano-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_security-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_security-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_security-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_security-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tags-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tags-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tags-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tags-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant_pipelines-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant_pipelines-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant_pipelines-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/settings_tenant_pipelines-pt-BR-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/team-en-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/team-en-desktop.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/team-pt-BR-celular.png`
+- `evidence/redesign/E4-configuracoes/depois-ligada/team-pt-BR-desktop.png`
