@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -104,6 +105,7 @@ export function PipelinePageClient({
   etapasIniciais: Stage[];
 }) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   // Permissões por perfil: renomear etapa é "Criar e editar funis e etapas".
   const activeOrgDasPermissoes = useActiveOrg();
   /**
@@ -319,6 +321,7 @@ export function PipelinePageClient({
       // `tests/unit/altura-fixa-le-a-reserva-do-rodape.test.ts` cobra: altura
       // fixa não desconta número próprio, lê a reserva.
       className="flex h-[calc(100dvh-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] min-h-[28rem] flex-col gap-4"
+      data-rd-pipeline={rd("tela")}
       // OBSERVÁVEL de propósito, e é a razão de existir desta linha: "a
       // assinatura morreu" e "nada aconteceu" produzem o MESMO silêncio na
       // tela, e sem este valor nem o produto nem o teste conseguem separar as
@@ -342,7 +345,10 @@ export function PipelinePageClient({
           limite curto) + botão na mesma linha sem quebra empurrava o botão pra
           fora da viewport em telas estreitas. De `sm:` pra cima volta a ser
           uma linha só, como sempre foi. */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        data-rd-pipeline={rd("cabecalho")}
+      >
         {/*
           O TÍTULO É O SELETOR. Com um funil só, `h1` puro (nada para trocar);
           com vários, o gatilho do `Select` veste o título e o `h1` real vai
@@ -427,7 +433,10 @@ export function PipelinePageClient({
               funil que não recebe mais escrita seria a mesma promessa falsa
               que o "Novo negócio" apagado. Por isso as abas nem aparecem. */}
           {!arquivado && (
-            <div className="flex items-center gap-0.5 rounded-md border bg-muted p-0.5">
+            <div
+              className="flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
+              data-rd-pipeline={rd("visoes")}
+            >
               <button
                 type="button"
                 data-testid="visao-quadro"

@@ -3,6 +3,7 @@
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ShieldCheck, PencilSimple, LockOpen } from "@/lib/ui/icons";
@@ -164,6 +165,7 @@ function BlocoDeTelefones({ contato, t }: { contato: Contact; t: (texto: string)
 export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMcp = false }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoRedesign();
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
   const clientesLigado = activeOrg?.cliente_pela_agenda === true;
@@ -261,10 +263,11 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
   );
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-6" data-rd-contatos={rd("ficha")}>
       {contact.is_anonymized && (
         <div
           role="alert"
+          data-rd-contatos={rd("aviso-anonimizado")}
           className="border-error-fg/30 sticky top-0 z-20 flex items-center gap-3 rounded-md border bg-surface bg-linear-to-b from-error-bg to-error-bg p-3 text-sm text-error-fg"
         >
           <ShieldCheck size={18} weight="duotone" aria-hidden />
@@ -277,12 +280,12 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
         </div>
       )}
 
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4" data-rd-contatos={rd("ficha-cabecalho")}>
         <div className="min-w-0">
           {/* Sem truncar: nome é dado que a tela existe pra mostrar, e cortar
               com reticências sem um jeito de ver o resto violaria o princípio
               de nunca esconder informação crítica. Deixa quebrar linha. */}
-          <h1 className="break-words text-2xl font-semibold tracking-tight">{displayName}</h1>
+          <h1 className="break-words text-2xl font-semibold tracking-tight" data-rd-contatos={rd("ficha-nome")}>{displayName}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {contact.email && <span>{contact.email}</span>}
             {contact.email && contact.phone_number && <span>•</span>}
@@ -479,15 +482,15 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
       )}
 
       <Tabs defaultValue="overview">
-        <TabsList>
+        <TabsList data-rd-contatos={rd("ficha-abas")}>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           {isAdmin && <TabsTrigger value="lgpd">LGPD</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          <Card className="p-4">
-            <dl className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+          <Card className="p-4" data-rd-contatos={rd("cartao")}>
+            <dl className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2" data-rd-contatos={rd("dados")}>
               <div>
                 <dt className="text-xs uppercase text-muted-foreground">{t("Nome")}</dt>
                 <dd className="mt-1">{contact.name ?? "—"}</dd>
@@ -690,7 +693,7 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
           <TabsContent value="lgpd" className="mt-4 space-y-4">
             {/* Acessos OAuth do contato a servidores MCP externos (9095). */}
             {acessosMcp && <AcessosMcpDoContato contactId={contactId} />}
-            <Card className="space-y-4 p-4">
+            <Card className="space-y-4 p-4" data-rd-contatos={rd("cartao")}>
               <div>
                 <h2 className="text-lg font-semibold">{t("Direito ao esquecimento (LGPD)")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">

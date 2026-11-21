@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useEffect, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useT } from "@/hooks/i18n/useT";
@@ -58,6 +59,7 @@ const STATUS_OPTIONS: Array<{ value: NonNullable<LeadFilters["status"]>; label: 
 
 export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   const user = useUser();
   const { data: members } = useAssignableMembers(true);
   const { data: agents } = useAssignableAgents(true);
@@ -208,7 +210,10 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
   ].filter(Boolean).length;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2"
+      data-rd-pipeline={rd("filtros")}
+    >
       <Input
         type="search"
         placeholder={t("Buscar por título…")}

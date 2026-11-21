@@ -2670,6 +2670,691 @@
 }
 /* redesign: chat — fim ─────────────────────────────────────────────────── */
 
+/* redesign: pipeline */
+/* ─────────────────────────────────────────────────────────────────────────
+   A tela Pipeline (quadro do funil, cartão, ficha do negócio) no visual do
+   protótipo v49 (Pipeline.dc.html, PipelineEscuro.dc.html, PipelineCelular.dc.html).
+
+   As peças são marcadas com `data-rd-pipeline` por `useMarcaDoPipeline()`
+   (`lib/redesign/pipeline.ts`), que só escreve o atributo com a chave LIGADA.
+   Fora de `@layer`, como o bloco dos componentes, e TODO seletor começa por
+   `[data-redesign="ligado"]` — vigiado por `tests/unit/redesign-pipeline.test.tsx`.
+
+   O que NÃO se declara aqui, de propósito: `transform`/`transition` no cartão
+   (o arraste do @hello-pangea/dnd move o cartão por transform), `opacity` e
+   `display` de peça que aparece no hover ou é `sr-only`, `overflow` na coluna
+   (o cabeçalho da etapa é `sticky` e quem rola é o quadro) e a altura da raiz
+   da tela (vigiada por `altura-fixa-le-a-reserva-do-rodape`).
+   ───────────────────────────────────────────────────────────────────────── */
+[data-redesign="ligado"],
+[data-redesign="ligado"] [data-theme="light"] {
+  --rd-pl-coluna: #eceff4;
+  --rd-pl-sombra-cartao: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --rd-pl-sombra-cartao-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --rd-pl-sombra-seg: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+[data-redesign="ligado"][data-theme="dark"],
+[data-redesign="ligado"] [data-theme="dark"] {
+  --rd-pl-coluna: #111c35;
+  --rd-pl-sombra-cartao: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --rd-pl-sombra-cartao-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --rd-pl-sombra-seg: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Cabeçalho: nome do funil (troca de funil) e as visões ------------- */
+[data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > h1,
+[data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > [data-slot="select-trigger"] {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+/* O gatilho do seletor de funil VESTE o título: o fundo de campo que o bloco
+   dos componentes dá a `bg-transparent` não vale aqui. */
+[data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > [data-slot="select-trigger"][class~="bg-transparent"] {
+  background-color: transparent;
+}
+[data-redesign="ligado"] [data-rd-pipeline="visoes"] {
+  gap: 2px;
+  padding: 3px;
+  border-color: transparent;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-pipeline="visoes"] > button {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-pipeline="visoes"] > button:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-pipeline="visoes"] > button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: var(--rd-pl-sombra-seg);
+}
+[data-redesign="ligado"] [data-rd-pipeline="visoes"] > button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* ---- Filtros: uma linha solta, sem caixa em volta ---------------------- */
+[data-redesign="ligado"] [data-rd-pipeline="filtros"] {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+[data-redesign="ligado"] [data-rd-pipeline="filtros"] input[type="search"] {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+/* ---- Quadro e colunas --------------------------------------------------- */
+[data-redesign="ligado"] [data-rd-pipeline="quadro"],
+[data-redesign="ligado"] [data-rd-pipeline="quadro"] > [data-faixa-das-etapas] {
+  gap: 14px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+  background: var(--rd-pl-coluna);
+}
+@media (min-width: 48rem) {
+  [data-redesign="ligado"] [data-rd-pipeline="coluna"] {
+    width: 280px;
+  }
+}
+/* O cabeçalho preso segue OPACO (é o que esconde os cartões que rolam por
+   baixo), agora no tom da coluna; a camada translúcida de dentro sai. */
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] {
+  border-radius: 12px 12px 0 0;
+  background: var(--rd-pl-coluna);
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] > div {
+  border-radius: 12px 12px 0 0;
+  background: transparent;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] > div > div:first-child {
+  gap: 8px;
+  padding: 12px 12px 10px;
+}
+/* Com a linha do total, nome e total formam um bloco só (o fio fica embaixo do total). */
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] > div > div:first-child:not(:last-child) {
+  padding-bottom: 4px;
+  border-bottom-color: transparent;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] > div > div + div {
+  padding: 0 12px 10px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] h2 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+/* Quem pode renomear vê o nome em caixa alta como todos; ao editar (foco),
+   o campo mostra o nome como ele é gravado. */
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] h2 input {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] h2 input:focus {
+  text-transform: none;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] span[aria-hidden][class~="h-2"] {
+  flex: none;
+  width: 10px;
+  height: 10px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] span[class~="bg-surface"][class~="rounded-full"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-corpo"] {
+  gap: 8px;
+  padding: 10px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="coluna-vazia"] {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* ---- Cartão do negócio --------------------------------------------------
+   As alturas fixas por linha (título de 2 linhas, valor, agente, rodapé)
+   continuam: é o que mantém todos os cartões do mesmo tamanho. */
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] {
+  border-color: var(--color-border);
+  border-radius: 10px;
+  box-shadow: var(--rd-pl-sombra-cartao);
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"][data-densidade="confortavel"] {
+  padding: 12px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"]:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--rd-pl-sombra-cartao-hover);
+}
+/* Selecionado e arrastando: o anel das classes do componente perderia para a
+   sombra acima (este bloco está fora de camada), então é redeclarado aqui. */
+[data-redesign="ligado"] [data-rd-pipeline="cartao"][class~="ring-2"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"][class~="rotate-1"] {
+  border-color: var(--color-accent);
+  box-shadow:
+    0 0 0 1px var(--color-accent),
+    var(--rd-pl-sombra-cartao-hover);
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao-titulo"] {
+  font-size: 14px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] [data-testid="card-valor"] {
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"][data-densidade="confortavel"] [data-testid="card-valor"] {
+  font-size: 14px;
+}
+/* Rodapé (responsável e tempo na etapa) separado por um fio, como no protótipo.
+   A altura continua FIXA (24px de conteúdo + 9px de fio e respiro). */
+[data-redesign="ligado"]
+  [data-rd-pipeline="cartao"][data-densidade="confortavel"]
+  [data-rd-pipeline="cartao-rodape"] {
+  height: 33px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao-rodape"] [data-tempo-na-etapa] {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---- Ficha do negócio (o cartão aberto) --------------------------------- */
+@media (min-width: 40rem) {
+  [data-redesign="ligado"] [data-rd-pipeline="ficha"] {
+    max-width: 460px;
+  }
+}
+[data-redesign="ligado"] [data-rd-pipeline="ficha"] [data-slot="sheet-title"] {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+[data-redesign="ligado"] [data-rd-pipeline="ficha-resumo"] {
+  column-gap: 10px;
+  padding-bottom: 16px;
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="ficha-resumo"] > span:first-child {
+  font-size: 22px;
+  font-weight: 700;
+}
+/* Toda seção da ficha (contato, linha do tempo, dados do negócio, tarefas,
+   propostas) com o mesmo respiro e o mesmo título do protótipo. */
+[data-redesign="ligado"] [data-rd-pipeline="secao"],
+[data-redesign="ligado"] [data-rd-pipeline="ficha"] [data-testid="tarefas-do-negocio"] {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="secao"] > h3 {
+  margin-bottom: 10px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="ficha"] h3[class~="uppercase"] {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+/* "Abrir conversa no Chat do CRM" é o botão primário da ficha; ao lado, o
+   quadrado só com o ícone abre a mesma conversa em nova aba. */
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"] {
+  min-height: 38px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"]:hover {
+  border-color: transparent;
+  background: var(--color-accent-hover);
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"] :is(span, svg) {
+  color: inherit;
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"] span[class~="font-medium"] {
+  font-size: 14px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"] span[class~="rounded-full"] {
+  background: var(--color-accent-fg);
+  color: var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"] + :is(a, button) {
+  width: 40px;
+  border-color: var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] a[class~="flex-1"] + :is(a, button):hover {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-pipeline="conversa"] :is(a, button):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* ---- Celular (PipelineCelular.dc.html) ----------------------------------
+   As colunas seguem com o encaixe (snap) de uma etapa por vez; o que muda é a
+   escala de leitura para o toque. */
+@media (max-width: 47.99rem) {
+  [data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > h1,
+  [data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > [data-slot="select-trigger"] {
+    font-size: 18px;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="cartao"][data-densidade="confortavel"] {
+    padding: 14px;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="cartao"] {
+    border-radius: 14px;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="cartao-titulo"] {
+    font-size: 15px;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="coluna"] {
+    border-radius: 14px;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="coluna-topo"],
+  [data-redesign="ligado"] [data-rd-pipeline="coluna-topo"] > div {
+    border-radius: 14px 14px 0 0;
+  }
+}
+/* redesign: pipeline — fim */
+
+/* redesign: contatos */
+/* ─────────────────────────────────────────────────────────────────────────
+   ÁREA CONTATOS NO REDESIGN (chave `REDESIGN_HIPERBOLD`): lista, ficha,
+   exclusão, Campanhas e Importações. Fonte: o protótipo v49
+   (`Contatos.dc.html`, `ContatosCelular.dc.html`, `Campanhas.dc.html`,
+   `Importacoes.dc.html`).
+
+   Os ganchos são `data-rd-contatos="<peça>"`, que as telas só escrevem com a
+   chave ligada (`components/contacts/useMarcaDoRedesign.ts`); desligada, não
+   há atributo nem regra que case. TODO seletor começa por
+   `[data-redesign="ligado"]` — cobrado por `tests/unit/redesign-contatos.test.tsx`.
+
+   Fora de `@layer` estas regras vencem qualquer utilitário, inclusive os
+   responsivos; por isso a geometria de computador mora em `@media`, e altura
+   abaixo dos 44px de toque só de `lg` (64rem) para cima. Cores só por
+   `var(--color-*)`, que já trocam entre claro e escuro.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ---- Cabeçalho da lista (h1 26px bold, subtítulo 15px) ----------------- */
+[data-redesign="ligado"] [data-rd-contatos="cabecalho"] {
+  gap: 12px;
+}
+[data-redesign="ligado"] [data-rd-contatos="ficha-cabecalho"] {
+  gap: 16px;
+}
+[data-redesign="ligado"] [data-rd-contatos="titulo"] {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: normal;
+  line-height: 1.25;
+}
+[data-redesign="ligado"] [data-rd-contatos="subtitulo"] {
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+
+/* ---- Cabeçalho de Campanhas e Importações (h1 22px, subtítulo 13px) ---- */
+[data-redesign="ligado"] [data-rd-contatos="titulo-area"] {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: normal;
+  line-height: 1.3;
+}
+[data-redesign="ligado"] [data-rd-contatos="subtitulo-area"] {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* ---- Barra de busca e filtros: sem caixa, pílulas, busca de 320px ----- */
+@media (width >= 48rem) {
+  [data-redesign="ligado"] [data-rd-contatos="lista"] {
+    padding: 28px 32px 20px;
+  }
+  [data-redesign="ligado"] [data-rd-contatos="filtros"] {
+    border-color: transparent;
+    background-color: transparent;
+    padding: 0;
+  }
+}
+@media (width >= 40rem) {
+  [data-redesign="ligado"] [data-rd-contatos="busca"] {
+    width: 320px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="busca"] [data-slot="input"] {
+  padding-left: 34px;
+  border-color: var(--color-border-strong);
+  border-radius: 8px;
+  background-color: var(--color-surface);
+}
+@media (width >= 64rem) {
+  [data-redesign="ligado"] [data-rd-contatos="busca"] [data-slot="input"] {
+    height: 38px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="filtros"] [data-slot="button"][class~="border"],
+[data-redesign="ligado"] [data-rd-contatos="filtros"] [data-slot="button"][aria-pressed] {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 400;
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-contatos="filtros"] [data-slot="button"][class~="border"]:hover {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-contatos="filtros"] [data-slot="button"][aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+@media (width >= 64rem) {
+  [data-redesign="ligado"] [data-rd-contatos="filtros"] [data-slot="button"][class~="border"],
+  [data-redesign="ligado"] [data-rd-contatos="filtros"] [data-slot="button"][aria-pressed] {
+    height: 34px;
+  }
+}
+
+/* ---- Seleção em lote (faixa accent-soft, contagem em accent) ---------- */
+[data-redesign="ligado"] [data-rd-contatos="selecao"],
+[data-redesign="ligado"] [data-rd-contatos="lote"],
+[data-redesign="ligado"] [data-rd-contatos="faixa-todos"] {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background-color: var(--color-accent-soft);
+}
+@media (width >= 48rem) {
+  [data-redesign="ligado"] [data-rd-contatos="selecao"],
+  [data-redesign="ligado"] [data-rd-contatos="lote"] {
+    min-height: 52px;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="selecao"] > span,
+[data-redesign="ligado"] [data-rd-contatos="lote"] > span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* ---- Tabela de contatos (cartão 12px, cabeçalho elevado, linha 56px) -- */
+[data-redesign="ligado"] [data-rd-contatos="tabela"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+}
+[data-redesign="ligado"] [data-rd-contatos="tabela"] thead tr {
+  background-color: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-contatos="tabela"] [data-slot="table-head"] {
+  height: 44px;
+  color: var(--color-text-muted);
+}
+@media (width >= 48rem) {
+  [data-redesign="ligado"] [data-rd-contatos="tabela-contatos"] tbody [data-slot="table-cell"] {
+    height: 56px;
+  }
+}
+/* Celular (ContatosCelular): cada linha-cartão com 68px de altura mínima. */
+@media (width < 48rem) {
+  [data-redesign="ligado"] [data-rd-contatos="tabela-contatos"] tbody [data-slot="table-row"] {
+    min-height: 68px;
+    padding-block: 10px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="rodape"] p {
+  font-size: 13px;
+}
+
+/* ---- Diálogo de exclusão (440px, título 18px, aviso em âmbar) --------- */
+@media (width >= 40rem) {
+  [data-redesign="ligado"] [data-rd-contatos="dialogo-excluir"] {
+    max-width: 440px;
+    padding: 24px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="dialogo-excluir"] h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-contatos="aviso-vinculo"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+[data-redesign="ligado"] [data-rd-contatos="aviso-vinculo"] a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-rd-contatos="aviso-vinculo"] a:hover {
+  background-color: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-contatos="aviso-vinculo"] a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+
+/* ---- Ficha do contato ------------------------------------------------- */
+[data-redesign="ligado"] [data-rd-contatos="ficha-nome"] {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+[data-redesign="ligado"] [data-rd-contatos="aviso-anonimizado"] {
+  border-color: transparent;
+  border-radius: 8px;
+  background-image: none;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  font-weight: 500;
+}
+@media (width >= 48rem) {
+  [data-redesign="ligado"] [data-rd-contatos="ficha"] {
+    padding: 20px 32px 32px;
+  }
+}
+/* Abas sublinhadas (.aba / .aba.ativa) no lugar do segmentado. */
+[data-redesign="ligado"] [data-rd-contatos="ficha-abas"][data-slot="tabs-list"] {
+  display: flex;
+  justify-content: flex-start;
+  gap: 22px;
+  width: 100%;
+  height: auto;
+  padding: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background-color: transparent;
+}
+[data-redesign="ligado"] [data-rd-contatos="ficha-abas"] [data-slot="tabs-trigger"] {
+  padding: 12px 2px;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+[data-redesign="ligado"]
+  [data-rd-contatos="ficha-abas"]
+  [data-slot="tabs-trigger"][data-state="active"] {
+  background-color: transparent;
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-contatos="ficha-abas"] [data-slot="tabs-trigger"]:focus-visible {
+  outline: none;
+  /* anel por dentro: a lista rola no eixo x e cortaria o anel de fora */
+  box-shadow: inset 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"]
+  [data-rd-contatos="ficha-abas"]
+  [data-slot="tabs-trigger"][data-state="active"]:focus-visible {
+  box-shadow:
+    inset 0 -2px 0 var(--color-accent),
+    inset 0 0 0 3px var(--redesign-foco);
+}
+/* Cartões da ficha (.cartao: 12px de raio, 20px de respiro). */
+[data-redesign="ligado"] [data-rd-contatos="cartao"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+}
+@media (width >= 48rem) {
+  [data-redesign="ligado"] [data-rd-contatos="cartao"] {
+    padding: 20px;
+  }
+  /* Lista de dados (.dl): rótulo de 150px ao lado do valor. Só nos itens
+     que TÊM rótulo; o que vier além do primeiro valor (segundo dd, nota)
+     desce na coluna do valor, nunca embaixo do rótulo. */
+  [data-redesign="ligado"] [data-rd-contatos="dados"] > div:has(> dt) {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: baseline;
+  }
+  [data-redesign="ligado"] [data-rd-contatos="dados"] > div:has(> dt) > :not(dt) {
+    grid-column: 2;
+  }
+  [data-redesign="ligado"] [data-rd-contatos="dados"] > div:has(> dt) > dd:first-of-type {
+    margin-top: 0;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="dados"] > div > dt {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-transform: none;
+}
+[data-redesign="ligado"] [data-rd-contatos="dados"] {
+  font-size: 14px;
+}
+
+/* ---- Campanhas: filtro sem caixa, lista de cartões (.linha) ----------- */
+@media (width >= 48rem) {
+  [data-redesign="ligado"] :is([data-rd-contatos="campanhas"], [data-rd-contatos="importacoes"]) {
+    padding: 18px 24px 24px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="campanhas"] [data-rd-contatos="filtros"] {
+  border-color: transparent;
+  background-color: transparent;
+  padding: 0;
+}
+[data-redesign="ligado"] [data-rd-contatos="campo"] {
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+}
+@media (width >= 64rem) {
+  [data-redesign="ligado"] [data-rd-contatos="campo"] {
+    height: 38px;
+  }
+}
+[data-redesign="ligado"] [data-rd-contatos="campo"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] [data-rd-contatos="lista-de-cartoes"] {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-contatos="lista-de-cartoes"] > [data-rd-contatos="item"] {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background-color: var(--color-surface);
+  padding: 16px 18px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+[data-redesign="ligado"] [data-rd-contatos="lista-de-cartoes"] > [data-rd-contatos="item"]:hover {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+[data-redesign="ligado"]
+  [data-rd-contatos="lista-de-cartoes"]
+  > [data-rd-contatos="item"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] [data-rd-contatos="item-nome"] {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---- Importações: envio e histórico em cartões de 12px ---------------- */
+[data-redesign="ligado"] [data-rd-contatos="envio"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+/* redesign: contatos — fim */
+
 /* redesign: automacoes ───────────────────────────────────────────────────
    A área Automações no redesign Hiperbold, protótipo v49 (Automacoes,
    EditorAutomacao, FollowUps, Roteadores, Execucoes; claro e escuro).
