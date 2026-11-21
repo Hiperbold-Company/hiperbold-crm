@@ -3648,9 +3648,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 16px 16px 14px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  padding: 16px 16px 0;
 }
 [data-redesign="ligado"] [data-rd-conexoes="titulo"] {
   margin: 0;
@@ -3795,7 +3793,7 @@
 /* ── Computador: respiro de 32px, como o protótipo ── */
 @media (min-width: 768px) {
   [data-redesign="ligado"] [data-rd-conexoes="cabecalho"] {
-    padding: 22px 32px 18px;
+    padding: 24px 32px 0;
   }
   [data-redesign="ligado"] [data-rd-conexoes="titulo"] {
     font-size: 24px;
