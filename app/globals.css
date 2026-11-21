@@ -1824,10 +1824,18 @@
   background-color: var(--color-surface);
 }
 [data-redesign="ligado"] [data-slot="input"][class~="px-4"] {
-  padding-inline: 12px;
+  padding-right: 12px;
+}
+/* Quem pôs ícone à esquerda (pl-*) manda no lado esquerdo. */
+[data-redesign="ligado"] [data-slot="input"][class~="px-4"]:not([class*=" pl-"]):not([class^="pl-"]) {
+  padding-left: 12px;
 }
 [data-redesign="ligado"] [data-slot="textarea"][class~="px-4"] {
-  padding-inline: 12px;
+  padding-right: 12px;
+}
+/* Quem pôs ícone à esquerda (pl-*) manda no lado esquerdo. */
+[data-redesign="ligado"] [data-slot="textarea"][class~="px-4"]:not([class*=" pl-"]):not([class^="pl-"]) {
+  padding-left: 12px;
 }
 [data-redesign="ligado"] [data-slot="textarea"][class~="py-3"] {
   padding-block: 10px;
