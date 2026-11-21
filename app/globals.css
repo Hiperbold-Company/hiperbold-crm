@@ -4865,3 +4865,108 @@
   }
 }
 /* redesign: plataforma — fim ─────────────────────── */
+
+/* redesign: editor ───────────────────────────────────────────────────────
+   Os NÓS do editor visual de automações no visual "Se / Então" do protótipo
+   v49 (EditorAutomacao). O ReactFlow é o mesmo: só cor e forma, nenhum texto.
+
+   Com a chave ligada o cartão do nó (`NodeCard`) ganha
+   `data-rd-editor="no-quando|no-se|no-entao|no-espera|no-fim"` (o papel) e as
+   peças `icone`, `titulo`, `resumo`, `ramos`, `erro`; o canvas ganha `canvas`
+   (`lib/redesign/editor.ts`). TODA regra começa por `[data-redesign="ligado"]`
+   — desligada, nenhuma casa, e `tests/unit/redesign-editor.test.tsx` cobra isso.
+   Cores só das variáveis do tema. Fora de `@layer` de propósito.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Cartão do nó: branco, raio, borda fina, sombra leve; o papel é a faixa de cima ── */
+[data-redesign="ligado"] [data-rd-editor^="no-"] {
+  --rd-papel: var(--color-accent);
+  --rd-papel-suave: var(--color-accent-soft);
+  border-radius: 12px;
+  border-width: 1px;
+  border-left-width: 1px;
+  border-top-width: 3px;
+  background: var(--color-surface);
+}
+/* Sem erro: borda forte, faixa do papel e sombra leve. Com erro, o anel e a
+   borda de erro de sempre ficam como estão. */
+[data-redesign="ligado"] [data-rd-editor^="no-"]:not([class*="ring-error"]) {
+  border-color: var(--color-border-strong);
+  border-top-color: var(--rd-papel);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+[data-redesign="ligado"] [data-rd-editor="no-se"] {
+  --rd-papel: var(--color-warning);
+  --rd-papel-suave: var(--color-warning-bg);
+}
+[data-redesign="ligado"] [data-rd-editor="no-entao"] {
+  --rd-papel: var(--color-success);
+  --rd-papel-suave: var(--color-success-bg);
+}
+[data-redesign="ligado"] [data-rd-editor="no-espera"] {
+  --rd-papel: var(--color-info);
+  --rd-papel-suave: var(--color-info-bg);
+}
+[data-redesign="ligado"] [data-rd-editor="no-fim"] {
+  --rd-papel: var(--color-error);
+  --rd-papel-suave: var(--color-error-bg);
+}
+
+/* Selecionado: anel na cor de destaque (o nó com erro mantém o anel de erro) */
+[data-redesign="ligado"] [data-rd-editor^="no-"][class*="ring-accent-500"]:not([class*="ring-error"]) {
+  border-color: var(--color-accent);
+  border-top-color: var(--color-accent);
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
+}
+
+/* ── Partes do cartão ── */
+[data-redesign="ligado"] [data-rd-editor="icone"] {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--rd-papel-suave);
+  color: var(--rd-papel);
+}
+[data-redesign="ligado"] [data-rd-editor="titulo"] {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-editor="resumo"] {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-editor="ramos"] {
+  border-top-color: var(--color-border);
+}
+
+/* ── Alças discretas ── */
+[data-redesign="ligado"] [data-rd-editor="canvas"] .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-surface);
+  background: var(--color-border-strong);
+}
+
+/* ── Arestas na cor de borda forte; a selecionada em destaque ── */
+[data-redesign="ligado"] [data-rd-editor="canvas"] .react-flow__edge-path {
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5px;
+}
+[data-redesign="ligado"] [data-rd-editor="canvas"] .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-accent);
+}
+
+/* ── Canvas: fundo de pontos suave ── */
+[data-redesign="ligado"] [data-rd-editor="canvas"] {
+  background-color: var(--color-bg);
+}
+[data-redesign="ligado"] [data-rd-editor="canvas"] .react-flow__background {
+  background-color: var(--color-bg);
+}
+[data-redesign="ligado"] [data-rd-editor="canvas"] .react-flow__background-pattern {
+  fill: var(--color-border-strong);
+  opacity: 0.5;
+}
+/* redesign: editor — fim ─────────────────────── */

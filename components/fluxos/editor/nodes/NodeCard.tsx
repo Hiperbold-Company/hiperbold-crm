@@ -9,6 +9,7 @@ import type { NomesDeValor } from "@/lib/followup/vocabulario";
 import { Warning } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
+import { pecaDoNo, useMarcaDoEditor } from "@/lib/redesign/editor";
 import { useEtapasDoFluxo } from "../EtapasDoFluxo";
 import type { NodeVisual } from "./nodeVisuals";
 
@@ -74,6 +75,7 @@ export function NodeCard({
   detalhe,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDoEditor();
   // O nome padrão do bloco sai no idioma de quem lê; o nome que o usuário deu é
   // dado dele e fica como está.
   // "Início" e "Fim" são os nomes com que o servidor cria a automação nova
@@ -102,6 +104,7 @@ export function NodeCard({
         hasError && "border-error ring-2 ring-error ring-offset-1 ring-offset-bg",
       )}
       data-testid={`node-card-${id}`}
+      data-rd-editor={rd(pecaDoNo(visual.type))}
       title={hasError ? errors!.join("; ") : undefined}
     >
       {showTarget && <Handle type="target" position={Position.Top} />}
@@ -111,14 +114,15 @@ export function NodeCard({
             "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
             visual.chipClassName,
           )}
+          data-rd-editor={rd("icone")}
         >
           <Icon size={14} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-text" title={rotulo}>
+          <p className="truncate text-sm font-medium text-text" title={rotulo} data-rd-editor={rd("titulo")}>
             {rotulo}
           </p>
-          <p className="line-clamp-2 break-words text-xs text-text-muted" title={subtitle}>
+          <p className="line-clamp-2 break-words text-xs text-text-muted" title={subtitle} data-rd-editor={rd("resumo")}>
             {subtitle}
           </p>
           {detalhe}
@@ -128,12 +132,13 @@ export function NodeCard({
         <p
           className="border-t border-error/30 px-3 py-1.5 text-xs leading-snug text-error-fg"
           data-testid={`node-error-${id}`}
+          data-rd-editor={rd("erro")}
         >
           {errors![0]}
         </p>
       )}
       {branchRows !== null && (
-        <ul className="border-t border-border" data-testid={`node-branches-${id}`}>
+        <ul className="border-t border-border" data-testid={`node-branches-${id}`} data-rd-editor={rd("ramos")}>
           {branchRows.map((branch) => {
             const rotulo = t(rotuloDoRamo(branch, nomes));
             const semEtapa = regraSemEtapa(branch, nomes);
