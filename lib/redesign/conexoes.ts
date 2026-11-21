@@ -1,5 +1,3 @@
-"use client";
-
 import { useRedesign } from "@/lib/redesign/contexto";
 
 /**
