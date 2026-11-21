@@ -4289,6 +4289,112 @@
     padding: 12px;
   }
 }
+/* Agenda: painel de marcar e detalhe do compromisso (gavetas). */
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"],
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-slot="sheet-title"],
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [data-slot="sheet-title"] {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-testid="painel-de-marcacao"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-contexto"] {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-contexto"] h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-testid="tipos-de-agendamento"] button {
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+}
+[data-redesign="ligado"] [data-rd-agenda="marcar-painel"] [data-testid="tipos-de-agendamento"] button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [role="status"],
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [role="alert"] {
+  border-radius: 12px;
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] [data-testid="compromisso-horario"] {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="detalhe"] a:not([data-slot="button"]) {
+  color: var(--color-accent);
+}
+
+/* Agenda: células da visão de mês. */
+[data-redesign="ligado"] [data-rd-agenda="mes-celula"],
+[data-redesign="ligado"] [data-rd-agenda="mes-celula-fora"] {
+  border-color: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-celula"] {
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-celula"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-celula-fora"] {
+  background: var(--color-surface-elevated);
+  opacity: 0.7;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero"],
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-fora"],
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-hoje"] {
+  height: 24px;
+  min-width: 24px;
+  font-size: 12px;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero"] {
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-fora"] {
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-numero-hoje"] {
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-chip"] {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-fechado"] {
+  border-radius: 6px;
+}
+[data-redesign="ligado"] [data-rd-agenda="mes-mais"] {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+@media (max-width: 639px) {
+  [data-redesign="ligado"] [data-rd-agenda="mes-celula"],
+  [data-redesign="ligado"] [data-rd-agenda="mes-celula-fora"] {
+    min-height: 64px;
+  }
+  [data-redesign="ligado"] [data-rd-agenda="mes-chip"] {
+    padding: 1px 4px;
+  }
+}
 /* redesign: agenda — fim ─────────────────────── */
 
 /* redesign: metricas ───────────────────────────────

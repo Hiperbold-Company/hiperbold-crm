@@ -847,6 +847,7 @@ function VisaoDeMes({
   pessoas: Pessoa[];
 }) {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const localeDaData = useLocaleDeData();
   // O mesmo período que `_client.tsx` BUSCA — ver `lib/agenda/recorte-da-grade.ts`.
   const primeiro = primeiroDiaDaVisaoDeMes(ancora);
@@ -882,6 +883,7 @@ function VisaoDeMes({
             <div
               key={d.toISOString()}
               data-testid={`celula-mes-${format(d, "yyyy-MM-dd")}`}
+              data-rd-agenda={rd(doMes ? "mes-celula" : "mes-celula-fora")}
               className={cn(
                 "min-h-20 border-b border-r border-border p-1",
                 !doMes && "bg-surface-elevated/30",
@@ -889,6 +891,13 @@ function VisaoDeMes({
             >
               <div className="mb-1 flex items-center justify-between px-0.5">
                 <span
+                  data-rd-agenda={rd(
+                    chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)
+                      ? "mes-numero-hoje"
+                      : doMes
+                        ? "mes-numero"
+                        : "mes-numero-fora",
+                  )}
                   className={cn(
                     "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs tabular-nums",
                     chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)
@@ -901,7 +910,10 @@ function VisaoDeMes({
                   {format(d, "d")}
                 </span>
                 {doDia.length > 2 && (
-                  <span className="text-2xs tabular-nums text-text-subtle">
+                  <span
+                    data-rd-agenda={rd("mes-mais")}
+                    className="text-2xs tabular-nums text-text-subtle"
+                  >
                     +{doDia.length - 2}
                   </span>
                 )}
@@ -916,6 +928,7 @@ function VisaoDeMes({
                     <div
                       key={`fechamento-${f.id}`}
                       data-testid={`fechamento-mes-${f.id}`}
+                      data-rd-agenda={rd("mes-fechado")}
                       className="truncate rounded-sm px-1 py-0.5 text-2xs leading-4 text-text-muted"
                       style={{ background: HACHURA_DO_FECHAMENTO }}
                     >
@@ -943,6 +956,7 @@ function VisaoDeMes({
                       // AFIRMA, e um seletor que repete a asserção não prova
                       // nada.
                       data-origem={c.origem}
+                      data-rd-agenda={rd("mes-chip")}
                       className="flex items-center gap-1 rounded-sm px-1 py-0.5"
                       style={{ background: fundoDaTrilha(trilha, 14) }}
                     >
