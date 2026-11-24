@@ -637,6 +637,7 @@ export const novaConditionCheckSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_status }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.business_hours }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.window_open }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.carteira }),
 ]);
 export type NovaConditionCheck = z.infer<typeof novaConditionCheckSchema>;
 

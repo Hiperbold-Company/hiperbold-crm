@@ -25,7 +25,7 @@ export async function carregarFatosDaAutomacaoPg(
   vars: Record<string, unknown>,
 ): Promise<FatosDaAutomacao> {
   const { rows: contatos } = await pool.query(
-    `select id, name, email, phone_number, birthdate::text as birthdate, tags, custom_fields, source_metadata
+    `select id, name, email, phone_number, birthdate::text as birthdate, tags, custom_fields, source_metadata, carteira_user_id
        from contacts where organization_id = $1 and id = $2`,
     [orgId, contactId],
   );
@@ -62,6 +62,7 @@ export async function carregarFatosDaAutomacaoPg(
           tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
           custom_fields: objeto(c.custom_fields),
           anuncio: anuncioDoFluxo(c.source_metadata),
+          carteira_user_id: (c.carteira_user_id as string | null | undefined) ?? null,
         }
       : null,
     negocio: (id ? lista.find((n) => n.id === id) : undefined) ?? lista.find((n) => n.status === "open") ?? null,
