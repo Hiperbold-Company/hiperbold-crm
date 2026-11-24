@@ -18331,6 +18331,8 @@ export const DICIONARIO: Traducoes = {
   "Publicado por": { es: "Publicado por" },
   "O que ela abre": { es: "Qué abre" },
   Etiquetas: { es: "Etiquetas" },
+  "Cliente VIP": { es: "Cliente VIP" },
+  Indicação: { es: "Recomendación" },
   "Não recebe acesso aos dados do CRM.": { es: "No recibe acceso a los datos del CRM." },
   "Texto disponível em português.": { es: "Texto disponible en portugués." },
   "Parte deste conteúdo está disponível apenas em português.": {

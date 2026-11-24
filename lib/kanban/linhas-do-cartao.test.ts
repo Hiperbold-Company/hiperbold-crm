@@ -43,9 +43,9 @@ describe("linhasDoCartao — o que o funil escolheu, ou o padrão", () => {
     expect(linhasDoCartao({})).toEqual(["ultima_mensagem", "telefone"]);
   });
 
-  it("o vocabulário tem os 9 campos e só eles", () => {
+  it("o vocabulário tem os 10 campos e só eles", () => {
     expect([...CAMPOS_DO_CARTAO].sort()).toEqual(
-      ["cargo", "email", "empresa", "origem", "telefone", "ultima_mensagem", "utm_campaign", "utm_medium", "utm_source"],
+      ["cargo", "email", "empresa", "etiquetas", "origem", "telefone", "ultima_mensagem", "utm_campaign", "utm_medium", "utm_source"],
     );
   });
 });
@@ -113,5 +113,30 @@ describe("valorDaLinha — de onde vem cada campo", () => {
     expect(valorDaLinha({}, "telefone")).toBeNull();
     expect(valorDaLinha({ conversa: null }, "ultima_mensagem")).toBeNull();
     expect(valorDaLinha({ conversa: { id: "c", preview: "  ", last_message_at: null, unread: 0 } }, "ultima_mensagem")).toBeNull();
+  });
+});
+
+describe("etiquetas — a união das três caixas", () => {
+  it("⭐ une negócio, contato e conversas, nessa ordem, sem repetir (maiúsculas não diferenciam; vale a primeira grafia)", () => {
+    expect(
+      valorDaLinha(
+        { tags: ["VIP", "novo"], contact_tags: ["vip", "Indicação"], conversation_tags: ["NOVO", "urgente"] },
+        "etiquetas",
+      ),
+    ).toBe("VIP · novo · Indicação · urgente");
+  });
+
+  it("aceita só uma caixa e ignora vazios", () => {
+    expect(valorDaLinha({ conversation_tags: ["a"] }, "etiquetas")).toBe("a");
+    expect(valorDaLinha({ tags: ["  ", "b"] }, "etiquetas")).toBe("b");
+  });
+
+  it("⭐ vazio → null (a linha some)", () => {
+    expect(valorDaLinha({}, "etiquetas")).toBeNull();
+    expect(valorDaLinha({ tags: [], contact_tags: [], conversation_tags: [] }, "etiquetas")).toBeNull();
+  });
+
+  it("o schema do PATCH aceita 'etiquetas'", () => {
+    expect(patchDasLinhasSchema.safeParse({ card_lines: ["etiquetas", "email"] }).success).toBe(true);
   });
 });
