@@ -224,6 +224,23 @@ describe("os tipos de documento do contato", () => {
     );
   });
 
+  it("SSN com separador é recusado em todo tipo que não seja ITIN, com mensagem própria", () => {
+    for (const tipo of TIPOS_DE_DOCUMENTO_DO_CONTATO.filter((t) => t !== "us_itin")) {
+      expect(validaDocumentoDoContato(US, "123-45-6789", tipo), tipo).toEqual({
+        ok: false,
+        motivo: "numero_invalido",
+        mensagem: "Não guardamos SSN: informe outro documento",
+      });
+    }
+    // Os mesmos 9 dígitos SEM o formato do SSN seguem a régua do tipo.
+    expect(validaDocumentoDoContato(US, "123456789", "us_drivers_license").ok).toBe(true);
+    // No ITIN a forma é a mesma; quem decide são as faixas do IRS.
+    expect(validaDocumentoDoContato(US, "123-45-6789", "us_itin")).toEqual(
+      expect.objectContaining({ ok: false, mensagem: expect.stringContaining("ITIN inválido") }),
+    );
+    expect(validaDocumentoDoContato(US, "912-70-1234", "us_itin").ok).toBe(true);
+  });
+
   it("normaliza para maiúsculas sem separador (é o que se cifra)", () => {
     expect(validaDocumentoDoContato(US, "a1234-5678", "us_passport")).toEqual(
       expect.objectContaining({ ok: true, normalizado: "A12345678" }),

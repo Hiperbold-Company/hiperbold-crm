@@ -1,4 +1,4 @@
-import { perfilDoPais, type DocumentoDoTitular } from "@/lib/legal/perfil-do-pais";
+import { MENSAGEM_SSN, pareceSsn, perfilDoPais, type DocumentoDoTitular } from "@/lib/legal/perfil-do-pais";
 import {
   TIPOS_DE_DOCUMENTO,
   type TipoDeDocumento,
@@ -415,8 +415,32 @@ export interface LinhaNormalizada {
  * Decisão do dono do produto, 2026-08-24: o público é brasileiro, então assumir
  * `+55` é a leitura certa de uma planilha sem DDI — e é o que a ingestão já fazia.
  */
-export function normalizaTelefone(raw: string): string | null {
+export function normalizaTelefone(raw: string, pais?: string | null): string | null {
+  if ((pais ?? "").trim().toUpperCase() === "US") return normalizaTelefoneUS(raw);
   return normalizePhoneBR(raw);
+}
+
+/**
+ * Telefone numa organização dos ESTADOS UNIDOS: sem DDI, o país é o +1.
+ *
+ * A mesma leitura da regra brasileira, com o código do país da organização: 10
+ * dígitos são área + número e ganham `+1`; 11 dígitos começando com `1` já
+ * trazem o DDI sem o `+`; quem escreve o `+` declara o país e é respeitado
+ * (cliente brasileiro em Orlando: `+55 11 99999-8888`). Fora disso, `null` — a
+ * linha vai para os erros em vez de virar o número de outra pessoa.
+ */
+function normalizaTelefoneUS(raw: string): string | null {
+  const t = raw.trim();
+  if (t === "") return null;
+  if (t.startsWith("+")) {
+    const digitos = t.slice(1).replace(/[\s().-]/g, "");
+    return /^\d{8,15}$/.test(digitos) ? `+${digitos}` : null;
+  }
+  if (/[^\d\s().-]/.test(t)) return null;
+  const digitos = t.replace(/\D/g, "");
+  if (digitos.length === 10) return `+1${digitos}`;
+  if (digitos.length === 11 && digitos.startsWith("1")) return `+${digitos}`;
+  return null;
 }
 
 /**
@@ -461,6 +485,8 @@ export function mapLinha(
   telefoneExemplo?: string,
   /** Os tipos de documento do país (EUA); ausente = o documento único de `documento`. */
   tiposDeDocumento?: readonly TipoDeDocumento[],
+  /** O país da organização: decide o DDI assumido no telefone sem `+` (EUA = +1; o resto, a regra de sempre). */
+  pais?: string | null,
 ): { contato: LinhaNormalizada; motivo: string | null } {
   const _t = t || ((x) => x);
   const doc = documento ?? perfilDoPais(null).documento;
@@ -487,7 +513,7 @@ export function mapLinha(
 
   const phoneRaw = get("phone_number");
   if (phoneRaw !== "") {
-    const phone = normalizaTelefone(phoneRaw);
+    const phone = normalizaTelefone(phoneRaw, pais);
     if (phone === null) {
       return {
         contato: {},
@@ -523,6 +549,10 @@ export function mapLinha(
       const tipo = tipoDaCelula(celulaDoTipo, tiposDeDocumento);
       if (tipo === null) {
         return { contato: {}, motivo: _t("tipo de documento não aceito: ") + `"${celulaDoTipo}"` };
+      }
+      // SSN na forma `123-45-6789` é recusado no BRUTO: a normalização do tipo tiraria os hífens.
+      if (pareceSsn(bruto, tipo.codigo)) {
+        return { contato: {}, motivo: _t(MENSAGEM_SSN) };
       }
       contato.cpf = tipo.normaliza(bruto);
       contato.document_type = tipo.codigo;

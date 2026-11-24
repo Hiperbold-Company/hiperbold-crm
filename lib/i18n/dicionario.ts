@@ -3535,6 +3535,8 @@ export const DICIONARIO: Traducoes = {
   // os de Portugal, e quem escolhe espanhol precisa deles traduzidos.
   "Denominação social": { es: "Denominación social" },
   NIPC: { es: "NIPC" },
+  "Não guardamos SSN: informe outro documento": { es: "No guardamos SSN: informe otro documento" },
+  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone (sem DDI, vale +1), email, documento (número do documento), document_type (tipo: passaporte, carteira de motorista, ITIN…), nascimento, tags. Não envie SSN. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.": { es: "Envíe un archivo .csv con encabezado — columnas reconocidas: nombre, teléfono (sin código de país, vale +1), email, documento (número del documento), document_type (tipo: pasaporte, licencia de conducir, ITIN…), nacimiento, tags. No envíe SSN. Excel: use “Guardar como” → “CSV UTF-8”. Máximo de 500 filas por archivo." },
   "Nome legal da empresa (Legal name)": { es: "Nombre legal de la empresa (Legal name)" },
   "EIN": { es: "EIN" },
   "Carteira de motorista (Driver's License)": { es: "Licencia de conducir (Driver's License)" },
@@ -15761,9 +15763,9 @@ export const DICIONARIO: Traducoes = {
   // passariam no CI e cairiam no português na tela em espanhol.
   Moeda: { es: "Moneda" },
   País: { es: "País" },
-  "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.":
+  "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países revisados: com a lei conferida ou, como os Estados Unidos, com a conclusão de que não há lei geral a citar — a lista é curta de propósito.":
     {
-      es: "De aquí salen el documento del contacto, la ley citada en el documento de acceso y el plazo en días hábiles. Solo aparecen países con la ley revisada: la lista es corta a propósito.",
+      es: "De aquí salen el documento del contacto, la ley citada en el documento de acceso y el plazo en días hábiles. Solo aparecen países revisados: con la ley verificada o, como Estados Unidos, con la conclusión de que no hay una ley general que citar; la lista es corta a propósito.",
     },
   "A citação do RGPD (artigo 15.º do Regulamento (UE) 2016/679) foi conferida contra o texto oficial numa revisão feita por IA, sem advogado em Portugal. Os prazos do sistema (7 e 15 dias úteis) são mais curtos que o prazo legal de um mês, e o relatório de acesso ainda não traz todas as informações do art. 15.º. Trocar o país muda a regra do documento do contato: a partir daí, CPF enviado por API, importação ou integração é recusado como NIF inválido. O sistema não substitui o seu encarregado da proteção de dados: confirme com ele os textos enviados aos titulares, sobretudo nas campanhas de marketing, que em Portugal, em regra, exigem consentimento prévio (Lei 41/2004, art. 13.º-A).":
     {

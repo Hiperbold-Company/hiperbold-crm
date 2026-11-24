@@ -207,12 +207,12 @@ describe("migration 0967: cpf_hash e cpf_encrypted são só do servidor", () => 
     `);
     expect((achadas ?? "").split(",")).toHaveLength(6);
   });
-  it("a lista de colunas de lib/contacts/colunas.ts (contexto das automações) é exatamente toda coluna de contacts menos as do CPF", () => {
+  it("a lista de colunas de lib/contacts/colunas.ts (contexto das automações) é exatamente toda coluna de contacts menos as do documento (o par do CPF e o tipo, 1020)", () => {
     const [reais] = sondasDesfeitas(`
       select '${MARCA}' || string_agg(attname, ', ' order by attnum)
         from pg_attribute
        where attrelid = 'public.contacts'::regclass and attnum > 0 and not attisdropped
-         and attname not in ('cpf_hash', 'cpf_encrypted');
+         and attname not in ('cpf_hash', 'cpf_encrypted', 'document_type');
     `);
     expect(
       COLUNAS_DO_CONTATO_SEM_CPF,

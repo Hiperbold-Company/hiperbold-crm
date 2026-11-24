@@ -1,5 +1,6 @@
 /**
- * Todas as colunas de `contacts` MENOS as do CPF (`cpf_hash`, `cpf_encrypted`), na ordem do banco.
+ * Todas as colunas de `contacts` MENOS as do documento (`cpf_hash`, `cpf_encrypted` e o tipo, `document_type`), na
+ * ordem do banco.
  *
  * Para quem lê o contato inteiro (contexto de automação, por exemplo) sem `select *`: o `*` traria o hash e o
  * cifrado do CPF para a memória, de onde `{{contact.cpf_hash}}` poderia sair num texto enviado ao cliente (D-216).
@@ -66,5 +67,7 @@ export const COLUNAS_DO_CONTATO_SEM_CPF = [
   "busca_sem_acento",
   "ai_opt_out",
   "contact_type",
-  "document_type",
+  // `document_type` (migration 1020) fica FORA, como o par do CPF: o tipo do
+  // documento tem a visibilidade do número (só gerente+ vê), e o contexto da
+  // automação vai para texto enviado ao cliente.
 ].join(", ");

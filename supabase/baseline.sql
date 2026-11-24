@@ -104881,15 +104881,22 @@ set lock_timeout = '3s';
 alter table public.contacts
   add column if not exists document_type text;
 
-alter table public.contacts
-  drop constraint if exists contacts_document_type_check;
-
-alter table public.contacts
-  add constraint contacts_document_type_check
-  check (document_type is null or document_type in (
-    'us_drivers_license', 'us_state_id', 'us_passport', 'us_green_card',
-    'us_itin', 'foreign_passport', 'br_cpf'
-  ));
+-- Só cria quando falta (padrão do bloco 1012): o update.sh reaplica o baseline inteiro, e drop+add
+-- revalidaria a tabela toda a cada atualização.
+do $hb_1020_check_do_tipo$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.contacts'::regclass
+       and conname = 'contacts_document_type_check'
+  ) then
+    alter table public.contacts
+      add constraint contacts_document_type_check
+      check (document_type is null or document_type = any (array['us_drivers_license', 'us_state_id',
+             'us_passport', 'us_green_card', 'us_itin', 'foreign_passport', 'br_cpf']::text[]));
+  end if;
+end
+$hb_1020_check_do_tipo$;
 
 comment on column public.contacts.document_type is
   'O TIPO do documento gravado em cpf_hash/cpf_encrypted (migration 1020). Só preenchido em país com seletor '
@@ -104899,12 +104906,25 @@ comment on column public.contacts.document_type is
 
 -- O tipo morre junto com o documento: quem zera o par (fn_lgpd_cascade_redact_contact, merge, qualquer
 -- caminho futuro) zera o tipo sem precisar saber dele. Sem HTTP, sem leitura de outra tabela.
+--
+-- E o tipo não muda SEM o número (catraca no padrão da 0967): o papel `authenticated` tem grant de
+-- UPDATE na coluna (régua de grant por coluna da 0998), e sem esta recusa trocaria pela REST o tipo de
+-- um número que ele nem lê — o passaporte viraria "CPF" com os mesmos caracteres. Quem grava o par é
+-- o servidor (`service_role`, `gravarCpfDoContatoPorUsuario`) ou função do dono (`postgres`), e esses
+-- passam.
 create or replace function public.fn_contacts_tipo_segue_o_documento()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
 as $fn$
 begin
+  if tg_op = 'UPDATE'
+     and new.document_type is distinct from old.document_type
+     and new.cpf_hash is not distinct from old.cpf_hash
+     and current_user not in ('service_role', 'postgres') then
+    raise exception 'document_type só muda junto com o documento, pelo servidor'
+      using errcode = '42501';
+  end if;
   if new.cpf_hash is null then
     new.document_type := null;
   end if;

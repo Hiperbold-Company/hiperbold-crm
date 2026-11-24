@@ -192,7 +192,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
             </Select>
             <p className="text-xs text-muted-foreground">
               {t(
-                "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.",
+                "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países revisados: com a lei conferida ou, como os Estados Unidos, com a conclusão de que não há lei geral a citar — a lista é curta de propósito.",
               )}
             </p>
             {/* Quem responde pelo documento precisa saber que a revisão foi

@@ -675,6 +675,18 @@ export type ResultadoDoDocumento =
   | { ok: true; tipo: TipoDeDocumento | null; normalizado: string }
   | { ok: false; motivo: "tipo_nao_aceito" | "tipo_obrigatorio" | "tipo_invalido" | "numero_invalido"; mensagem: string };
 
+/** O SSN com separador (`123-45-6789`): o formato que o titular digita. */
+const FORMATO_DE_SSN = /^\d{3}-\d{2}-\d{4}$/;
+
+/**
+ * O valor tem a FORMA de SSN (`123-45-6789`) e o tipo não é ITIN? Lido no valor BRUTO, antes de
+ * qualquer normalização — a do tipo tira os hífens e o SSN passaria como carteira de motorista.
+ */
+export function pareceSsn(valor: string, codigoDoTipo: string): boolean {
+  return codigoDoTipo !== "us_itin" && FORMATO_DE_SSN.test(valor.trim());
+}
+export const MENSAGEM_SSN = "Não guardamos SSN: informe outro documento";
+
 export function validaDocumentoDoContato(
   perfil: PerfilDoPais,
   valor: string,
@@ -701,6 +713,12 @@ export function validaDocumentoDoContato(
   const escolhido = tipos.find((t) => t.codigo === tipo.trim());
   if (!escolhido) {
     return { ok: false, motivo: "tipo_invalido", mensagem: "Tipo de documento não aceito" };
+  }
+  // Um SSN digitado no campo de outro tipo (a carteira de motorista aceita 4 a 20
+  // dígitos, e passaria) é recusado pelo FORMATO, com mensagem própria: o
+  // produto não guarda SSN. O ITIN tem a mesma forma e é julgado pelas faixas do IRS.
+  if (pareceSsn(valor, escolhido.codigo)) {
+    return { ok: false, motivo: "numero_invalido", mensagem: MENSAGEM_SSN };
   }
   if (!escolhido.valida(valor)) {
     return { ok: false, motivo: "numero_invalido", mensagem: escolhido.mensagemInvalido };

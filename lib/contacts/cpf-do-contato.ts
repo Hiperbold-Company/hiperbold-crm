@@ -116,6 +116,34 @@ export async function decifrarCpfDoContato(organizationId: string, contactId: st
   return dec.data;
 }
 
+/**
+ * O TIPO do documento (migration 1020) tem a visibilidade do NÚMERO: só sai para quem abre o documento
+ * (gerente+, decidido pelo chamador). Por isso nenhuma lista nem resposta comum o seleciona — ele é lido aqui,
+ * pelo cliente de serviço e com `organization_id` explícito, ao lado da decifragem.
+ */
+export async function tiposDoDocumentoDosContatos(
+  organizationId: string,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const saida = new Map<string, string>();
+  if (ids.length === 0) return saida;
+  const admin = createAdminClient();
+  for (let i = 0; i < ids.length; i += BLOCO_DE_CPFS) {
+    const { data, error } = await admin
+      .from("contacts")
+      .select("id, document_type")
+      .eq("organization_id", organizationId)
+      .eq("is_anonymized", false)
+      .in("id", ids.slice(i, i + BLOCO_DE_CPFS))
+      .not("document_type", "is", null);
+    if (error) continue;
+    for (const linha of (data ?? []) as Array<{ id: string; document_type: string | null }>) {
+      if (linha.document_type) saida.set(linha.id, linha.document_type);
+    }
+  }
+  return saida;
+}
+
 /** Contatos por consulta ao ler os cifrados de uma exportação (o `in` vai na URL do PostgREST). */
 const BLOCO_DE_CPFS = 100;
 /** Decifragens em voo ao mesmo tempo: uma exportação de milhares não abre milhares de chamadas. */

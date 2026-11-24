@@ -35,7 +35,13 @@ vi.mock("@/lib/contacts/cpf-do-contato", () => ({
   idsComCpf: vi.fn(async () => ({ ids: new Set<string>(), error: null })),
   // Hiperbold: CPF exportado só para gerente+; nenhum contato daqui tem CPF.
   cpfsDecifradosDosContatos: vi.fn(async () => new Map<string, string>()),
+  tiposDoDocumentoDosContatos: vi.fn(async () => new Map<string, string>()),
 }));
+// O país da organização decide se o documento sai rotulado pelo tipo (EUA); aqui, Brasil.
+vi.mock("@/lib/legal/perfil-do-pais", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/legal/perfil-do-pais")>();
+  return { ...real, perfilDaOrganizacao: vi.fn(async () => real.perfilDoPais(null)) };
+});
 
 const USER = "99999999-9999-4999-8999-999999999999";
 const uid = (n: number) => `c0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;

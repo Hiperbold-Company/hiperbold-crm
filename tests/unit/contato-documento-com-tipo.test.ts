@@ -8,6 +8,9 @@
  * tipo, o número gravado com letra (sem o `\D` que apagava), o tipo gravado
  * junto, o hash com o tipo, o CSV com coluna de tipo, e o Brasil igual.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,11 +24,13 @@ const CPF = "52998224725";
 process.env.CPF_ENCRYPTION_KEY = "chave-de-teste-do-cpf";
 
 let orgDaSessao = ORG;
-import { createContactHandler, patchContactHandler } from "@/app/api/v1/contacts/_handler";
+let papelNaOrg = "agent";
+import { createContactHandler, getContactHandler, patchContactHandler } from "@/app/api/v1/contacts/_handler";
+import { COLUNAS_DO_CONTATO_SEM_CPF } from "@/lib/contacts/colunas";
 import { POST as importar } from "@/app/api/v1/contacts/import/route";
 import { requireRole } from "@/lib/auth/require-role";
 import { hashCpf, hashDocumento } from "@/lib/contacts/cpf";
-import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
+import { MENSAGEM_SSN, perfilDoPais } from "@/lib/legal/perfil-do-pais";
 import { contactCreateSchemaDoPais, contactPatchSchemaDoPais } from "@/lib/schemas/contacts";
 import { validateRequest } from "@/lib/schemas/_validate";
 import { ApiError } from "@/lib/api/types";
@@ -79,6 +84,7 @@ function montar(inicial: Linha[] = []) {
       { id: ORG, country: "US" },
       { id: ORG_BR, country: null },
     ],
+    user_organizations: [{ user_id: USER, organization_id: ORG, role: papelNaOrg, revoked_at: null }],
   };
   const comum = (recusarCpf: boolean) => ({
     contacts: (modo: string, linhas: Linha[], patch?: Linha | null) => {
@@ -122,6 +128,7 @@ const contatos = () => usuario.tabelas.contacts!;
 
 beforeEach(() => {
   orgDaSessao = ORG;
+  papelNaOrg = "agent";
   sequencia = 0;
   cifraDisponivel = true;
   vi.mocked(requireRole).mockImplementation(async () => ({
@@ -155,6 +162,12 @@ describe("a API valida o par tipo + número pelo país da organização", () => 
     const r = validado(US, { name: "Ana", cpf: "123-45-6789", document_type: "us_ssn" });
     expect(r.success).toBe(false);
     expect(r.error?.issues.some((i) => i.path[0] === "document_type")).toBe(true);
+  });
+
+  it("EUA: número na forma de SSN é recusado em tipo que não é ITIN, com a mensagem própria", () => {
+    const r = validado(US, { name: "Ana", cpf: "123-45-6789", document_type: "us_drivers_license" });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]).toMatchObject({ path: ["cpf"], message: MENSAGEM_SSN });
   });
 
   it("EUA: número fora da régua do tipo é recusado no campo do número", () => {
@@ -298,6 +311,61 @@ describe("criar e alterar contato com documento tipado", () => {
   });
 });
 
+describe("o tipo tem a visibilidade do número (só gerente+)", () => {
+  const passaporte = {
+    id: "p1",
+    organization_id: ORG,
+    name: "Ana",
+    is_anonymized: false,
+    tags: [],
+    consent: {},
+    custom_fields: {},
+    cpf_hash: "hash-p1",
+    cpf_encrypted: "cifrado(A12345678)",
+    document_type: "us_passport",
+  };
+
+  it("a resposta da criação não traz o tipo", async () => {
+    montar();
+    const r = validado(US, { name: "Ana", cpf: "A12345678", document_type: "us_passport" });
+    const criado = await createContactHandler(usuario as never, ctx, r.data as never);
+    expect(contatos()[0]).toMatchObject({ document_type: "us_passport" });
+    expect(criado.contact).not.toHaveProperty("document_type");
+  });
+
+  it("atendente que pede para abrir o documento é negado, e o tipo não é lido pelo servidor", async () => {
+    montar([{ ...passaporte }]);
+    const ficha = await getContactHandler(usuario as never, ctx, { contactId: "p1", decryptPurpose: "atendimento" });
+    expect(ficha.cpf_available).toBe(true);
+    expect(ficha.cpf_decrypt_denied).toBe(true);
+    expect(ficha.cpf_decrypted).toBeNull();
+    // O banco em memória devolve a linha inteira em qualquer `select`; o recorte real é a lista de
+    // colunas da sessão (abaixo) — aqui se prova que o caminho do servidor não acrescentou o tipo.
+    expect(servidor.chamadasRpc.some((c) => c.nome === "fn_decrypt_oauth")).toBe(false);
+  });
+
+  it("a lista de colunas que a sessão lê (lista, ficha, respostas de POST e PATCH) não nomeia o tipo", () => {
+    const fonte = readFileSync(join(process.cwd(), "app/api/v1/contacts/_handler.ts"), "utf8");
+    const m = /const SELECT_COLS =\s*"([^"]+)"/.exec(fonte);
+    expect(m, "SELECT_COLS não encontrado").not.toBeNull();
+    expect(m![1]!.split(", ")).not.toContain("document_type");
+    expect(m![1]!.split(", ")).not.toContain("cpf_hash");
+  });
+
+  it("gerente que abre o documento recebe o número E o tipo", async () => {
+    papelNaOrg = "manager";
+    montar([{ ...passaporte }]);
+    const ficha = await getContactHandler(usuario as never, ctx, { contactId: "p1", decryptPurpose: "atendimento" });
+    expect(ficha.cpf_decrypted).toBe("A12345678");
+    expect(ficha.document_type).toBe("us_passport");
+  });
+
+  it("o contexto das automações não leva o tipo", () => {
+    expect(COLUNAS_DO_CONTATO_SEM_CPF.split(", ")).not.toContain("document_type");
+    expect(COLUNAS_DO_CONTATO_SEM_CPF.split(", ")).not.toContain("cpf_hash");
+  });
+});
+
 describe("importação por planilha com a coluna do tipo", () => {
   async function importarCsv(cabecalho: string, linhas: string[]) {
     const form = new FormData();
@@ -338,6 +406,31 @@ describe("importação por planilha com a coluna do tipo", () => {
     expect(corpo.data.errors.map((e) => e.linha)).toEqual([2, 3, 4]);
     expect(contatos()).toHaveLength(1);
     expect(contatos()[0]).not.toHaveProperty("cpf_hash");
+  });
+
+  it("EUA: SSN com hífens numa linha de carteira de motorista é recusado antes de normalizar", async () => {
+    montar();
+    const { corpo } = await importarCsv("name,phone_number,document,document_type", [
+      "Eva,+14075551238,123-45-6789,Driver's License",
+    ]);
+    expect(corpo.data.imported).toBe(0);
+    expect(corpo.data.errors).toEqual([expect.objectContaining({ linha: 2, motivo: expect.stringContaining(MENSAGEM_SSN) })]);
+    expect(contatos()).toHaveLength(0);
+  });
+
+  it("EUA: telefone sem DDI vira +1 (e não +55); com + é respeitado", async () => {
+    montar();
+    const { corpo } = await importarCsv("name,phone_number", ["Ana,(407) 555-1234", "Bia,14075551235", "Caio,+55 11 99999-8888"]);
+    expect(corpo.data).toMatchObject({ imported: 3, errors: [] });
+    expect(contatos().map((c) => c.phone_number)).toEqual(["+14075551234", "+14075551235", "+5511999998888"]);
+  });
+
+  it("Brasil: telefone sem DDI continua +55", async () => {
+    orgDaSessao = ORG_BR;
+    montar();
+    const { corpo } = await importarCsv("nome,telefone", ["Ana,(11) 99999-8888"]);
+    expect(corpo.data).toMatchObject({ imported: 1, errors: [] });
+    expect(contatos()[0]).toMatchObject({ phone_number: "+5511999998888" });
   });
 
   it("Brasil: a coluna de tipo não é reconhecida e o CPF importa como sempre", async () => {

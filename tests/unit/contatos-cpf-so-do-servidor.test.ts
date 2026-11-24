@@ -43,6 +43,8 @@ vi.mock("@/lib/contacts/cpf-do-contato", () => ({
     return servidor.cpfEmClaro;
   }),
   cifrarCpfDoContato: vi.fn(async (cpf: string) => `cifrado(${cpf})`),
+  // Brasil: nenhum contato daqui tem tipo de documento (migration 1020).
+  tiposDoDocumentoDosContatos: vi.fn(async () => new Map<string, string>()),
   idsComCpf: vi.fn(async (_org: string, ids: string[]) => ({
     ids: new Set(ids.filter((i) => servidor.comCpf.has(i))),
     error: null,

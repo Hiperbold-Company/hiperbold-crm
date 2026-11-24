@@ -176,6 +176,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       doc,
       perfil.telefoneExemplo,
       perfil.tiposDeDocumento,
+      perfil.codigo,
     );
     if (motivo !== null) {
       errors.push({ linha, motivo });

@@ -31,6 +31,7 @@ import {
   cifrarCpfDoContato,
   decifrarCpfDoContato,
   gravarCpfDoContatoPorUsuario,
+  tiposDoDocumentoDosContatos,
   idsComCpf,
   idsPorHashDeCpf,
   type ErroDeCpf,
@@ -76,9 +77,10 @@ type SB = SupabaseClient;
 
 // `cpf_hash` e `cpf_encrypted` NÃO entram aqui: o papel `authenticated` não lê nem grava essas colunas (migration
 // 0967, D-216), e pedir qualquer uma — ou `select *` — com a sessão do usuário dá "permission denied". Quem precisa de
-// "tem CPF?" usa `idsComCpf` (lib/contacts/cpf-do-contato.ts), com o cliente de serviço.
+// "tem CPF?" usa `idsComCpf` (lib/contacts/cpf-do-contato.ts), com o cliente de serviço. `document_type` (1020)
+// também fica de fora: o tipo tem a visibilidade do número e sai só na abertura do documento (gerente+).
 const SELECT_COLS =
-  "id, organization_id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, email_normalized, phone_number, birthdate, document_type, is_blocked, blocked_reason, is_personal, contact_type, ai_opt_out, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, first_service_at";
+  "id, organization_id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, email_normalized, phone_number, birthdate, is_blocked, blocked_reason, is_personal, contact_type, ai_opt_out, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, first_service_at";
 
 interface CursorPayload {
   sort: string | null;
@@ -459,6 +461,8 @@ export async function getContactHandler(
 
   let cpfDecrypted: string | null = null;
   let cpfDecryptDenied = false;
+  // O tipo do documento sai junto com o número, para o mesmo papel (gerente+); `null` em Brasil e Portugal.
+  let documentType: string | null = null;
 
   if (input.decryptPurpose && contact.cpf_available && ctx.actor.type === "user") {
     const { data: membership } = await supabase
@@ -476,6 +480,10 @@ export async function getContactHandler(
       // Decifra no servidor (`fn_decrypt_oauth`, só service_role). O papel mínimo (manager) já foi conferido acima e
       // o audit logo abaixo registra a abertura, com `success` dizendo se saiu CPF.
       cpfDecrypted = await decifrarCpfDoContato(contact.organization_id, input.contactId);
+      if (cpfDecrypted !== null) {
+        const tipos = await tiposDoDocumentoDosContatos(contact.organization_id, [input.contactId]);
+        documentType = tipos.get(input.contactId) ?? null;
+      }
       if (cpfDecrypted === null) {
         logger.warn("[contacts.get] não consegui decifrar o CPF do contato", {
           organizationId: contact.organization_id,
@@ -513,6 +521,7 @@ export async function getContactHandler(
     cpf_available: contact.cpf_available === true,
     cpf_decrypted: cpfDecrypted,
     cpf_decrypt_denied: cpfDecryptDenied || undefined,
+    ...(documentType ? { document_type: documentType } : {}),
   };
 }
 
