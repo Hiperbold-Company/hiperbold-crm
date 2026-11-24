@@ -2698,6 +2698,105 @@
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
+/* ---- Onda 3: abas e seletores da lista numa linha que rola de lado ---- */
+[data-redesign="ligado"] [data-rd-chat="abas"],
+[data-redesign="ligado"] [data-rd-chat="seletores"] {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+[data-redesign="ligado"] [data-rd-chat="abas"] > *,
+[data-redesign="ligado"] [data-rd-chat="seletores"] > * {
+  flex: none;
+}
+
+/* ---- Onda 3: "Mais ações" do cabeçalho da conversa --------------------
+   Só esconde: as ações raras seguem montadas dentro do <details>. Sem
+   nenhuma ação dentro (todas devolveram nada), o gatilho some. */
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"] {
+  position: relative;
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"]:not(:has([data-rd-chat="mais-acoes-lista"] > *)) {
+  display: none;
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"] > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"] > summary::-webkit-details-marker {
+  display: none;
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"] > summary:hover,
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"][open] > summary {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes"] > summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--rd-chat-foco);
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes-lista"] {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+[data-redesign="ligado"] [data-rd-chat="mais-acoes-lista"] button {
+  justify-content: flex-start;
+  width: 100%;
+  border-color: transparent;
+}
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-chat="mais-acoes"] > summary {
+    width: 32px;
+    height: 32px;
+  }
+}
+/* Celular: a barra de ações rola de lado (overflow), e uma lista solta por
+   cima seria cortada por ela. Aberto, o "⋯" desdobra as ações na própria faixa. */
+@media (max-width: 47.99rem) {
+  [data-redesign="ligado"] [data-rd-chat="mais-acoes"][open] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="mais-acoes-lista"] {
+    position: static;
+    flex-direction: row;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  [data-redesign="ligado"] [data-rd-chat="mais-acoes-lista"] > * {
+    flex: none;
+  }
+  [data-redesign="ligado"] [data-rd-chat="mais-acoes-lista"] button {
+    width: auto;
+    border-color: var(--color-border-strong);
+  }
+}
+
 /* redesign: chat — fim ─────────────────────────────────────────────────── */
 
 /* redesign: pipeline */

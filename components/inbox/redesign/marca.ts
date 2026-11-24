@@ -18,6 +18,8 @@ export type PecaDoChat =
   | "grade"
   | "lista"
   | "cabecalho-da-lista"
+  | "mais-acoes"
+  | "mais-acoes-lista"
   | "titulo-da-lista"
   | "filtros"
   | "busca"
