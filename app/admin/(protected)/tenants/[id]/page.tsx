@@ -16,7 +16,8 @@ import { loadAuthUser } from "@/lib/auth/server";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { moduloLigado } from "@/lib/instalacao/modulos";
-import { redesignDaEmpresa } from "@/lib/redesign/chave";
+import { redesignDaEmpresa, redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { TenantOverviewClient } from "./_client";
@@ -56,8 +57,9 @@ export default async function TenantDetailPage({ params }: TenantDetailPageProps
     lerIaDoMolde(id),
     lerNovoVisual(id),
   ]);
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rd-plataforma={rd("grade-de-cartoes")}>
       <TenantOverviewClient id={id} cobrancaLigada={cobranca !== null} />
       <MembrosDaAgencia organizationId={id} membros={membros} podeEscrever={platformAdmin.scope === "full"} />
       {novoVisual !== null && (

@@ -28,7 +28,17 @@ export type PecaDaPlataforma =
   | "cabecalho"
   | "titulo"
   | "subtitulo"
-  | "criar";
+  | "criar"
+  // onda 5: o molde do v49 em toda tela de /admin
+  | "filtros"
+  | "tabela"
+  | "nome"
+  | "avatar"
+  | "voltar"
+  | "cabecalho-da-empresa"
+  | "selo"
+  | "grade-de-cartoes"
+  | "formulario";
 
 export type MarcaDaPlataforma = (peca: PecaDaPlataforma) => PecaDaPlataforma | undefined;
 
@@ -39,4 +49,18 @@ export function marcaDaPlataforma(ligado: boolean): MarcaDaPlataforma {
 
 export function useMarcaDaPlataforma(): MarcaDaPlataforma {
   return marcaDaPlataforma(useRedesign());
+}
+
+/**
+ * As iniciais do avatar das listas (onda 5, v49): até duas letras, das duas
+ * primeiras palavras do nome que a linha JÁ mostra. Nome vazio devolve "".
+ * Só é chamado com a chave ligada; o avatar é decorativo (`aria-hidden`).
+ */
+export function iniciaisDoNome(nome: string | null | undefined): string {
+  const palavras = (nome ?? "").trim().split(/\s+/).filter(Boolean);
+  return palavras
+    .slice(0, 2)
+    .map((p) => Array.from(p)[0] ?? "")
+    .join("")
+    .toLocaleUpperCase("pt-BR");
 }

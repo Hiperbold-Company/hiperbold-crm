@@ -8,6 +8,8 @@ import { CaretLeft } from "@/lib/ui/icons";
 import { TabNav } from "./_tab-nav";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 // ---------------------------------------------------------------------------
 // Status badge helpers (same palette as TenantsTable)
@@ -72,6 +74,7 @@ export default async function TenantDetailLayout({ children, params }: TenantLay
     .single();
 
   const basePath = `/admin/tenants/${id}`;
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
 
   return (
     <div className="space-y-6">
@@ -79,22 +82,29 @@ export default async function TenantDetailLayout({ children, params }: TenantLay
       <Link
         href="/admin/tenants"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        data-rd-plataforma={rd("voltar")}
       >
         <CaretLeft size={14} aria-hidden />
         {traduzir("Tenants", idioma)}
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+        data-rd-plataforma={rd("cabecalho-da-empresa")}
+      >
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{org?.display_name ?? id}</h1>
           {org?.slug && (
-            <code className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+            <code
+              className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
+              data-rd-plataforma={rd("selo")}
+            >
               {org.slug}
             </code>
           )}
           {org?.status && (
-            <Badge variant={STATUS_VARIANTS[org.status] ?? "neutral"}>
+            <Badge variant={STATUS_VARIANTS[org.status] ?? "neutral"} data-rd-plataforma={rd("selo")}>
               {traduzir(STATUS_LABELS[org.status] ?? org.status, idioma)}
             </Badge>
           )}

@@ -19,6 +19,7 @@ import {
 import { Users } from "@/lib/ui/icons";
 import type { AdminUserRow } from "@/hooks/useAdminUsers";
 import { useT } from "@/hooks/i18n/useT";
+import { iniciaisDoNome, useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 // ---------------------------------------------------------------------------
 // Role badge
@@ -72,8 +73,9 @@ function relativeDate(iso: string | null, locale: Locale): string {
 
 export function UsersTableAdminSkeleton() {
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border" data-rd-plataforma={rd("tabela")}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -119,6 +121,7 @@ export function UsersTableAdmin({
 }: UsersTableAdminProps) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   if (data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-md border py-16 text-center text-muted-foreground">
@@ -133,7 +136,7 @@ export function UsersTableAdmin({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border">
+      <div className="rounded-md border" data-rd-plataforma={rd("tabela")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -153,7 +156,17 @@ export function UsersTableAdmin({
                   {row.email ?? "—"}
                 </TableCell>
                 <TableCell className="font-medium">
-                  {row.full_name ?? <span className="text-muted-foreground">—</span>}
+                  {rd("nome") && row.full_name ? (
+                    // Chave ligada (v49): avatar de iniciais do nome já mostrado, decorativo.
+                    <span data-rd-plataforma={rd("nome")}>
+                      <span aria-hidden data-rd-plataforma={rd("avatar")}>
+                        {iniciaisDoNome(row.full_name)}
+                      </span>
+                      {row.full_name}
+                    </span>
+                  ) : (
+                    row.full_name ?? <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-0.5">

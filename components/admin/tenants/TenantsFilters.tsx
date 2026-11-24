@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import type { AdminTenantsFilters } from "@/hooks/useAdminTenants";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -26,6 +27,7 @@ interface TenantsFiltersProps {
 
 export function TenantsFilters({ filters, onChange }: TenantsFiltersProps) {
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   const [inputValue, setInputValue] = useState(filters.q ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -51,7 +53,7 @@ export function TenantsFilters({ filters, onChange }: TenantsFiltersProps) {
   );
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center" data-rd-plataforma={rd("filtros")}>
       <Input
         placeholder={t("Buscar por nome, slug ou CNPJ...")}
         value={inputValue}

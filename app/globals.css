@@ -7337,3 +7337,202 @@
   background: var(--color-surface-elevated);
 }
 /* redesign: ajustes — fim ─────────────────────── */
+
+/* redesign: onda5 plataforma ───────────────────────────────
+   Onda 5, parte 2: o molde do protótipo v49 (plat-empresas, plat-usuarios,
+   plat-cobranca, plat-cadastro, plat-marca, plat-sistema) aplicado a toda tela
+   de `/admin`. Mesmas peças `data-rd-plataforma` de `lib/redesign/plataforma.ts`;
+   este bloco vem DEPOIS de `redesign: plataforma` e ajusta o que o v49 mede:
+   título 24px, descrição 14px, faixa de filtro com pílulas, tabela em cartão
+   com cabeçalho em versalete 11px, linhas de ~54px, selos arredondados,
+   avatar de iniciais, grade de cartões no detalhe da empresa e formulários
+   mais largos. Só apresentação: nenhum controle muda.
+
+   TODA regra começa por `[data-redesign="ligado"]`;
+   `tests/unit/redesign-onda5-plataforma.test.tsx` cobra. Só variáveis do tema.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Cabeçalho: título 24px, descrição 14px, sem o filete do bloco anterior ── */
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
+  font-size: 24px;
+  line-height: 1.3;
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 + p {
+  margin-top: 2px;
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] :is(div, header):has(> h1):not([class*="flex"])::before {
+  display: none;
+}
+
+/* ── Faixa de filtro: busca arredondada e filtros em pílula ── */
+[data-redesign="ligado"] [data-rd-plataforma="filtros"] {
+  gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-plataforma="filtros"] [data-slot="input"] {
+  height: 38px;
+  border-radius: 10px;
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-plataforma="filtros"] [data-slot="select-trigger"] {
+  height: 34px;
+  padding-inline: 14px;
+  border-radius: 999px;
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-plataforma="filtros"] [data-slot="select-trigger"]:hover {
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-plataforma="filtros"] [data-slot="select-trigger"][data-state="open"] {
+  border-color: var(--plat);
+  background: var(--plat-soft);
+  color: var(--plat);
+}
+
+/* ── Tabela em cartão branco ── */
+[data-redesign="ligado"] [data-rd-plataforma="tabela"] {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-plataforma="conteudo"] [data-slot="table-head"] {
+  height: 40px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+[data-redesign="ligado"] [data-rd-plataforma="tabela"] [data-slot="table-cell"] {
+  height: 54px;
+  padding-block: 8px;
+  vertical-align: middle;
+}
+[data-redesign="ligado"] [data-rd-plataforma="tabela"] tbody [data-slot="table-row"]:last-child {
+  border-bottom: 0;
+}
+
+/* ── Selos de estado arredondados (listas e cabeçalho da empresa) ── */
+[data-redesign="ligado"] [data-rd-plataforma="tabela"] [data-slot="badge"],
+[data-redesign="ligado"] [data-rd-plataforma="selo"] {
+  border-radius: 999px;
+  padding-inline: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Avatar de iniciais na coluna do nome ── */
+[data-redesign="ligado"] [data-rd-plataforma="nome"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-plataforma="avatar"] {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--plat-soft);
+  color: var(--plat);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── Detalhe da empresa: voltar, cabeçalho com selos e grade de cartões ── */
+[data-redesign="ligado"] [data-rd-plataforma="voltar"] {
+  min-height: 32px;
+  font-weight: 500;
+}
+[data-redesign="ligado"] [data-rd-plataforma="voltar"]:hover {
+  color: var(--plat);
+}
+[data-redesign="ligado"] [data-rd-plataforma="cabecalho-da-empresa"] > div {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-plataforma="grade-de-cartoes"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="grade-de-cartoes"] > * {
+    margin: 0;
+  }
+  /* O resumo (informações, ações e volumes) ocupa a linha inteira; um cartão
+     que sobra sozinho na última linha também. */
+  [data-redesign="ligado"] [data-rd-plataforma="grade-de-cartoes"] > :first-child,
+  [data-redesign="ligado"] [data-rd-plataforma="grade-de-cartoes"] > :last-child:nth-child(even) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Formulários (cadastro, marca, configuração, recursos opcionais) ── */
+[data-redesign="ligado"] [data-rd-plataforma="formulario"] > form {
+  max-width: 56rem;
+}
+[data-redesign="ligado"] [data-rd-plataforma="formulario"] [data-slot="card-title"] {
+  font-size: 16px;
+  line-height: 1.35;
+}
+[data-redesign="ligado"] [data-rd-plataforma="formulario"] [data-slot="card-description"] {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-plataforma="formulario"] h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ── Celular: nada sai da tela, toque de 44px, tabela rola dentro do cartão ── */
+@media (max-width: 640px) {
+  [data-redesign="ligado"] [data-rd-plataforma="conteudo"] h1 {
+    font-size: 22px;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="tabela"] {
+    overflow-x: auto;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="filtros"] [data-slot="input"],
+  [data-redesign="ligado"] [data-rd-plataforma="filtros"] [data-slot="select-trigger"] {
+    width: 100%;
+    height: 44px;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="tabela"] [data-slot="button"],
+  [data-redesign="ligado"] [data-rd-plataforma="voltar"],
+  [data-redesign="ligado"] [data-rd-plataforma="criar"],
+  [data-redesign="ligado"] [data-rd-plataforma="tabela"] ~ div [data-slot="button"] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* "Ver" (usuários) e "Excluir organização" (empresas): links e botões de texto da linha. */
+  [data-redesign="ligado"] [data-rd-plataforma="tabela"] [data-slot="table-cell"] :is(a[href], button):not([data-slot="button"]) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* Abas do detalhe da empresa (a faixa logo abaixo do cabeçalho): rolam em vez de sair da tela. */
+  [data-redesign="ligado"] [data-rd-plataforma="cabecalho-da-empresa"] + div {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  [data-redesign="ligado"] [data-rd-plataforma="cabecalho-da-empresa"] + div > a {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+}
+/* redesign: onda5 plataforma — fim ─────────────────────── */

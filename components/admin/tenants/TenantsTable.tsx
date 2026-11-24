@@ -18,6 +18,7 @@ import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import type { AdminTenantRow } from "@/hooks/useAdminTenants";
 import { TenantRowActions } from "./TenantRowActions";
 import { useT } from "@/hooks/i18n/useT";
+import { iniciaisDoNome, useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 // ---------------------------------------------------------------------------
 // Status badge
@@ -91,8 +92,9 @@ function shortCnpj(cnpj: string | null): string {
 
 export function TenantsTableSkeleton() {
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border" data-rd-plataforma={rd("tabela")}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -138,6 +140,7 @@ export function TenantsTable({
 }: TenantsTableProps) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   const [paraExcluir, setParaExcluir] = useState<AdminTenantRow | null>(null);
   if (data.length === 0) {
     return (
@@ -153,7 +156,7 @@ export function TenantsTable({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border">
+      <div className="rounded-md border" data-rd-plataforma={rd("tabela")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -173,7 +176,19 @@ export function TenantsTable({
             {data.map((row) => (
               <TableRow key={row.id}>
                 <TableCell className="font-mono text-xs">{row.slug}</TableCell>
-                <TableCell className="font-medium">{row.display_name}</TableCell>
+                <TableCell className="font-medium">
+                  {rd("nome") ? (
+                    // Chave ligada (v49): avatar de iniciais do nome já mostrado, decorativo.
+                    <span data-rd-plataforma={rd("nome")}>
+                      <span aria-hidden data-rd-plataforma={rd("avatar")}>
+                        {iniciaisDoNome(row.display_name)}
+                      </span>
+                      {row.display_name}
+                    </span>
+                  ) : (
+                    row.display_name
+                  )}
+                </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {shortCnpj(row.cnpj)}
                 </TableCell>
