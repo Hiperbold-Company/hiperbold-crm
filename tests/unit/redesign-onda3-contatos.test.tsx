@@ -111,7 +111,12 @@ vi.mock("@/hooks/contacts/useContactList", () => ({
   }),
 }));
 vi.mock("@/hooks/contacts/useContact", () => ({
-  useContact: () => ({ isLoading: false, isError: false, data: { data: CONTATO }, refetch: vi.fn() }),
+  useContact: () => ({
+    isLoading: false,
+    isError: false,
+    data: { data: { ...CONTATO, conversa: { id: "cv-1" } as unknown as Contact["conversa"] } },
+    refetch: vi.fn(),
+  }),
 }));
 
 function montar(ui: ReactNode, ligado: boolean) {

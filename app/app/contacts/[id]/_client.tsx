@@ -380,11 +380,20 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
                 {/* Onda 3: as ações raras ficam num "Mais ações" que só ESCONDE —
                     os diálogos continuam montados. Sem ação rara, nada de gatilho. */}
                 {podeMarcarPessoal || podeJuntar ? (
-                  <details data-rd-contatos={rd("mais-acoes")}>
+                  <details
+                    data-rd-contatos={rd("mais-acoes")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") e.currentTarget.removeAttribute("open");
+                    }}
+                  >
                     <summary aria-label={t("Mais ações")}>
                       <DotsThree size={20} weight="bold" aria-hidden />
                     </summary>
-                    <div data-rd-contatos={rd("mais-acoes-lista")}>
+                    {/* Escolher uma ação fecha a lista; o diálogo dela segue montado. */}
+                    <div
+                      data-rd-contatos={rd("mais-acoes-lista")}
+                      onClick={(e) => e.currentTarget.closest("details")?.removeAttribute("open")}
+                    >
                       {/* PESSOAL (spec 21, etapa 15): gerente marca e desmarca; sem
                           exceção de envio — quem é pessoal não recebe por nenhum caminho.
                           Marcar confirma (esconde da operação); desmarcar é direto. */}
@@ -647,7 +656,7 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
             )}
           </div>
         )}
-        {ligado ? (
+        {ligado && contact.conversa ? (
           <div data-rd-contatos={rd("ficha-conversa")}>
             <ConversaNoDossie conversa={contact.conversa} />
           </div>
