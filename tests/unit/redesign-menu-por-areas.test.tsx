@@ -107,4 +107,22 @@ describe("menu por áreas do v49", () => {
     monta("/app/contacts");
     expect(screen.queryByRole("navigation", { name: "Seções da IA" })).toBeNull();
   });
+
+  it("em /app/team a coluna de Configurações mostra Você/Empresa/Integrações, Equipe acesa, a trilha e nenhuma aba na faixa", () => {
+    const { faixa } = monta("/app/team");
+    const coluna = screen.getByRole("navigation", { name: "Seções das Configurações" });
+    for (const g of ["Você", "Empresa", "Integrações"]) expect(within(coluna).getByText(g)).toBeTruthy();
+    expect(within(coluna).getByRole("link", { name: "Equipe" }).getAttribute("aria-current")).toBe("page");
+    expect(within(coluna).getByRole("link", { name: "Configurações" }).getAttribute("href")).toBe("/app/settings");
+    // Tipos de agendamento é aba da Agenda: não entra na coluna.
+    expect(within(coluna).queryByRole("link", { name: "Tipos de agendamento" })).toBeNull();
+    expect(within(faixa).queryAllByRole("link")).toEqual([]);
+    expect(screen.getByText("Configurações", { selector: "p > span" }).parentElement?.textContent).toBe("Configurações›Empresa");
+  });
+
+  it("em /app/settings/tenant/agenda (aba da Agenda) não há coluna de Configurações e a faixa é a da Agenda", () => {
+    const { faixa } = monta("/app/settings/tenant/agenda");
+    expect(screen.queryByRole("navigation", { name: "Seções das Configurações" })).toBeNull();
+    expect(within(faixa).getByRole("link", { name: "Tipos de agendamento" })).toBeTruthy();
+  });
 });

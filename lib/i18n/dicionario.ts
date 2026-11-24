@@ -29217,6 +29217,7 @@ export const DICIONARIO: Traducoes = {
   "Buscar por nome": { es: "Buscar por nombre" },
   "Sem descrição": { es: "Sin descripción" },
   "Seções da IA": { es: "Secciones de la IA" },
+  "Seções das Configurações": { es: "Secciones de la configuración" },
   "Métricas": { es: "Métricas" },
   "Montar": { es: "Montar" },
   "Ensinar": { es: "Enseñar" },

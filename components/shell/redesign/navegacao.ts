@@ -9,6 +9,7 @@ import {
   caminhoNoCatalogo,
   estaEm,
   gruposDaIA,
+  gruposDasConfiguracoes,
   type AreaDoMenu,
   type AreaV49,
 } from "@/lib/redesign/areas";
@@ -42,6 +43,10 @@ export interface NavegacaoDaMoldura {
   area: AreaV49 | null;
   /** Montar / Ensinar / Acompanhar, para a coluna da IA. */
   gruposDaIA: Array<{ rotulo: string; itens: NavDestination[] }>;
+  /** Você / Empresa / Integrações, para a coluna de Configurações. Vazio fora de Configurações. */
+  gruposDasConfiguracoes: Array<{ rotulo: string; itens: NavDestination[] }>;
+  /** O grupo da coluna de Configurações em que a tela está (a trilha "Configurações › Empresa"). */
+  grupoDaTela: string | undefined;
   /** O destino em que a pessoa está, pelo prefixo mais longo. */
   atual: NavDestination | undefined;
   /** O nome para a faixa do celular: o da tela atual; em Configurações sem porta própria, "Configurações". */
@@ -81,6 +86,31 @@ export function tituloDaTela(
   return hub && estaEm(pathname, hub.href) ? hub.label : undefined;
 }
 
+/**
+ * A COLUNA DE CONFIGURAÇÕES DA TELA — pura.
+ *
+ * Aparece quando a tela não é de uma área do v49 e está em Configurações: o
+ * destino atual é do grupo do rodapé, ou o caminho está sob o hub
+ * (`/app/settings` e as telas dele que o catálogo não lista). Os itens são os
+ * destinos VISÍVEIS desse grupo — nenhuma porta a mais que o catálogo dá.
+ */
+export function colunaDasConfiguracoes(
+  pathname: string,
+  visiveis: ReadonlyArray<NavDestination>,
+  area: AreaV49 | null,
+  atual: Pick<NavDestination, "group"> | undefined,
+): { grupos: Array<{ rotulo: string; itens: NavDestination[] }>; grupoDaTela: string | undefined } {
+  const hub = NAV_GROUPS.find((g) => g.id === GRUPO_NO_RODAPE)?.hub;
+  const naArea = !area && (atual?.group === GRUPO_NO_RODAPE || (!!hub && estaEm(pathname, hub.href)));
+  if (!naArea) return { grupos: [], grupoDaTela: undefined };
+  const grupos = gruposDasConfiguracoes(visiveis.filter((d) => d.group === GRUPO_NO_RODAPE));
+  const aqui = abaDaTela(
+    pathname,
+    grupos.flatMap((g) => g.itens.map((i) => i.href)),
+  );
+  return { grupos, grupoDaTela: grupos.find((g) => g.itens.some((i) => i.href === aqui))?.rotulo };
+}
+
 export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
   const pathname = usePathname() ?? "";
   const { user, activeOrg } = useAuth();
@@ -116,6 +146,8 @@ export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
     ? visiveis.filter((d) => d.group === atual.group && (d.section ?? "") === (atual.section ?? ""))
     : [];
 
+  const coluna = colunaDasConfiguracoes(pathname, visiveis, area, atual);
+
   return {
     itens,
     rodape,
@@ -127,5 +159,7 @@ export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
     areas: areasDoMenu(visiveis),
     area,
     gruposDaIA: gruposDaIA(visiveis),
+    gruposDasConfiguracoes: coluna.grupos,
+    grupoDaTela: coluna.grupoDaTela,
   };
 }

@@ -4789,22 +4789,22 @@
   display: contents;
 }
 
-/* A página: coluna centrada de 880px nos formulários (protótipo Main: 840 + respiro); página com tabela usa a largura toda, como Tags e Equipe no protótipo. Raiz que já declara max-w-* ou padding próprio fica como está. */
+/* A página: a coluna inteira ao lado do menu de Configurações, alinhada à esquerda como no v49 (teto de 1120px para telas largas); página com tabela usa a largura toda. Raiz que já declara max-w-* fica como está. */
 [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:not([class*="max-w-"]) {
   box-sizing: border-box;
   width: 100%;
-  margin-inline: auto;
+  margin-inline: 0;
 }
 @media (min-width: 768px) {
   [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:not([class*="max-w-"]) {
-    max-width: 880px;
+    max-width: 1120px;
   }
   [data-redesign="ligado"] [data-rd-configuracoes="area"] > div:not([class*="max-w-"]):has(table) {
     max-width: none;
   }
 }
 
-/* O cabeçalho: título 22/26 em 700 e a frase de apoio em cinza. */
+/* O cabeçalho: título 22/24 em 700 e a frase de apoio em cinza. */
 [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] {
   display: flex;
   flex-direction: column;
@@ -4821,7 +4821,7 @@
 }
 @media (min-width: 768px) {
   [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
 [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] > p {
@@ -4839,7 +4839,7 @@
   box-shadow: none;
 }
 [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-slot="card-title"] {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -4914,6 +4914,101 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text);
+}
+/* Onda 5 — Configurações no v49 (com o menu vertical da coluna). */
+
+/* Descrição de cartão: pequena e cinza, logo abaixo do título. */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] [data-slot="card-description"] {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* Formulário em cartão: usa a largura da coluna em vez da caixa estreita. A grade de campos que já existe (Organização) vira 3 colunas em tela larga; grade curta (Idioma e Fuso do Perfil) fica em 2. */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] form:has(> [data-rd-configuracoes="cartao"]) {
+  max-width: 960px;
+}
+@media (min-width: 1280px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] > [class~="grid-cols-2"]:has(> :nth-child(5)) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Tabela dentro de cartão (Tags, Notificações), a partir do tablet: cabeçalho em versalete pequeno e cinza, linhas de ~52px, e as ações secundárias da linha viram texto, como Editar/Juntar/Apagar no v49 (os botões são os mesmos). No celular a tabela fica como está: alvo de toque inteiro. */
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table thead {
+    background: transparent;
+    border-bottom: 1px solid var(--color-border);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table th {
+    padding-block: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td {
+    padding-block: 12px;
+    vertical-align: middle;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table tbody tr:hover {
+    background: var(--color-surface-elevated);
+  }
+
+  /* Ações em texto numa linha só (v49: Editar · Juntar · Apagar). */
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child:has(> button[data-slot="button"]) {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child > button[data-slot="button"]:is([data-variant="outline"], [data-variant="ghost"]) {
+    height: auto;
+    min-height: 28px;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child > button[data-slot="button"]:is([data-variant="outline"], [data-variant="ghost"]):hover {
+    background: var(--color-accent-soft);
+  }
+}
+
+/* Índice: atalhos compactos. */
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"] [data-slot="card"] {
+  padding: 12px 14px;
+}
+[data-redesign="ligado"] [data-rd-configuracoes="atalho"] p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Meu plano: o cartão do plano logo abaixo do cabeçalho (Assinatura, o plano atual) com borda de destaque; o de pagamento fica neutro (precisa do escopo da área para vencer o bloco de ajustes, que vem depois no arquivo). */
+[data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cabecalho"] + [data-rd-ajustes="cartao-do-plano"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+/* Meu plano: o uso em barras numa grade de 2 colunas (só o cartão cujas linhas têm barra), sem fio entre as linhas. */
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-ajustes="cartao-de-uso"] > [data-slot="card-content"]:has(> [data-rd-ajustes="linha-de-uso"] > [data-rd-ajustes="barra-de-uso"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 32px;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-ajustes="cartao-de-uso"] > [data-slot="card-content"]:has(> [data-rd-ajustes="linha-de-uso"] > [data-rd-ajustes="barra-de-uso"]) > [data-rd-ajustes="linha-de-uso"] {
+    padding-top: 12px;
+    border-bottom-width: 0;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-ajustes="cartao-de-uso"] > [data-slot="card-content"]:has(> [data-rd-ajustes="linha-de-uso"] > [data-rd-ajustes="barra-de-uso"]) > [data-rd-ajustes="linha-de-uso"]:nth-child(-n + 2) {
+    padding-top: 0;
+  }
 }
 /* redesign: configuracoes — fim ─────────────────────────────────────────── */
 
@@ -7099,7 +7194,7 @@
    do bloco `redesign: configuracoes`.
    ───────────────────────────────────────────── */
 
-/* O cabeçalho: título 22/26 em 700 e a frase de apoio em cinza. */
+/* O cabeçalho: título 22/24 em 700 e a frase de apoio em cinza. */
 [data-redesign="ligado"] [data-rd-ajustes="cabecalho"] h1 {
   margin: 0;
   font-size: 22px;
@@ -7110,7 +7205,7 @@
 }
 @media (min-width: 768px) {
   [data-redesign="ligado"] [data-rd-ajustes="cabecalho"] h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
 [data-redesign="ligado"] [data-rd-ajustes="cabecalho"] p {
@@ -7182,7 +7277,7 @@
 
 /* Convites pendentes: título de seção com peso e a frase de apoio no tom certo. */
 [data-redesign="ligado"] [data-rd-ajustes="convites"] > div:first-child h2 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.3;
   color: var(--color-text);
@@ -7213,7 +7308,7 @@
   opacity: 0.55;
 }
 [data-redesign="ligado"] [data-rd-ajustes="secao"] [data-slot="card-title"] {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -7227,7 +7322,7 @@
 }
 [data-redesign="ligado"] [data-rd-ajustes="cartao-de-uso"] [data-slot="card-title"],
 [data-redesign="ligado"] [data-rd-ajustes="cartao-do-plano"] [data-slot="card-title"] {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.3;
 }

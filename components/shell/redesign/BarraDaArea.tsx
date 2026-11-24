@@ -47,9 +47,11 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
   const t = useT();
   const nav = useNavegacaoDaMoldura();
   const intencao = usePrefetchPorIntencao();
-  // Na IA, no desktop, quem navega é a coluna lateral (Montar/Ensinar/Acompanhar).
+  // Na IA e em Configurações, no desktop, quem navega é a coluna lateral
+  // (Montar/Ensinar/Acompanhar; Você/Empresa/Integrações).
   const daIA = nav.area?.id === "ia";
-  const abas = !daIA && nav.abasDaArea.length >= 2 ? nav.abasDaArea : [];
+  const daConfiguracao = nav.gruposDasConfiguracoes.length > 0;
+  const abas = !daIA && !daConfiguracao && nav.abasDaArea.length >= 2 ? nav.abasDaArea : [];
   const faixa = useRef<HTMLElement>(null);
   const [mascara, setMascara] = useState<string | undefined>(undefined);
   // Uma aba só: a de caminho mais longo que contém a tela atual. Sem isto,
@@ -87,11 +89,21 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
       data-moldura="redesign"
       className="sticky top-[var(--faixas-de-cima,0px)] z-20 flex min-h-14 items-center gap-2 border-b border-border bg-surface px-3 md:px-6"
     >
-      <div className={cn("flex min-w-0 items-center gap-2", abas.length > 0 && "md:hidden")}>
+      <div className={cn("flex min-w-0 items-center gap-2", (abas.length > 0 || daConfiguracao) && "md:hidden")}>
         {nav.titulo && (
           <span className="truncate text-base font-semibold">{t(nav.titulo)}</span>
         )}
       </div>
+      {/* Em Configurações, no desktop, a trilha do v49 no lugar das abas: o título
+          da tela já está no cabeçalho da página. No celular fica o nome da tela. */}
+      {daConfiguracao && (
+        <p className="hidden min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground md:flex">
+          <span>{t("Configurações")}</span>
+          {nav.grupoDaTela === "Você" && <><span aria-hidden="true">›</span><span>{t("Você")}</span></>}
+          {nav.grupoDaTela === "Empresa" && <><span aria-hidden="true">›</span><span>{t("Empresa")}</span></>}
+          {nav.grupoDaTela === "Integrações" && <><span aria-hidden="true">›</span><span>{t("Integrações")}</span></>}
+        </p>
+      )}
       <nav
         ref={faixa}
         aria-label={t("Seções da área")}

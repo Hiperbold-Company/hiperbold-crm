@@ -39,10 +39,12 @@ export type IdDeArea =
   | "automacoes"
   | "conexoes";
 
-export interface GrupoDaIA {
+/** Um grupo de uma coluna lateral (IA: Montar/Ensinar/Acompanhar; Configurações: Você/Empresa/Integrações). */
+export interface GrupoDaColuna {
   rotulo: string;
   abas: readonly string[];
 }
+export type GrupoDaIA = GrupoDaColuna;
 
 export interface AreaV49 {
   id: IdDeArea;
@@ -179,7 +181,95 @@ export function areaDaTela<T extends ComHref>(pathname: string, visiveis: Readon
 export function gruposDaIA<T extends ComHref>(
   visiveis: ReadonlyArray<T>,
 ): Array<{ rotulo: string; itens: T[] }> {
-  return GRUPOS_DA_IA.map((g) => ({ rotulo: g.rotulo, itens: visiveisNaOrdem(g.abas, visiveis) })).filter(
-    (g) => g.itens.length > 0,
+  return agruparNaColuna(GRUPOS_DA_IA, visiveis);
+}
+
+/**
+ * Os destinos de uma coluna lateral, por grupo e na ordem declarada. Grupo
+ * vazio some. Com `restoNoUltimo`, destino recebido que nenhum grupo declara
+ * entra no fim do ÚLTIMO grupo, na ordem em que chegou — porta nova do
+ * catálogo nunca fica sem lugar na coluna.
+ */
+export function agruparNaColuna<T extends ComHref>(
+  grupos: readonly GrupoDaColuna[],
+  visiveis: ReadonlyArray<T>,
+  { restoNoUltimo = false }: { restoNoUltimo?: boolean } = {},
+): Array<{ rotulo: string; itens: T[] }> {
+  const saida = grupos.map((g) => ({ rotulo: g.rotulo, itens: visiveisNaOrdem(g.abas, visiveis) }));
+  const ultimo = saida[saida.length - 1];
+  if (restoNoUltimo && ultimo) {
+    const declarados = new Set(grupos.flatMap((g) => g.abas));
+    ultimo.itens.push(...visiveis.filter((d) => !declarados.has(d.href)));
+  }
+  return saida.filter((g) => g.itens.length > 0);
+}
+
+/**
+ * A COLUNA DE CONFIGURAÇÕES (v49): Você / Empresa / Integrações.
+ *
+ * Só organiza: a lista é dos hrefs do grupo de Configurações do catálogo, e o
+ * que entra é o que o chamador já filtrou pelo papel. A cerca de
+ * `tests/unit/redesign-onda5-configuracoes.test.tsx` cobra que todo href daqui
+ * existe no catálogo.
+ */
+export const GRUPOS_DAS_CONFIGURACOES: readonly GrupoDaColuna[] = [
+  {
+    rotulo: "Você",
+    abas: [
+      "/app/settings/profile",
+      "/app/settings/security",
+      "/app/settings/notifications",
+      "/app/settings/aplicativo",
+      "/app/ajuda",
+    ],
+  },
+  {
+    rotulo: "Empresa",
+    abas: [
+      "/app/settings/tenant",
+      "/app/team",
+      "/app/settings/atendimento",
+      "/app/settings/marca",
+      "/app/settings/metas",
+      "/app/settings/tags",
+      "/app/settings/plano",
+      "/app/lgpd/requests",
+      "/app/settings/recursos",
+      "/app/settings/tenant/proposals/modelos",
+      "/app/settings/tenant/proposals",
+      "/app/settings/tenant/financeiro",
+      "/app/settings/campos-personalizados",
+      "/app/settings/automacoes",
+    ],
+  },
+  {
+    rotulo: "Integrações",
+    abas: [
+      "/app/settings/conversoes",
+      "/app/settings/meta-ads",
+      "/app/settings/api-tokens",
+      "/app/ai/credentials",
+      "/app/settings/voip-trunk",
+      "/app/settings/servidor-mcp-externo",
+      "/app/extensions",
+      "/app/integracao-dados",
+    ],
+  },
+];
+
+/**
+ * Os grupos da coluna de Configurações a partir dos destinos visíveis DO
+ * GRUPO de Configurações. O destino que já é aba de uma área do v49 (Tipos e
+ * Aviso de agendamento são da Agenda) fica na área dele: na coluna, o clique
+ * levaria a outra área e a coluna sumiria debaixo do dedo.
+ */
+export function gruposDasConfiguracoes<T extends ComHref>(
+  daConfiguracao: ReadonlyArray<T>,
+): Array<{ rotulo: string; itens: T[] }> {
+  const deArea = new Set(AREAS_DO_V49.flatMap((a) => a.abas));
+  return agruparNaColuna(
+    GRUPOS_DAS_CONFIGURACOES,
+    daConfiguracao.filter((d) => !deArea.has(d.href)),
+    { restoNoUltimo: true },
   );
 }
