@@ -25,6 +25,7 @@ Toda pendência do fork da Hiperbold (técnica, conta, custo, terceiro) fica aqu
     - "N agentes" / "N réguas na lista" ao lado dos filtros;
     - faixas informativas azuis com a explicação da tela ("Uma régua é…", "Cada conexão usa um roteador…");
     - rótulos do v49 ("Novo agente", "Nova régua", "Ligado/Desligado" em vez de "Criar novo", "Novo fluxo", "Ativo/Desativado"): troca de texto do produto, decidir junto com a central de ajuda.
+  - **Notas baixas da revisão da onda 4 (sem correção):** onde a ação sobe para a faixa do título, a ordem do Tab difere da visual (Automações, Agentes, Conhecimento, Roteadores); o teste da grade só lê o CSS, sem medir posição; "Adicionar nó" no sheet do celular × "Adicionar caixa" na paleta; falta a chave zh-CN dos textos novos.
 - [ ] **D-244 · Redesign onda 3 (Conversas, Pipeline, Contatos): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 3 foi só visual.
   - **Pipeline:** resumo "N em aberto · R$ total" no cabeçalho do funil; filtro pronto "Parados há mais de 7 dias" (o CRM tem "Apenas atrasados", que é outra regra); "Mais filtros" recolhendo os filtros raros (hoje viram uma linha que rola de lado); "Novo negócio" e as visões como no v49, mas sem o resumo.
   - **Contatos:** filtros prontos "Só clientes" e "Com mensagem sem ler"; rodapé paginado "Página 1 de 12 · 284 contatos" (o CRM carrega rolando); na ficha, os cartões "Negócios" (com etapa e valor) e "Memória do contato" na coluna da direita.
