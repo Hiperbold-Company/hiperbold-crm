@@ -122,6 +122,9 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
           <Link
             href={`/signup?invite=${encodeURIComponent(token)}${prova ? `&v=${encodeURIComponent(prova)}` : ""}`}
             className="inline-block rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
+            // Com a chave ligada, a regra de links da casca de entrada pintaria o
+            // texto de azul sobre o fundo azul; `button` a deixa de fora.
+            data-slot={ligado ? "button" : undefined}
           >
             {t("Criar minha conta")}
           </Link>

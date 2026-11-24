@@ -84,7 +84,8 @@ describe("onda 2 — convite, chave LIGADA", () => {
     render(await pagina(VALIDO));
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Você foi convidado para entrar como Atendente");
     expect(screen.getByText(payload.email)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Criar minha conta" })).toBeTruthy();
+    // É botão (fundo azul): fica fora da regra que pinta links de azul.
+    expect(screen.getByRole("link", { name: "Criar minha conta" }).getAttribute("data-slot")).toBe("button");
   });
 
   it("convite vencido fala com gente, não em 'admin do tenant'", async () => {
