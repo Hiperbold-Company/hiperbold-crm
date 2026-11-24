@@ -5,6 +5,7 @@
  * teste (`bulk-delete`, `export`, `count`, `excluir-em-lote`, `alvo-de-lote`, `consulta`, o handler
  * da lista) é o real.
  */
+import type * as PerfilDoPaisModulo from "@/lib/legal/perfil-do-pais";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,7 +44,7 @@ vi.mock("@/lib/contacts/cpf-do-contato", () => ({
 }));
 // O país da organização decide se o documento sai rotulado pelo tipo (EUA); aqui, Brasil.
 vi.mock("@/lib/legal/perfil-do-pais", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/legal/perfil-do-pais")>();
+  const real = await importOriginal<typeof PerfilDoPaisModulo>();
   return { ...real, perfilDaOrganizacao: vi.fn(async () => real.perfilDoPais(null)) };
 });
 

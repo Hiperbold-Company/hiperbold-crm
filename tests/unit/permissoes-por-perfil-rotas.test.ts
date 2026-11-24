@@ -7,6 +7,7 @@
  * (papel efetivo + permissões que `loadAuthUser` leu); o resto da rota roda de
  * verdade sobre o banco em memória.
  */
+import type * as PerfilDoPaisModulo from "@/lib/legal/perfil-do-pais";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,7 +40,7 @@ vi.mock("@/lib/contacts/cpf-do-contato", () => ({
 }));
 // O país da organização decide se o documento sai rotulado pelo tipo (EUA); aqui, Brasil.
 vi.mock("@/lib/legal/perfil-do-pais", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/legal/perfil-do-pais")>();
+  const real = await importOriginal<typeof PerfilDoPaisModulo>();
   return { ...real, perfilDaOrganizacao: vi.fn(async () => real.perfilDoPais(null)) };
 });
 

@@ -6,6 +6,7 @@
  * aqui ele é dublê de propósito: o que se mede é o que a rota faz em volta —
  * paginação até o teto, formato, papel, CPF decifrado e `contacts.exported`.
  */
+import type * as PerfilDoPaisModulo from "@/lib/legal/perfil-do-pais";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,7 +32,7 @@ vi.mock("@/lib/contacts/cpf-do-contato", () => ({
   tiposDoDocumentoDosContatos: vi.fn(async () => new Map()),
 }));
 vi.mock("@/lib/legal/perfil-do-pais", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/legal/perfil-do-pais")>();
+  const real = await importOriginal<typeof PerfilDoPaisModulo>();
   return { ...real, perfilDaOrganizacao: vi.fn() };
 });
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
