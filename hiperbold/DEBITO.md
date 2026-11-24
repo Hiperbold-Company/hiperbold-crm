@@ -4,6 +4,29 @@ Toda pendência do fork da Hiperbold (técnica, conta, custo, terceiro) fica aqu
 
 ## Abertas
 
+- [ ] **D-246 · Redesign onda 5 (Configurações, Plataforma e celular): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 5 é só visual.
+  - **Configurações:**
+    - "Aparência" no grupo Você (não há destino no catálogo);
+    - Equipe: aba Setores; colunas Setores, Capacidade e Carga agora; "N pessoas com acesso de M do plano"; legenda dos papéis;
+    - Tags: botão "Nova etiqueta"; colunas Criada por e "IA aplica sozinha"; contador; ações destrutivas em vermelho;
+    - Meu plano: "Uso do plano" com descrição; preço e renovação no cartão do plano atual; comparação Mensal, Semestral e Anual;
+    - Conversões: cartões "Para onde avisar" (Meta e Google) e "Últimos envios" com filtro;
+    - trilha "Configurações › Empresa" dentro do cabeçalho da página (hoje fica na barra do topo).
+  - **Plataforma (/admin):**
+    - números no topo de cada tela: Empresas (total, em teste grátis, com pagamento atrasado), Usuários (pessoas, % com verificação em 2 etapas, convites pendentes), Cobrança (MRR, inadimplência, cancelamentos no mês), Cadastro (novos, ativados na semana, recusados), Marca (itens, definidos por você, no padrão), Sistema (componentes, funcionando bem, com atenção);
+    - pílulas por estado com contador e "N de N" em todas as listas (hoje o filtro é um seletor);
+    - colunas novas: Empresas (Plano, Pessoas, Conexões); Usuários (2 etapas, estado Convite pendente/Bloqueado, Empresas); Cobrança (valor, próxima cobrança, meio);
+    - outro formato: Cadastro como lista de pedidos (segmento, origem, quando, estado); Marca como tabela de itens com origem Banco/Padrão; Sistema como lista de componentes com versão, estado, último sinal e observação, e a faixa "Atualização X disponível";
+    - nomes: Tenants → Empresas, Users → Usuários, Marca → Marca da instalação, Recursos opcionais → Sistema;
+    - menu agrupado (Visão geral, Clientes, Produto, Canais) com o selo PLATAFORMA e o rodapé "Voltar para o CRM";
+    - Incidentes e Auditoria ainda sem a faixa de filtro e a tabela do molde (só o estilo geral).
+  - **Celular:**
+    - barra inferior do v49: Pipeline, Conversas, Contatos, Métricas, Mais (hoje: Chat, Pipeline, Desempenho, Contatos, Mais);
+    - "Mais" curto (Início, Agenda "2 hoje", Tarefas com contador, Central de ajuda, Relatar problema, Configurações, Trocar de empresa) em vez do inventário inteiro, com sino no cabeçalho;
+    - aviso "IA, Automações e Conexões ficam só no computador" e Radar fora do celular;
+    - "+" de criar na barra de cima (Contatos e outras) e título só na barra de cima, sem o título repetido na página;
+    - filtros rápidos em pílula em Contatos (Todos, Com negócio aberto, Sem resposta) e selo de etiqueta à direita da linha;
+    - listas como cartões (Contatos, Tarefas, Conversas).
 - [ ] **D-245 · Redesign onda 4 (IA e Automações): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 4 é só visual. O v49 não tem tela de celular para IA nem Automações, nem tela do editor do agente.
   - **Automações:**
     - cartões de resumo no topo (Ligadas agora, Rodaram este mês, Negócios criados, Precisam de atenção);
