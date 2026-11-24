@@ -94,6 +94,12 @@ export function NodeCard({
   // Uma saída só continua sendo a bolinha de sempre no rodapé: não há o que
   // rotular, e mexer nisso quebraria o arrasto de todo nó não-ramificado.
   const branchRows = branches !== undefined && branches.length > 1 ? branches : null;
+  const papel = rd(pecaDoNo(visual.type));
+  // Redesign (v49): o rótulo pequeno do papel em cima do título, só com a chave
+  // ligada (`papel` é undefined desligada). Espera e fim não têm rótulo no
+  // protótipo. A maiúscula é do CSS.
+  const rotuloDoPapel =
+    papel === "no-quando" ? t("Quando") : papel === "no-se" ? t("Se") : papel === "no-entao" ? t("Então") : null;
 
   return (
     <div
@@ -104,7 +110,7 @@ export function NodeCard({
         hasError && "border-error ring-2 ring-error ring-offset-1 ring-offset-bg",
       )}
       data-testid={`node-card-${id}`}
-      data-rd-editor={rd(pecaDoNo(visual.type))}
+      data-rd-editor={papel}
       title={hasError ? errors!.join("; ") : undefined}
     >
       {showTarget && <Handle type="target" position={Position.Top} />}
@@ -119,6 +125,7 @@ export function NodeCard({
           <Icon size={14} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
+          {rotuloDoPapel && <p data-rd-editor={rd("papel")}>{rotuloDoPapel}</p>}
           <p className="truncate text-sm font-medium text-text" title={rotulo} data-rd-editor={rd("titulo")}>
             {rotulo}
           </p>

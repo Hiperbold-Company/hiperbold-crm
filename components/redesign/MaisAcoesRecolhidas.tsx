@@ -50,10 +50,12 @@ export function MaisAcoesRecolhidas({
       <summary aria-label={t("Mais ações")} title={t("Mais ações")}>
         <DotsThree size={18} weight="bold" aria-hidden />
       </summary>
-      {/* Escolher uma ação fecha a lista; o diálogo dela segue montado. */}
+      {/* Escolher uma ação fecha a lista; o diálogo dela segue montado. Na fase
+          de captura: botão que para a propagação (Exportar, Excluir do editor de
+          automações) deixava a lista aberta por cima do diálogo. */}
       <div
         {...marcaDaLista}
-        onClick={(e) => {
+        onClickCapture={(e) => {
           if ((e.target as HTMLElement).closest("button, a")) {
             (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
           }

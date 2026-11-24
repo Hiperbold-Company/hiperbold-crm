@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { NodeType } from "@/lib/followup/graph-schema";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
+import { useRedesign } from "@/lib/redesign/contexto";
 import { NOS_DA_SUPERFICIE } from "@/lib/followup/validate-publish";
 import type { FollowupFlowSurface } from "@/lib/followup/api-schemas";
 import { REGISTRO_DE_NOS, type CategoriaDoNo } from "@/lib/followup/registro-de-nos";
@@ -52,6 +53,7 @@ interface Props {
 export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }: Props) {
   const t = useT();
   const rd = useMarcaDasAutomacoes();
+  const ligado = useRedesign();
   const isMobile = variant === "mobile";
   const botao = (tipo: NodeType) => {
     const visual = NODE_VISUALS[tipo];
@@ -92,7 +94,8 @@ export function NodePalette({ onAdd, variant = "desktop", surface = "followup" }
       data-rd-automacoes={rd("paleta")}
     >
       <h2 className="px-1 pb-1 text-xs font-medium tracking-wide text-text-muted uppercase">
-        {t("Adicionar nó")}
+        {/* v49: "Adicionar caixa", o nome que o resto do editor já usa. */}
+        {ligado ? t("Adicionar caixa") : t("Adicionar nó")}
       </h2>
       {surface === "automacao"
         ? GRUPOS.map(({ categoria }) => {

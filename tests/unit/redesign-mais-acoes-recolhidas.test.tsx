@@ -58,4 +58,28 @@ describe("MaisAcoesRecolhidas", () => {
     expect(aoClicar).toHaveBeenCalledTimes(1);
     expect(details.open).toBe(false);
   });
+
+  // Onda 4: Exportar e Excluir do editor de automações param a propagação do
+  // clique (para não abrir o cartão da lista). A lista fecha mesmo assim.
+  it("ação que para a propagação também fecha a lista e roda", () => {
+    const aoClicar = vi.fn();
+    const { container, getByText } = render(
+      <MaisAcoesRecolhidas marca={{}} marcaDaLista={{}}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            aoClicar();
+          }}
+        >
+          Exportar
+        </button>
+      </MaisAcoesRecolhidas>,
+    );
+    const details = container.querySelector("details") as HTMLDetailsElement;
+    details.open = true;
+    fireEvent.click(getByText("Exportar"));
+    expect(aoClicar).toHaveBeenCalledTimes(1);
+    expect(details.open).toBe(false);
+  });
 });

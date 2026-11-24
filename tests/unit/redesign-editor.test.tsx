@@ -69,6 +69,26 @@ describe("redesign: editor, DOM", () => {
     expect(screen.getByText("Resumo da configuração")).toBeTruthy();
   });
 
+  // Onda 4 (v49): o único acréscimo ligado é o rótulo do papel em cima do título
+  // — Quando (gatilho), Se (decisão), Então (ação). Espera e fim não têm rótulo
+  // no protótipo. Fora esse rótulo, o texto e os ids de teste são os de sempre.
+  it("ligado, só o rótulo do papel se acrescenta ao texto", () => {
+    const papeis = { trigger: "Quando", condition: "Se", action: "Então", wait: null, end: null } as const;
+    for (const [tipo, rotulo] of Object.entries(papeis)) {
+      const off = render(no(tipo as keyof typeof NODE_VISUALS, { errors: ["falta algo"] }));
+      const textoOff = off.container.textContent;
+      const idsOff = Array.from(off.container.querySelectorAll("[data-testid]")).map((e) => e.getAttribute("data-testid"));
+      cleanup();
+      const on = render(no(tipo as keyof typeof NODE_VISUALS, { errors: ["falta algo"] }), { wrapper: ligado });
+      const papel = on.container.querySelector('[data-rd-editor="papel"]');
+      expect(papel?.textContent ?? null, tipo).toBe(rotulo);
+      papel?.remove();
+      expect(on.container.textContent, tipo).toBe(textoOff);
+      expect(Array.from(on.container.querySelectorAll("[data-testid]")).map((e) => e.getAttribute("data-testid")), tipo).toEqual(idsOff);
+      cleanup();
+    }
+  });
+
   it("marcaDoEditor e pecaDoNo: ligada devolve a peça, desligada undefined", () => {
     expect(marcaDoEditor(true)("canvas")).toBe("canvas");
     expect(marcaDoEditor(false)("canvas")).toBeUndefined();

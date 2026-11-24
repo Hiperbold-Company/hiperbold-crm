@@ -98,8 +98,10 @@ export function AutomacoesList({
   const lista = filtrarLista(todas, tipo, busca);
   const data_ = (iso: string) => dataDaUltimaExecucao(iso, idioma, fuso);
 
+  // Com a chave ligada, `acoes` e `conteudo` deixam o CSS subir estes botões para a
+  // faixa do título (v49) sem mover elemento nenhum: desligada, nenhum atributo.
   const botaoNova = (
-    <div className="flex w-full items-start gap-2 sm:w-auto">
+    <div className="flex w-full items-start gap-2 sm:w-auto" data-rd-automacoes={rd("acoes")}>
       <AcoesNoCelular
         acoes={[
           { rotulo: t("Importar"), onSelect: () => setImportarAberto(true), desativada: motivoDoBloqueio !== null },
@@ -150,7 +152,7 @@ export function AutomacoesList({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-rd-automacoes={rd("conteudo")}>
       {falhou && todas.length > 0 ? (
         <div
           role="alert"

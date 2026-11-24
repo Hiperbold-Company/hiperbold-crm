@@ -37,6 +37,11 @@ export type PecaDasAutomacoes =
   | "abas"
   | "editor"
   | "barra-do-editor"
+  | "voltar"
+  | "acoes"
+  | "conteudo"
+  | "mais-acoes"
+  | "mais-acoes-lista"
   | "paleta"
   | "tela"
   | "painel";

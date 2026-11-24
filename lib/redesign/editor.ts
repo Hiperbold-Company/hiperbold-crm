@@ -11,7 +11,8 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * idêntico ao de antes.
  *
  * O papel do nó (cor) é a peça do próprio cartão: `no-quando` (gatilho),
- * `no-se` (decide), `no-entao` (faz), `no-espera` e `no-fim`. Nenhum texto novo.
+ * `no-se` (decide), `no-entao` (faz), `no-espera` e `no-fim`. O único texto novo é o
+ * rótulo do papel (`papel`: Quando / Se / Então) em cima do título, só ligado.
  *
  * Este arquivo NUNCA importa `lib/redesign/chave.ts` (server-only).
  */
@@ -23,6 +24,7 @@ export type PecaDoEditor =
   | "no-espera"
   | "no-fim"
   | "icone"
+  | "papel"
   | "titulo"
   | "resumo"
   | "ramos"

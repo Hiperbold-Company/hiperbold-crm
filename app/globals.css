@@ -4046,6 +4046,212 @@
     flex-wrap: wrap;
   }
 }
+/* ── Onda 4: lista no v49 ──
+   Computador: os botões de criar sobem para a faixa do título sem mover
+   elemento nenhum. A página vira grade de duas colunas; a raiz da lista e a
+   barra "somem" como caixa (display: contents), e cada peça vai para o seu
+   lugar. O estado vazio fica como está (os botões dele moram no cartão).
+   Só a partir de 1280px: abaixo, os três botões apertariam a descrição numa
+   tira, e fica a barra de sempre. */
+@media (min-width: 1280px) {
+  [data-redesign="ligado"] [data-rd-automacoes="pagina"]:has(> [data-rd-automacoes="conteudo"] > [data-rd-automacoes="barra"]) {
+    display: grid;
+    /* Teto na coluna dos botões: o aviso de limite do plano (texto longo)
+       mora no mesmo grupo e, sem teto, espremeria o título numa tira. */
+    grid-template-columns: minmax(0, 1fr) fit-content(36rem);
+    align-content: start;
+    gap: 16px 24px;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="pagina"] > [data-rd-automacoes="conteudo"]:has(> [data-rd-automacoes="barra"]),
+  [data-redesign="ligado"] [data-rd-automacoes="conteudo"] > [data-rd-automacoes="barra"] {
+    display: contents;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="pagina"]:has(> [data-rd-automacoes="conteudo"] > [data-rd-automacoes="barra"]) > [data-rd-automacoes="cabecalho"] {
+    grid-column: 1;
+    grid-row: 1;
+    margin-bottom: 8px;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="conteudo"] > *,
+  [data-redesign="ligado"] [data-rd-automacoes="barra"] > * {
+    grid-column: 1 / -1;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="barra"] > [data-rd-automacoes="acoes"] {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+}
+[data-redesign="ligado"] [data-rd-automacoes="acoes"] {
+  gap: 8px;
+}
+
+/* Cartão: rodapé de ações em texto, espalhadas como no protótipo. */
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] > div {
+  display: contents;
+}
+/* Sem a caixa do grupo, o rodapé é quem quebra a linha quando não cabe
+   (celular, duas colunas, rótulos mais longos em espanhol). */
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] button {
+  height: 30px;
+  padding: 0 10px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] button:hover:not(:disabled) {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] button.text-destructive {
+  color: var(--color-error-fg);
+}
+[data-redesign="ligado"] [data-rd-automacoes="cartao-rodape"] button svg {
+  display: none;
+}
+
+/* ── Onda 4: barra do editor no v49 ── */
+[data-redesign="ligado"] [data-rd-automacoes="voltar"] {
+  flex: none;
+  margin-right: 12px;
+  padding: 4px 6px 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="voltar"]:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-automacoes="barra-do-editor"] [data-rd-automacoes="acoes"] [data-testid="ver-execucoes"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  box-shadow: none;
+}
+
+/* "Mais ações" do editor (só esconde; os diálogos seguem montados). */
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"] {
+  position: relative;
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"]:not(:has([data-rd-automacoes="mais-acoes-lista"] > *)) {
+  display: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"] > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"] > summary::-webkit-details-marker {
+  display: none;
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"] > summary:hover,
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"][open] > summary {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes"] > summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes-lista"] {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+[data-redesign="ligado"] [data-rd-automacoes="mais-acoes-lista"] button {
+  justify-content: flex-start;
+  width: 100%;
+  border-color: transparent;
+}
+@media (min-width: 1024px) {
+  [data-redesign="ligado"] [data-rd-automacoes="mais-acoes"] > summary {
+    width: 32px;
+    height: 32px;
+  }
+}
+/* Celular: a lista solta por cima seria cortada pela barra; aberto, o "⋯"
+   desdobra as ações na própria faixa. */
+@media (max-width: 47.99rem) {
+  [data-redesign="ligado"] [data-rd-automacoes="mais-acoes"][open] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="mais-acoes-lista"] {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="mais-acoes-lista"] > * {
+    flex: none;
+  }
+  [data-redesign="ligado"] [data-rd-automacoes="mais-acoes-lista"] button {
+    width: auto;
+    border-color: var(--color-border-strong);
+  }
+}
+
+/* ── Onda 4: paleta no v49 (itens em lista, ícone em quadradinho) ── */
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] [data-testid^="palette-grupo-"] {
+  gap: 2px;
+  padding-bottom: 4px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] h3 {
+  padding: 10px 4px 4px;
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] button[data-testid^="palette-add-"] {
+  height: 38px;
+  gap: 10px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 500;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] button[data-testid^="palette-add-"]:hover {
+  border-color: var(--color-border);
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-automacoes="paleta"] button[data-testid^="palette-add-"] > span:first-child {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
 /* redesign: automacoes — fim ─────────────────────────────────────────── */
 
 /* redesign: conexoes ──────────────────────────────────────────────────────
@@ -6019,6 +6225,16 @@
 [data-redesign="ligado"] [data-rd-editor="canvas"] .react-flow__background-pattern {
   fill: var(--color-border-strong);
   opacity: 0.5;
+}
+/* ── Onda 4: rótulo do papel em cima do título (Quando / Se / Então) ── */
+[data-redesign="ligado"] [data-rd-editor="papel"] {
+  margin: 0 0 1px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rd-papel);
 }
 /* redesign: editor — fim ─────────────────────── */
 
