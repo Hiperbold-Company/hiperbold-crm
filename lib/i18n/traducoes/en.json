@@ -14788,5 +14788,7 @@
   "Estamos em manutenção": "We're under maintenance",
   "Estamos atualizando o sistema. Seus dados estão seguros.": "We're updating the system. Your data is safe.",
   "Atualizar a página": "Refresh the page",
-  "A conta está pausada": "The account is paused"
+  "A conta está pausada": "The account is paused",
+  "Este link não é válido ou já passou da janela de 24h.": "This link isn't valid or the 24-hour window has passed.",
+  "Peça um novo convite a quem administra a sua empresa.": "Ask whoever manages your company for a new invite."
 }

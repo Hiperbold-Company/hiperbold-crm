@@ -34,18 +34,19 @@ vi.mock("@/app/team/accept-invite/[token]/ReenviarVerificacaoNoConvite", () => (
 
 import AcceptInvitePage from "@/app/team/accept-invite/[token]/page";
 
-const agora = Math.floor(Date.now() / 1000);
+// Datas fixas: o token entra no HTML (links), e o retrato precisa ser estável.
+const NO_FUTURO = 4102444800; // 2100-01-01
 const payload: InvitePayload = {
   invite_id: "22222222-2222-4222-8222-222222222222",
   email: "convidada@example.com",
   organization_id: "33333333-3333-4333-8333-333333333333",
   role: "agent",
-  iat: agora,
-  exp: agora + 3600,
+  iat: NO_FUTURO - 3600,
+  exp: NO_FUTURO,
   invited_by: "44444444-4444-4444-8444-444444444444",
 };
 const VALIDO = signInviteToken(payload);
-const VENCIDO = signInviteToken({ ...payload, iat: agora - 7200, exp: agora - 3600 });
+const VENCIDO = signInviteToken({ ...payload, iat: 1700000000, exp: 1700003600 });
 
 async function pagina(token: string) {
   return AcceptInvitePage({ params: Promise.resolve({ token }), searchParams: Promise.resolve({}) });

@@ -12660,6 +12660,8 @@ export const DICIONARIO: Traducoes = {
   "Você não tem acesso a essa área.": { es: "No tienes acceso a esta área." },
   "Voltar pra Inbox": { es: "Volver a Inbox" },
   "404 — Página não encontrada": { es: "404 — Página no encontrada" },
+  "Este link não é válido ou já passou da janela de 24h.": { es: "Este enlace no es válido o ya pasó la ventana de 24 h." },
+  "Peça um novo convite a quem administra a sua empresa.": { es: "Pide una nueva invitación a quien administra tu empresa." },
   "A conta está pausada": { es: "La cuenta está en pausa" },
   "Você não tem acesso a esta tela": { es: "No tienes acceso a esta pantalla" },
   "Esta parte do sistema é liberada só para alguns papéis da equipe.": { es: "Esta parte del sistema solo está habilitada para algunos roles del equipo." },

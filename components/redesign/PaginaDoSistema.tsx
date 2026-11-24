@@ -1,8 +1,7 @@
 import Link from "next/link";
 
-import { LogotipoDoProduto } from "@/components/branding/MarcaDoProduto";
 import { AcaoDoNavegador } from "@/components/redesign/AcaoDoNavegador";
-import { marcaEhADoProduto } from "@/lib/branding";
+import { LogoDaMarca } from "@/components/redesign/LogoDaMarca";
 import type { MarcaDeSaida } from "@/lib/branding/saida";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -67,14 +66,7 @@ export function PaginaDoSistema({
   return (
     <main className="flex min-h-screen flex-col items-center justify-center" data-rd-sistema="pagina">
       <div className="flex justify-center" data-rd-sistema="logo">
-        {marca.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- URL de quem hospeda; ver app/(public)/layout.tsx
-          <img src={marca.logoUrl} alt={marca.nome} className="h-auto max-h-10 w-auto max-w-[12rem] object-contain" />
-        ) : marcaEhADoProduto({ name: marca.nome, logoUrl: null }) ? (
-          <LogotipoDoProduto nome={marca.nome} className="h-7 w-auto" />
-        ) : (
-          <span>{marca.nome}</span>
-        )}
+        <LogoDaMarca marca={marca} />
       </div>
       <section className="w-full text-center" data-rd-sistema="cartao">
         <span className="mx-auto flex items-center justify-center" data-rd-sistema="icone" data-tom={tom} aria-hidden="true">
