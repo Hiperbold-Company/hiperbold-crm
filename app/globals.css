@@ -6477,7 +6477,11 @@
   border-radius: 12px;
   border-width: 1px;
   border-left-width: 1px;
-  border-top-width: 3px;
+  /* A faixa de 3px do papel é 1px de borda + 2px de sombra interna: a caixa
+     tem de medir o mesmo com a chave ligada e desligada, porque o "Organizar"
+     usa a altura medida e grava as posições no grafo. */
+  border-top-width: 1px;
+  position: relative;
   background: var(--color-surface);
 }
 /* Sem erro: borda forte, faixa do papel e sombra leve. Com erro, o anel e a
@@ -6485,7 +6489,9 @@
 [data-redesign="ligado"] [data-rd-editor^="no-"]:not([class*="ring-error"]) {
   border-color: var(--color-border-strong);
   border-top-color: var(--rd-papel);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  box-shadow:
+    inset 0 2px 0 var(--rd-papel),
+    0 2px 6px rgba(15, 23, 42, 0.06);
 }
 [data-redesign="ligado"] [data-rd-editor="no-se"] {
   --rd-papel: var(--color-warning);
@@ -6508,7 +6514,9 @@
 [data-redesign="ligado"] [data-rd-editor^="no-"][class*="ring-accent-500"]:not([class*="ring-error"]) {
   border-color: var(--color-accent);
   border-top-color: var(--color-accent);
-  box-shadow: 0 0 0 4px var(--color-accent-soft);
+  box-shadow:
+    inset 0 2px 0 var(--color-accent),
+    0 0 0 4px var(--color-accent-soft);
 }
 
 /* ── Partes do cartão ── */
@@ -6526,7 +6534,6 @@
 }
 [data-redesign="ligado"] [data-rd-editor="resumo"] {
   font-size: 12px;
-  line-height: 1.45;
   color: var(--color-text-muted);
 }
 [data-redesign="ligado"] [data-rd-editor="ramos"] {
@@ -6562,8 +6569,14 @@
   opacity: 0.5;
 }
 /* ── Onda 4: rótulo do papel em cima do título (Quando / Se / Então) ── */
+/* O rótulo fica acima da caixa, fora do fluxo: não soma altura (ver o cartão). */
 [data-redesign="ligado"] [data-rd-editor="papel"] {
-  margin: 0 0 1px;
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 2px;
+  margin: 0;
+  pointer-events: none;
+  white-space: nowrap;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.3;
