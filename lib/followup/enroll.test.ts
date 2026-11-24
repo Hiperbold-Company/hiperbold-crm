@@ -165,6 +165,28 @@ describe("enrollFollowupFlow", () => {
     if (!result.ok) expect(result.code).toBe("flow_not_enrollable");
   });
 
+  it("recusa automação visual — ela começa pelo gatilho dela, não por inscrição", async () => {
+    const db = fakeDb({
+      id: POINTER,
+      organization_id: ORG,
+      status: "active",
+      active_version_id: VERSION,
+      surface: "automacao",
+    });
+    const result = await enrollFollowupFlow(db as never, {
+      organizationId: ORG,
+      pointerId: POINTER,
+      contactId: CONTACT,
+      actorUserId: null,
+      requestId: "r1",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("flow_not_enrollable");
+      expect(result.status).toBe(422);
+    }
+  });
+
   it("#3923 — instalação SEM canal pareado devolve erro tratado, não uma exceção crua", async () => {
     // `fn_service_begin` levanta `service_channel_not_found` (P0002) quando a
     // organização não tem sessão de canal. Antes, o `throw` de
