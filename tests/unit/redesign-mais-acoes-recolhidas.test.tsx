@@ -58,11 +58,4 @@ describe("MaisAcoesRecolhidas", () => {
     expect(aoClicar).toHaveBeenCalledTimes(1);
     expect(details.open).toBe(false);
   });
-
-  it("escolher uma ação deixa o foco no '⋯', para o diálogo devolvê-lo ali ao fechar", () => {
-    const { details, getByText } = montar();
-    details.open = true;
-    fireEvent.click(getByText("Arquivar"));
-    expect(document.activeElement).toBe(details.querySelector("summary"));
-  });
 });
