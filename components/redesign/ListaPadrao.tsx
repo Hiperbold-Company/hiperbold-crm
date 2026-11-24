@@ -100,7 +100,7 @@ export function ListaPadrao<T>({
         <header className="flex flex-col gap-3.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-7 pb-3.5 pt-5">
           <div className="flex flex-wrap items-start gap-3.5">
             <div className="min-w-60 flex-1">
-              <h1 className="m-0 text-[22px] font-bold">{rotulo}</h1>
+              <h1 className="m-0 text-xl font-bold">{rotulo}</h1>
               {descricao ? <p className="m-0 mt-1 text-sm text-[var(--color-text-muted)]">{descricao}</p> : null}
             </div>
             {acoes ? <div className="flex items-center gap-2">{acoes}</div> : null}
@@ -112,7 +112,7 @@ export function ListaPadrao<T>({
                 key={r.rotulo}
                 className="flex min-w-36 flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2.5"
               >
-                <strong className="text-[22px] font-bold leading-tight tabular-nums">{r.valor}</strong>
+                <strong className="text-xl font-bold leading-tight tabular-nums">{r.valor}</strong>
                 <span className="text-xs text-[var(--color-text-muted)]">{r.rotulo}</span>
               </li>
             ))}
@@ -136,7 +136,7 @@ export function ListaPadrao<T>({
                     type="button"
                     aria-pressed={ativa}
                     onClick={() => setPilula(p.id)}
-                    className={`inline-flex min-h-[30px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] ${
+                    className={`inline-flex min-h-[30px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm ${
                       ativa
                         ? "border-[var(--color-accent-600)] bg-[var(--color-accent-soft)] font-semibold text-[var(--color-accent-600)]"
                         : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
@@ -144,7 +144,7 @@ export function ListaPadrao<T>({
                   >
                     <span>{p.rotulo}</span>
                     <span
-                      className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[11px] font-semibold ${
+                      className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-2xs font-semibold ${
                         ativa
                           ? "bg-[var(--color-accent-600)] text-[var(--color-accent-fg)]"
                           : "bg-[var(--color-surface-elevated)] text-[var(--color-text-muted)]"

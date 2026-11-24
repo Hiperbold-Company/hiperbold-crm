@@ -193,7 +193,7 @@ export function CallsClient() {
         tituloDoPainel={(c) => `${t("Chamada com")} ${counterpartLabel(c)}`}
         painel={(c) => (
           <div className="space-y-5">
-            <dl className="m-0 flex flex-col text-[13px]">
+            <dl className="m-0 flex flex-col text-sm">
               {[
                 [t("Quando"), fmtDate(c.started_at, idioma)],
                 [t("Direção"), c.direction === "outbound" ? t("Saída") : t("Entrada")],

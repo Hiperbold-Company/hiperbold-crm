@@ -139,7 +139,7 @@ export function AuditClient() {
         tituloDoPainel={(r) => r.action}
         painel={(r) => (
           <div className="space-y-5">
-            <dl className="m-0 flex flex-col text-[13px]">
+            <dl className="m-0 flex flex-col text-sm">
               {[
                 [t("Quem"), rotuloDoAtor(r)],
                 [t("Quando"), fmtDate(r.created_at, tagDoIdioma)],

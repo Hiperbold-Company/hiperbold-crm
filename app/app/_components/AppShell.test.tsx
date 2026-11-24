@@ -15,7 +15,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { GRUPO_NO_RODAPE, sidebarGroups } from "@/lib/navigation/registry";
+import { GRUPO_NO_RODAPE, searchable, sidebarGroups } from "@/lib/navigation/registry";
+import { AREAS_DO_V49, abasDaAreaV49 } from "@/lib/redesign/areas";
 import type { Role } from "@/lib/auth/types";
 
 const estado = { role: "admin" as Role, caminho: "/app/inbox" };
@@ -128,21 +129,55 @@ describe("AppShell — chave do redesign", () => {
     expect(screen.getByTestId("menu-do-usuario")).toBeTruthy();
   });
 
-  it.each(["admin", "agent", "viewer"] as Role[])(
-    "ligada, papel %s: o menu lateral tem exatamente as portas de sidebarGroups()",
+  /*
+   * PERMISSÃO NA MOLDURA NOVA (onda 1). O menu deixou de ser `sidebarGroups()`
+   * e passou a listar as áreas do v49 — por isso o caso antigo ("exatamente as
+   * portas de sidebarGroups") saiu, e este o substitui com a régua que importa:
+   *  (1) nada novo: todo destino alcançável na moldura nova (menu, abas de cada
+   *      área e "Mais") já é liberado ao papel hoje — `searchable()`, a mesma
+   *      lista do ⌘K e dos hubs "Ver tudo em";
+   *  (2) nada some: toda porta do menu de sempre (`sidebarGroups`) e todo
+   *      destino liberado continuam com porta — no menu, numa aba ou no "Mais".
+   */
+  it.each(["viewer", "agent", "manager", "admin"] as Role[])(
+    "ligada, papel %s: o que a moldura nova alcança é o que o catálogo já libera, e nada some",
     (papel) => {
       estado.role = papel;
+      // Liberado hoje = toda tela que o papel abre (⌘K) + o hub "Ver tudo em" de cada grupo que o menu de sempre mostra.
+      const hubs = sidebarGroups(false, papel, undefined, [], []).flatMap((g) => (g.group.hub ? [g.group.hub.href] : []));
+      const liberados = new Set([...searchable(false, papel, undefined, [], []).map((d) => d.href), ...hubs]);
+      const menuDeSempre = sidebarGroups(false, papel, undefined, [], [])
+        .filter((g) => g.group.id !== GRUPO_NO_RODAPE)
+        .flatMap((g) => g.items.map((d) => d.href));
+
       const { container } = montar(true);
       const menu = container.querySelector('aside[data-moldura="redesign"]') as HTMLElement;
       const nav = within(menu).getByRole("navigation", { name: "Navegação principal" });
-      const hrefs = within(nav)
+      const noMenu = within(nav)
         .getAllByRole("link")
-        .map((a) => a.getAttribute("href"));
-      const grupos = sidebarGroups(false, papel, undefined, [], []);
-      const esperados = grupos.filter((g) => g.group.id !== GRUPO_NO_RODAPE).flatMap((g) => g.items.map((d) => d.href));
-      expect(hrefs).toEqual(esperados);
-      const rodape = grupos.find((g) => g.group.id === GRUPO_NO_RODAPE)?.group.hub;
+        .map((a) => a.getAttribute("href") as string);
+
+      const visiveis = searchable(false, papel, undefined, [], []);
+      const nasAbas = AREAS_DO_V49.flatMap((a) => abasDaAreaV49(a, visiveis).map((d) => d.href));
+
+      const rodape = sidebarGroups(false, papel, undefined, [], []).find((g) => g.group.id === GRUPO_NO_RODAPE)
+        ?.group.hub;
       if (rodape) expect(within(menu).getByRole("link", { name: rodape.label }).getAttribute("href")).toBe(rodape.href);
+      fireEvent.click(within(menu).getByRole("button", { name: "Todas as seções" }));
+      const noMais = within(screen.getByRole("dialog"))
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("href") as string);
+
+      const alcancaveis = new Set([...noMenu, ...nasAbas, ...noMais]);
+      // (1) subconjunto do que o papel já tinha
+      expect([...alcancaveis].filter((h) => !liberados.has(h))).toEqual([]);
+      // (2) nada que o papel alcançava ficou sem porta
+      expect(menuDeSempre.filter((h) => !alcancaveis.has(h))).toEqual([]);
+      expect([...liberados].filter((h) => !alcancaveis.has(h))).toEqual([]);
+      for (const h of ["/app/radar", "/app/activities"]) {
+        if (liberados.has(h)) expect(alcancaveis.has(h)).toBe(true);
+      }
+
       estado.role = "admin";
     },
   );
