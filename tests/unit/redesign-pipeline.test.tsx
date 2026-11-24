@@ -202,9 +202,19 @@ describe("redesign do Pipeline: desligado é a tela de sempre", () => {
 });
 
 describe("redesign do Pipeline: ligado marca as peças", () => {
-  it("cartão: raiz, título e rodapé", () => {
+  it("cartão: raiz, identidade, título, valor e rodapé", () => {
     const { container } = montarCartao(true);
-    expect(marcas(container)).toEqual(["cartao", "cartao-rodape", "cartao-titulo"]);
+    // Onda 3: identidade e valor ganham marca para o valor subir à linha do título.
+    expect(marcas(container)).toEqual([
+      "cartao",
+      "cartao-identidade",
+      "cartao-rodape",
+      "cartao-titulo",
+      "cartao-valor",
+    ]);
+    expect(container.querySelector('[data-rd-pipeline="cartao-valor"]')?.getAttribute("data-testid")).toBe(
+      "card-valor",
+    );
     const cartao = container.querySelector('[data-rd-pipeline="cartao"]');
     expect(cartao?.getAttribute("role")).toBe("group");
     expect(cartao?.querySelector('[data-testid="card-valor"]')).not.toBeNull();
@@ -242,7 +252,7 @@ describe("as peças fora do jsdom deste arquivo usam a mesma marca condicional",
   // rede e de sessão demais para montar aqui; o que se cobra deles é a FORMA:
   // a marca sai sempre de `rd(...)` (undefined desligada), nunca de string fixa.
   const ARQUIVOS: Record<string, string[]> = {
-    "app/app/pipelines/[id]/_client.tsx": ["tela", "cabecalho", "visoes"],
+    "app/app/pipelines/[id]/_client.tsx": ["tela", "cabecalho", "visoes", "identidade"],
     "app/app/kanban/_client.tsx": ["funis"],
     "components/kanban/FilterBar.tsx": ["filtros"],
     "components/kanban/KanbanBoard.tsx": ["quadro"],

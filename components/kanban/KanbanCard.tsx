@@ -234,7 +234,7 @@ export function KanbanCard({
           />
 
           {/* ① identidade — altura FIXA de 2 linhas, com ou sem texto longo. */}
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2" data-rd-pipeline={rd("cartao-identidade")}>
             <div className="flex min-w-0 flex-1 items-start gap-1.5">
               {/* A largura é SEMPRE reservada (`h-4 w-4` num wrapper que não
                   some), só a tinta é condicional: o card tem orçamento fixo de
@@ -326,6 +326,7 @@ export function KanbanCard({
               "os dois aparecem" olhando dois lugares diferentes. */}
           <p
             data-testid="card-valor"
+            data-rd-pipeline={value || recorrente ? rd("cartao-valor") : rd("cartao-sem-valor")}
             className={cn(
               "flex items-baseline gap-1 font-medium tabular-nums",
               denso ? "mt-0.5 h-4 text-2xs leading-4" : "mt-1 h-5 text-xs leading-5",

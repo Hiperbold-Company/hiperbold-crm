@@ -2922,6 +2922,66 @@
   font-weight: 600;
 }
 
+/* ---- Onda 3: valor na linha do título, como no v49 ---------------------
+   Grade de duas colunas no cartão: identidade (título e menu) à esquerda,
+   valor à direita na MESMA linha; o resto ocupa a largura toda. Só posição
+   de grade — nada de transform nem order (o arraste mexe no cartão). */
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] > * {
+  grid-column: 1 / -1;
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] > [data-rd-pipeline="cartao-identidade"] {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] > [data-rd-pipeline="cartao-valor"] {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  margin-top: 0;
+  line-height: 20px;
+}
+/* Sem valor, o v49 não desenha nada (o traço só ocupava a linha). */
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] > [data-rd-pipeline="cartao-sem-valor"] {
+  display: none;
+}
+
+/* ---- Onda 3: nome do funil e visões lado a lado ------------------------ */
+[data-redesign="ligado"] [data-rd-pipeline="identidade"] {
+  gap: 16px;
+}
+[data-redesign="ligado"] [data-rd-pipeline="identidade"] > [data-slot="select-trigger"] {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+[data-redesign="ligado"] [data-rd-pipeline="identidade"] > [data-slot="select-trigger"][class~="bg-transparent"] {
+  background-color: transparent;
+}
+[data-redesign="ligado"] [data-rd-pipeline="identidade"] > h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
+/* ---- Onda 3: filtros numa linha que rola de lado, no computador -------- */
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-pipeline="filtros"] {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 3px;
+    scrollbar-width: thin;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="filtros"] > * {
+    flex: none;
+  }
+}
+
 /* ---- Ficha do negócio (o cartão aberto) --------------------------------- */
 @media (min-width: 40rem) {
   [data-redesign="ligado"] [data-rd-pipeline="ficha"] {
