@@ -18,6 +18,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ ligado: false }));
 
+// A marca vem do banco (platform_branding). Sem .env.local (como no CI) o
+// cliente aponta para um host .invalid e a leitura fica pendurada até o timeout.
+vi.mock("@/lib/branding/saida", () => ({
+  marcaDaSaida: async () => ({ nome: "Marca Teste", logoUrl: null, accent: "#123456" }),
+}));
 vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => h.ligado }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),

@@ -16,7 +16,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { signInviteToken, type InvitePayload } from "@/lib/auth/invite-token";
 
-const h = vi.hoisted(() => ({ ligado: false, user: null as unknown }));
+const h = vi.hoisted(() => {
+  // Segredo fixo: a assinatura do token entra no HTML (links), e o retrato não
+  // pode depender do .env.local de quem roda. Vence INTERNAL_SECRET também.
+  process.env.INVITE_TOKEN_SECRET = "segredo-fixo-do-teste-do-convite-onda2-0123456789";
+  return { ligado: false, user: null as unknown };
+});
 
 vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => h.ligado }));
 vi.mock("@/lib/supabase/server", () => ({
