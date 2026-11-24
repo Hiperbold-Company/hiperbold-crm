@@ -81,6 +81,7 @@ const ESTADOS: Record<string, Conv> = {
   minha: { ...BASE, assigned_to_user_id: "u-1", assignee_kind: "human" } as unknown as Conv,
   encerrada: { ...BASE, status: "closed", assigned_to_user_id: "u-1", assignee_kind: "human" } as unknown as Conv,
   "arquivada de grupo": { ...BASE, status: "archived", is_group: true } as unknown as Conv,
+  "contato pessoal": { ...BASE, contacts: { ...BASE.contacts, is_personal: true } } as unknown as Conv,
 };
 
 function montar(conv: Conv, ligado: boolean) {
@@ -95,10 +96,8 @@ function montar(conv: Conv, ligado: boolean) {
 }
 
 const RARAS = [
-  "Ligar",
   "Reservar serviço",
   "Vídeo",
-  "Ensinar o agente",
   "Arquivar",
   "Marcar como pessoal",
   "Desmarcar pessoal",
@@ -139,12 +138,15 @@ describe("onda 3 — Conversas, chave LIGADA", () => {
 
     const mais = container.querySelector('[data-rd-chat="mais-acoes"]');
     const rarasDoCaso = antes.filter((r) => RARAS.includes(r));
-    expect(Boolean(mais)).toBe(rarasDoCaso.length > 0);
+    // O <details> sempre monta; quem esconde o gatilho vazio é o CSS (:has,
+    // provado no navegador). Aqui: a lista só tem filhos quando há ação rara.
+    const lista = mais?.querySelector('[data-rd-chat="mais-acoes-lista"]');
+    expect((lista?.children.length ?? 0) > 0).toBe(rarasDoCaso.length > 0);
     if (mais) {
       expect(rotulos(mais).sort()).toEqual(rarasDoCaso.sort());
     }
     // As do dia a dia nunca vão para o menu.
-    for (const r of ["Assumir", "Liberar", "Transferir", "Fechar", "Reabrir", "Buscar nesta conversa", "Lembrar", "Convidar"]) {
+    for (const r of ["Assumir", "Liberar", "Transferir", "Fechar", "Reabrir", "Buscar nesta conversa", "Lembrar", "Convidar", "Ligar", "Ensinar o agente"]) {
       if (antes.includes(r)) expect(mais ? rotulos(mais) : []).not.toContain(r);
     }
   });

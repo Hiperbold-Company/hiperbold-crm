@@ -401,6 +401,9 @@ export function ConversationHeader({
             )}
             {/* A chamada usa o telefone da ficha, mesmo quando o contato chegou por
                 outro canal. Grupos não representam uma pessoa para ligar. */}
+            {!conversation.is_group && c?.id && (
+              <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
+            )}
             <ParticipantesDaConversa
               conversationId={conversation.id}
               podeConvidar={podeConvidar}
@@ -553,6 +556,17 @@ export function ConversationHeader({
             {/* ENSINAR O AGENTE: só na conversa encerrada, que é a que o lote noturno
                 lê — e ocupa o lugar que Transferir/Lembrar/Fechar deixam vagos nesse
                 estado, então não alarga a barra. Mesmo piso da rota (agent). */}
+            {encerrada && podeEnsinar && (
+              <EnsinarAgenteButton conversationId={conversation.id} encerrada={encerrada} />
+            )}
+            {/* ARQUIVAR (#923): tira da frente sem destruir.
+                A conversa já arquivada não mostra o botão — arquivar duas vezes não
+                é um gesto que exista, e o botão só reapareceria como um clique que
+                não muda nada. Fechada E resolvida mostram: são exatamente as que se
+                quer mandar para o arquivo depois de encerradas, e é o caminho que
+                faz a aba "Arquivadas" deixar de ser uma pasta morta.
+                A permissão é a mesma de fechar (a rota `/conversations/[id]` é
+                `requireSupportWrite`): quem pode encerrar, pode arquivar. */}
             {c?.id && (
               <Button asChild size="sm" variant="ghost" className="xl:hidden">
                 <Link
@@ -568,16 +582,14 @@ export function ConversationHeader({
               </Button>
             )}
             {/* Onda 3: as ações raras num "Mais ações" que só ESCONDE. Só ação
-                que abre diálogo: Lembrar e Convidar mostram estado (lembrete
-                ativo, quem participa) e ficam à vista. Sem nada dentro, o CSS
+                que abre diálogo e não mostra estado: Ligar ("Em ligação"),
+                Lembrar (lembrete ativo), Convidar (quem participa) e Ensinar
+                ("Ensinando o agente") ficam à vista. Sem nada dentro, o CSS
                 some com o gatilho. */}
             <MaisAcoesRecolhidas
               marca={{ "data-rd-chat": rd("mais-acoes") }}
               marcaDaLista={{ "data-rd-chat": rd("mais-acoes-lista") }}
             >
-              {!conversation.is_group && c?.id && (
-                <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
-              )}
               {!conversation.is_group && c?.id && activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent && (
                 <ReservarServicoNaConversa key={`${activeOrg.orgId}:${conversation.id}`} contactId={c.id} conversationId={conversation.id} contactName={displayName}/>
               )}
@@ -607,17 +619,6 @@ export function ConversationHeader({
                   O componente só desenha o botão para quem a rota aceitaria (dono ou
                   gestor+) e não desenha NADA quando não há participante nem permissão
                   de convidar — nenhum espaço vazio no cabeçalho de quem só foi ler. */}
-              {encerrada && podeEnsinar && (
-                <EnsinarAgenteButton conversationId={conversation.id} encerrada={encerrada} />
-              )}
-              {/* ARQUIVAR (#923): tira da frente sem destruir.
-                  A conversa já arquivada não mostra o botão — arquivar duas vezes não
-                  é um gesto que exista, e o botão só reapareceria como um clique que
-                  não muda nada. Fechada E resolvida mostram: são exatamente as que se
-                  quer mandar para o arquivo depois de encerradas, e é o caminho que
-                  faz a aba "Arquivadas" deixar de ser uma pasta morta.
-                  A permissão é a mesma de fechar (a rota `/conversations/[id]` é
-                  `requireSupportWrite`): quem pode encerrar, pode arquivar. */}
               {status !== "archived" && (
                 <Button
                   size="sm"
