@@ -5,6 +5,7 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaIa } from "@/lib/redesign/ia";
 import { AgentForm, type ChannelSessionLite } from "./AgentForm";
 import type { CoberturaPorFunil } from "./FunisDoAgente";
 import type { MaterialDoAcervo } from "./BasesDoAgente";
@@ -47,6 +48,7 @@ interface Props {
 
 export function AgentTabs(props: Props) {
   const t = useT();
+  const rd = useMarcaDaIa();
   const [tab, setTab] = React.useState<
     "configuration" | "test" | "capacidades" | "runs" | "history" | "proposals"
   >("configuration");
@@ -58,7 +60,7 @@ export function AgentTabs(props: Props) {
       onValueChange={(v) => setTab(v as typeof tab)}
       className="flex flex-col gap-4"
     >
-      <TabsList>
+      <TabsList data-rd-ia={rd("abas")}>
         <TabsTrigger value="configuration">{t("Configuração")}</TabsTrigger>
         <TabsTrigger value="test" disabled={!hasVersion}>
           {t("Teste")}

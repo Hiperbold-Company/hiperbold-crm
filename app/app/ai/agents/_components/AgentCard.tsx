@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
+import { useMarcaDaIa } from "@/lib/redesign/ia";
+import { corDoAvatar } from "@/components/inbox/redesign/marca";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 import type { AgentRow } from "@/hooks/ai/useAgent";
 import { AgentStatusBadge, deriveAgentStatus } from "./AgentStatusBadge";
 import { AgentRowMenu } from "./AgentRowMenu";
@@ -67,15 +70,34 @@ export function modeloEmVigor(agent: AgentRow): string {
 export function AgentCard({ agent, canWrite }: Props) {
   const t = useT();
   const rd = useMarcaDasMetricas();
+  const rdIa = useMarcaDaIa();
   const status = deriveAgentStatus(agent);
+  // Com a chave ligada (v49) os selos moram embaixo do nome; desligada, ao lado do menu.
+  const selosEmbaixoDoNome = rdIa("selos") !== undefined;
+  const selos = (
+    <>
+      {agent.is_default && (
+        <Badge variant="secondary" className="text-xs">
+          {t("default")}
+        </Badge>
+      )}
+      <AgentStatusBadge status={status} />
+    </>
+  );
 
   return (
     <Card className="flex h-full flex-col gap-3 p-4" data-rd-metricas={rd("agentes-cartao")}>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2" data-rd-ia={rdIa("cartao-topo")}>
+        {rdIa("avatar") ? (
+          <span data-rd-ia={rdIa("avatar")} data-rd-cor={corDoAvatar(agent.id)} aria-hidden>
+            {iniciaisDoNome(agent.name) ?? "?"}
+          </span>
+        ) : null}
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium" title={agent.name}>
             {agent.name}
           </h3>
+          {selosEmbaixoDoNome ? <div data-rd-ia={rdIa("selos")}>{selos}</div> : null}
           <p
             className="truncate text-xs text-muted-foreground"
             title={
@@ -90,12 +112,7 @@ export function AgentCard({ agent, canWrite }: Props) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {agent.is_default && (
-            <Badge variant="secondary" className="text-xs">
-              {t("default")}
-            </Badge>
-          )}
-          <AgentStatusBadge status={status} />
+          {selosEmbaixoDoNome ? null : selos}
           {canWrite && <AgentRowMenu agent={agent} />}
         </div>
       </div>
@@ -118,7 +135,7 @@ export function AgentCard({ agent, canWrite }: Props) {
           <dd className="font-mono">{agent.priority ?? "—"}</dd>
         </div>
       </dl>
-      <div className="mt-auto pt-2">
+      <div className="mt-auto pt-2" data-rd-ia={rdIa("cartao-rodape")}>
         <Link href={`/app/ai/agents/${agent.id}`}>
           <Button variant="outline" size="sm" className="w-full">
             {canWrite ? t("Editar") : t("Visualizar")}

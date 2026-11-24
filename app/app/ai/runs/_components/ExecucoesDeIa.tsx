@@ -123,7 +123,7 @@ export function ExecucoesDeIa() {
 
   if (erro) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-rd-automacoes={rd("pagina")}>
         <Card className="border-destructive/40 p-6">
           <h2 className="font-medium">{t("Não consegui carregar as execuções")}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{erro}</p>
@@ -136,7 +136,7 @@ export function ExecucoesDeIa() {
   }
 
   if (!execucoes || !resumo) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("Carregando…")}</div>;
+    return <div className="p-6 text-sm text-muted-foreground" data-rd-automacoes={rd("pagina")}>{t("Carregando…")}</div>;
   }
 
   return (

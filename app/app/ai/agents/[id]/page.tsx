@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasMetricas } from "@/lib/redesign/metricas";
+import { marcaDaIa } from "@/lib/redesign/ia";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { listSelectableChannels } from "@/lib/channels/selectable";
@@ -223,9 +224,10 @@ export default async function AgentEditorPage({ params }: { params: Promise<{ id
   const materiais = [...materiaisVivos, ...materiaisArquivadosMarcados];
 
   const rd = marcaDasMetricas(await redesignNaRequisicao());
+  const rdIa = marcaDaIa(await redesignNaRequisicao());
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6" data-rd-metricas={rd("agente-tela")}>
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-metricas={rd("agente-tela")} data-rd-ia={rdIa("pagina")}>
       <AgentOperation agent={agent} readOnly={readOnly} />
       {(agent.kind ?? "rag_bot") !== "mcp_agent" && !agent.published_version_id && (
         <LegacyRecovery

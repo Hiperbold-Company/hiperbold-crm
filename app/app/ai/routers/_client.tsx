@@ -57,10 +57,10 @@ export function RoutersClient({ initialState, channelSessions }: Props) {
   const [createOpen, setCreateOpen] = React.useState(false);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-rd-automacoes={rd("conteudo")}>
       <div className="flex sm:justify-end" data-rd-automacoes={rd("barra")}>
         {canManagePerm && (
-          <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
+          <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto" data-rd-automacoes={rd("acoes")}>
             <Plus /> {t("Novo roteador")}
           </Button>
         )}

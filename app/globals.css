@@ -3793,9 +3793,12 @@
    `@layer` de propósito: vence os utilitários do Tailwind sem `!important`.
    ───────────────────────────────────────────────────────────────────────── */
 
-/* ── Página: cabeçalho como o do protótipo ── */
+/* ── Página: cabeçalho como o do protótipo ──
+   Onda 4: o título fica logo abaixo da barra do topo. O respiro em volta é o
+   do <main> do casco; o da própria página saía em dobro. */
 [data-redesign="ligado"] [data-rd-automacoes="pagina"] {
-  gap: 24px;
+  gap: 20px;
+  padding: 0;
 }
 [data-redesign="ligado"] [data-rd-automacoes="cabecalho"] {
   align-items: flex-start;
@@ -3810,13 +3813,13 @@
 }
 @media (min-width: 768px) {
   [data-redesign="ligado"] [data-rd-automacoes="cabecalho"] [data-rd-automacoes="titulo"] {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
 [data-redesign="ligado"] [data-rd-automacoes="descricao"] {
-  margin: 6px 0 0;
-  max-width: 680px;
-  font-size: 15px;
+  margin: 2px 0 0;
+  max-width: 720px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--color-text-muted);
 }
@@ -4253,6 +4256,338 @@
   border-radius: 7px;
 }
 /* redesign: automacoes — fim ─────────────────────────────────────────── */
+
+/* redesign: ia ────────────────────────────────────────────────────────────
+   As telas de IA no redesign Hiperbold, protótipo v49 (IA-agentes,
+   IA-conhecimento, IA-casos, IA-execucoes, IA-roteadores, IA-follow-ups).
+
+   Os componentes são os de sempre; com a chave ligada eles ganham
+   `data-rd-ia="<peça>"` (`lib/redesign/ia.ts`) e as regras abaixo os
+   desenham. TODA regra começa por `[data-redesign="ligado"]` — desligada,
+   nenhuma casa, e `tests/unit/redesign-onda4-ia.test.tsx` cobra isso. Algumas
+   regras também pegam marcas que as telas já tinham (`data-rd-automacoes`,
+   `data-rd-metricas`), sempre a partir de uma peça desta área.
+
+   Cores só das variáveis do tema. Fora de `@layer` de propósito: vence os
+   utilitários do Tailwind sem `!important`.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Página: o título logo abaixo da barra do topo ──
+   O respiro em volta é o do <main> do casco; o da página saía em dobro. */
+[data-redesign="ligado"] [data-rd-ia="pagina"] {
+  gap: 20px;
+  padding: 0;
+}
+[data-redesign="ligado"] [data-rd-ia="cabecalho"] {
+  gap: 4px 24px;
+}
+[data-redesign="ligado"] [data-rd-ia="titulo"] {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--color-text);
+}
+@media (min-width: 768px) {
+  [data-redesign="ligado"] [data-rd-ia="cabecalho"] [data-rd-ia="titulo"] {
+    font-size: 24px;
+  }
+}
+[data-redesign="ligado"] [data-rd-ia="descricao"] {
+  margin: 2px 0 0;
+  max-width: 720px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── Ação principal na faixa do título (computador) ──
+   Sem mover elemento nenhum: a página vira grade de duas colunas, a raiz da
+   lista e a barra "somem" como caixa (display: contents) e cada peça vai para
+   o seu lugar. Só quando a barra tem as ações (`:has`): o estado vazio e quem
+   não pode criar ficam como estão. A coluna das ações tem teto, porque o
+   aviso de limite do plano mora no mesmo grupo. */
+@media (min-width: 1024px) {
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) fit-content(32rem);
+    align-content: start;
+    gap: 20px 24px;
+  }
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) > [data-rd-ia="conteudo"],
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) > [data-rd-ia="conteudo"] > [data-rd-ia="barra"] {
+    display: contents;
+  }
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) > [data-rd-ia="cabecalho"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  /* A raiz da lista empilhava com `gap`/`space-y`; agora quem separa é a grade. */
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) > [data-rd-ia="conteudo"] > *,
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) > [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > * {
+    grid-column: 1 / -1;
+    margin-block: 0;
+  }
+  [data-redesign="ligado"] [data-rd-ia="pagina"]:has(> [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"]) > [data-rd-ia="conteudo"] > [data-rd-ia="barra"] > [data-rd-ia="acoes"] {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+  }
+}
+[data-redesign="ligado"] [data-rd-ia="acoes"] {
+  gap: 8px;
+}
+
+/* ── Filtros do Agentes: os mesmos controles, mais baixos ── */
+[data-redesign="ligado"] [data-rd-ia="filtros"] {
+  gap: 8px 12px;
+}
+[data-redesign="ligado"] [data-rd-ia="filtros"] > input[data-slot="input"],
+[data-redesign="ligado"] [data-rd-ia="filtros"] > [data-slot="select-trigger"] {
+  border-color: var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  font-size: 14px;
+}
+[data-redesign="ligado"] [data-rd-ia="filtros"] > label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+@media (min-width: 1024px) {
+  [data-redesign="ligado"] [data-rd-ia="filtros"] > input[data-slot="input"],
+  [data-redesign="ligado"] [data-rd-ia="filtros"] > [data-slot="select-trigger"] {
+    height: 36px;
+  }
+}
+
+/* ── Pílulas segmentadas (Casos) e abas do editor do agente ── */
+[data-redesign="ligado"] [data-rd-ia="pilulas"][data-slot="tabs-list"],
+[data-redesign="ligado"] [data-rd-ia="abas"][data-slot="tabs-list"] {
+  display: inline-flex;
+  align-self: flex-start;
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+  gap: 2px;
+  padding: 3px;
+  overflow-x: auto;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-rd-ia="pilulas"] > [data-slot="tabs-trigger"],
+[data-redesign="ligado"] [data-rd-ia="abas"] > [data-slot="tabs-trigger"] {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-ia="pilulas"] > [data-slot="tabs-trigger"][data-state="active"],
+[data-redesign="ligado"] [data-rd-ia="abas"] > [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Execuções: "Execuções / Roteamento" em pílulas; filtros em chips ── */
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="cabecalho"] > [data-rd-automacoes="abas"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 8px 0 4px;
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="cabecalho"] > [data-rd-automacoes="abas"] > * {
+  padding: 4px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="cabecalho"] > [data-rd-automacoes="abas"] > [aria-current="page"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="cabecalho"] > [data-rd-automacoes="abas"] > a:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="cabecalho"] > [data-rd-automacoes="abas"] > a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="cabecalho"] {
+  margin-bottom: 20px;
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="barra"] {
+  gap: 6px;
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="barra"] > [data-slot="button"] {
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="barra"] > [data-slot="button"]:hover:not(:disabled) {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+/* Ligado = a variante cheia que o botão já escreve (o filtro de falhas não tem aria-pressed). */
+[data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="barra"] > [data-slot="button"][data-variant="default"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* A aba Roteamento das Execuções é outro componente, com a mesma faixa ao
+   contrário (link em Execuções, Roteamento corrente): o mesmo desenho e o
+   mesmo respiro, para a pílula não levar a uma tela com o cabeçalho antigo. */
+[data-redesign="ligado"] [data-testid="resultados-roteamento"] {
+  padding: 0;
+}
+[data-redesign="ligado"] [data-testid="resultados-roteamento"] > [data-rd-roteamento="cabecalho"] > div:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+}
+[data-redesign="ligado"] [data-testid="resultados-roteamento"] > [data-rd-roteamento="cabecalho"] > div:first-child > * {
+  padding: 4px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+[data-redesign="ligado"] [data-testid="resultados-roteamento"] > [data-rd-roteamento="cabecalho"] > div:first-child > [aria-current="page"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+[data-redesign="ligado"] [data-testid="resultados-roteamento"] > [data-rd-roteamento="cabecalho"] > div:first-child > a:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-testid="resultados-roteamento"] > [data-rd-roteamento="cabecalho"] > div:first-child > a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Agentes: cartão do v49 (iniciais, selos embaixo do nome, rodapé) ── */
+[data-redesign="ligado"] [data-rd-ia="cartao-topo"] {
+  align-items: flex-start;
+  gap: 10px;
+}
+[data-redesign="ligado"] [data-rd-ia="avatar"] {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--rd-chat-avatar, var(--color-accent));
+  color: var(--rd-chat-avatar-texto, var(--color-accent-fg));
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+[data-redesign="ligado"] [data-rd-ia="selos"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 2px;
+}
+[data-redesign="ligado"] [data-rd-ia="cartao-rodape"] {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-ia="cartao-rodape"] [data-slot="button"] {
+  width: auto;
+  padding: 0 10px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-ia="cartao-rodape"] [data-slot="button"]:hover {
+  background: var(--color-surface-elevated);
+}
+
+/* ── Conhecimento: aviso de chave como faixa; cartões de material compactos ── */
+[data-redesign="ligado"] [data-rd-ia="pagina"] [data-testid="conhecimento-sem-chave"] {
+  padding: 12px 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: 10px;
+  box-shadow: none;
+  font-size: 13px;
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] {
+  gap: 14px;
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] > [data-slot="card"] {
+  border-color: var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] > [data-slot="card"]:hover {
+  border-color: var(--color-border-strong);
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] > [data-slot="card"] > [data-slot="card-header"] {
+  gap: 4px;
+  padding: 14px 16px 8px;
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] > [data-slot="card"] [data-slot="card-title"] {
+  font-size: 14px;
+  font-weight: 700;
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] > [data-slot="card"] > [data-slot="card-content"] {
+  padding: 0 16px 10px;
+  font-size: 13px;
+}
+[data-redesign="ligado"] [data-rd-ia="grade-materiais"] > [data-slot="card"] > [data-slot="card-footer"] {
+  gap: 6px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Celular: nada sai da tela ── */
+@media (max-width: 767px) {
+  [data-redesign="ligado"] [data-rd-ia="filtros"] > [data-slot="select-trigger"] {
+    flex: 1 1 10rem;
+  }
+  [data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="barra"] {
+    flex-wrap: wrap;
+  }
+}
+/* Botões baixos só no computador: no celular fica a área de toque do botão base (44px). */
+@media (min-width: 1024px) {
+  [data-redesign="ligado"] [data-testid="execucoes-de-ia"] > [data-rd-automacoes="barra"] > [data-slot="button"],
+  [data-redesign="ligado"] [data-rd-ia="cartao-rodape"] [data-slot="button"] {
+    height: 30px;
+  }
+}
+/* redesign: ia — fim ───────────────────────────────────────────────────── */
 
 /* redesign: conexoes ──────────────────────────────────────────────────────
    A tela de Conexões (`/app/connections`) no redesign Hiperbold, protótipo v49

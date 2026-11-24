@@ -1,6 +1,7 @@
 "use client";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaIa } from "@/lib/redesign/ia";
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, ArrowsClockwise } from "@/lib/ui/icons";
@@ -36,6 +37,7 @@ interface Props {
 
 export function AcervoClient({ initialSources, initialChave, agentes }: Props) {
   const t = useT();
+  const rd = useMarcaDaIa();
   const qc = useQueryClient();
   const [novoAberto, setNovoAberto] = useState(false);
 
@@ -69,17 +71,17 @@ export function AcervoClient({ initialSources, initialChave, agentes }: Props) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-rd-ia={rd("conteudo")}>
       <ChaveDeConhecimento estado={estado} onChaveCadastrada={recarregar} />
       <StatusDaBase materiais={lista} podeIndexar={estado.pode_indexar} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3" data-rd-ia={rd("barra")}>
         <p className="text-sm text-text-muted">
           {lista.length === 0
             ? t("Nenhum material ainda.")
             : `${lista.length} ${lista.length === 1 ? t("material") : t("materiais")} ${t("no acervo.")}`}
         </p>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-rd-ia={rd("acoes")}>
           {lista.length > 0 ? (
             <Button
               variant="outline"
@@ -121,7 +123,7 @@ export function AcervoClient({ initialSources, initialChave, agentes }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" data-rd-ia={rd("grade-materiais")}>
           {/* Cada cartão LINKAR para a leitura do material: era o que faltava
               para a equipe não precisar de um sistema externo para consultar o
               que já está guardado aqui. */}
