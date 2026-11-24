@@ -2250,6 +2250,7 @@
   --rd-chat-avatar-2: #9a5b2e;
   --rd-chat-avatar-3: #7b5bad;
   --rd-chat-avatar-4: #3f6c9e;
+  --rd-chat-avatar-texto: #ffffff;
 }
 
 [data-redesign="ligado"][data-theme="dark"],
@@ -2267,6 +2268,7 @@
   --rd-chat-avatar-2: #9a5b2e;
   --rd-chat-avatar-3: #7b5bad;
   --rd-chat-avatar-4: #3f6c9e;
+  --rd-chat-avatar-texto: #ffffff;
 }
 
 /* A grade: um cartão só, como as três colunas do protótipo. */
@@ -2698,6 +2700,69 @@
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
+/* ---- Onda 3: cartão da conversa na lista, como no v49 -----------------
+   Nome e hora na primeira linha; a espera na fila desce para baixo da
+   prévia, numa linha só. Só posição de grade: tudo segue dentro do mesmo
+   botão, então a ordem do teclado não muda. */
+[data-redesign="ligado"] [data-rd-chat="item-corpo"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-redesign="ligado"] [data-rd-chat="fila"] {
+  grid-row: 3;
+  margin: 4px 0 0;
+  min-width: 0;
+  white-space: nowrap;
+}
+[data-redesign="ligado"] [data-rd-chat="fila"] > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Onda 3: identidade do contato na ficha ao lado do chat ----------- */
+[data-redesign="ligado"] [data-rd-chat="contato"] > h3 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+[data-redesign="ligado"] [data-rd-chat="contato-cartao"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0;
+  padding: 8px 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+[data-redesign="ligado"] [data-rd-chat="contato-avatar"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--rd-chat-avatar, var(--color-accent));
+  color: var(--rd-chat-avatar-texto);
+  font-size: 24px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-chat="contato-nome"] {
+  justify-content: center;
+  font-size: 16px;
+}
+[data-redesign="ligado"] [data-rd-chat="contato-acoes"] {
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+}
+
 /* ---- Onda 3: abas e seletores da lista numa linha que rola de lado ---- */
 [data-redesign="ligado"] [data-rd-chat="abas"],
 [data-redesign="ligado"] [data-rd-chat="seletores"] {
@@ -2758,7 +2823,7 @@
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-surface);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+  box-shadow: var(--shadow-lg);
 }
 [data-redesign="ligado"] [data-rd-chat="mais-acoes-lista"] button {
   justify-content: flex-start;
@@ -3030,7 +3095,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 8px;
 }
-[data-redesign="ligado"] [data-rd-pipeline="cartao"] > * {
+/* As faixas absolutas (borda de estado, pulso) são aria-hidden e ficam FORA
+   da regra: com grid-column, a caixa que as posiciona viraria a célula. */
+[data-redesign="ligado"] [data-rd-pipeline="cartao"] > :not([aria-hidden="true"]) {
   grid-column: 1 / -1;
 }
 [data-redesign="ligado"] [data-rd-pipeline="cartao"] > [data-rd-pipeline="cartao-identidade"] {
@@ -3043,6 +3110,8 @@
   grid-row: 1;
   align-self: start;
   margin-top: 0;
+  max-width: 11rem;
+  min-width: 0;
   line-height: 20px;
 }
 /* Sem valor, o v49 não desenha nada (o traço só ocupava a linha). */
@@ -3557,7 +3626,7 @@
   height: 34px;
   border-radius: 50%;
   background: var(--rd-chat-avatar, var(--color-accent));
-  color: #fff;
+  color: var(--rd-chat-avatar-texto, var(--color-accent-fg));
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
@@ -3646,7 +3715,7 @@
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-surface);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-lg);
 }
 [data-redesign="ligado"] [data-rd-contatos="mais-acoes-lista"] > button {
   justify-content: flex-start;
@@ -3657,6 +3726,29 @@
   [data-redesign="ligado"] [data-rd-contatos="mais-acoes"] > summary {
     width: 36px;
     height: 36px;
+  }
+}
+
+/* ---- Onda 3: ficha em duas colunas no computador (v49) ---------------
+   Dados à esquerda; carteira, roteiros, compras e módulos à direita. Sem
+   espaço entre linhas da grade: o respiro é a margem de baixo de cada bloco
+   da direita, para o cartão de dados não abrir buracos. */
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-contatos="visao-geral"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+    column-gap: 16px;
+    row-gap: 0;
+    align-items: start;
+  }
+  [data-redesign="ligado"] [data-rd-contatos="visao-geral"] > :first-child {
+    grid-column: 1;
+    grid-row: 1 / span 8;
+  }
+  [data-redesign="ligado"] [data-rd-contatos="visao-geral"] > :not(:first-child) {
+    grid-column: 2;
+    margin-top: 0;
+    margin-bottom: 16px;
   }
 }
 

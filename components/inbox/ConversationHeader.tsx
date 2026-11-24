@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
 import { ChannelLogo } from "@/components/inbox/ChannelLogo";
-import { Phone, ArrowRight, MagnifyingGlass, DotsThree } from "@/lib/ui/icons";
+import { Phone, ArrowRight, MagnifyingGlass } from "@/lib/ui/icons";
 import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 import { EnsinarAgenteButton } from "@/components/inbox/EnsinarAgenteButton";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
@@ -50,6 +50,7 @@ import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 import { useRedesign } from "@/lib/redesign/contexto";
+import { MaisAcoesRecolhidas } from "@/components/redesign/MaisAcoesRecolhidas";
 import { AvatarDoContato } from "@/components/inbox/redesign/AvatarDoContato";
 
 interface Props {
@@ -400,6 +401,11 @@ export function ConversationHeader({
             )}
             {/* A chamada usa o telefone da ficha, mesmo quando o contato chegou por
                 outro canal. Grupos não representam uma pessoa para ligar. */}
+            <ParticipantesDaConversa
+              conversationId={conversation.id}
+              podeConvidar={podeConvidar}
+              atendenteId={user.id}
+            />
             {isOpen && (
               <Button
                 size="sm"
@@ -514,6 +520,12 @@ export function ConversationHeader({
               </Button>
             )}
             {!encerrada && (
+              <SnoozeButton
+                conversationId={conversation.id}
+                snoozeUntil={conversation.snooze_until ?? null}
+              />
+            )}
+            {!encerrada && (
               <Button
                 size="sm"
                 variant="outline"
@@ -555,129 +567,112 @@ export function ConversationHeader({
                 </Link>
               </Button>
             )}
-            {/* Onda 3: as ações raras num "Mais ações" que só ESCONDE — tudo
-                segue montado (popovers e diálogos inclusive). Sem nada dentro,
-                o CSS some com o gatilho. */}
-            <details
-              data-rd-chat={rd("mais-acoes")}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") e.currentTarget.removeAttribute("open");
-              }}
+            {/* Onda 3: as ações raras num "Mais ações" que só ESCONDE. Só ação
+                que abre diálogo: Lembrar e Convidar mostram estado (lembrete
+                ativo, quem participa) e ficam à vista. Sem nada dentro, o CSS
+                some com o gatilho. */}
+            <MaisAcoesRecolhidas
+              marca={{ "data-rd-chat": rd("mais-acoes") }}
+              marcaDaLista={{ "data-rd-chat": rd("mais-acoes-lista") }}
             >
-              <summary aria-label={t("Mais ações")} title={t("Mais ações")}>
-                <DotsThree size={18} weight="bold" aria-hidden />
-              </summary>
-              <div data-rd-chat={rd("mais-acoes-lista")}>
-                {!conversation.is_group && c?.id && (
-                  <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
-                )}
-                {!conversation.is_group && c?.id && activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent && (
-                  <ReservarServicoNaConversa key={`${activeOrg.orgId}:${conversation.id}`} contactId={c.id} conversationId={conversation.id} contactName={displayName}/>
-                )}
-                {/* Videochamada (#2440): sem JITSI_SERVER_URL este botão não renderiza,
-                    então ele não ocupa lugar nem na instalação que não oferece a feature.
-                    A sala é aleatória por chamada (#2441) — não depende de telefone,
-                    só do link ir pelo chat.
+              {!conversation.is_group && c?.id && (
+                <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
+              )}
+              {!conversation.is_group && c?.id && activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent && (
+                <ReservarServicoNaConversa key={`${activeOrg.orgId}:${conversation.id}`} contactId={c.id} conversationId={conversation.id} contactName={displayName}/>
+              )}
+              {/* Videochamada (#2440): sem JITSI_SERVER_URL este botão não renderiza,
+                  então ele não ocupa lugar nem na instalação que não oferece a feature.
+                  A sala é aleatória por chamada (#2441) — não depende de telefone,
+                  só do link ir pelo chat.
 
-                    `provider`/`lastInboundAt`, `bloqueio` e `encerrada` vêm para o
-                    botão seguir a MESMA régua do composer: janela de 24h (a rota não
-                    barra quem envia da tela — vira 131047 silencioso, #1614), a trava
-                    de contato e a de conversa encerrada. Os textos saem da mesma função
-                    do composer (lib/inbox/motivo-do-envio-bloqueado.ts); encerrada só
-                    desabilita, sem texto, como o composer faz. `supportReadonly` fica
-                    de fora: ele mora no `user`, que este componente não recebe. */}
-                <VideoCallButton
-                  conversationId={conversation.id}
-                  provider={conversation.channel_sessions?.provider ?? null}
-                  lastInboundAt={conversation.last_inbound_at}
-                  bloqueio={motivoDoContato(c, t)}
-                  encerrada={status === "closed"}
-                />
-                {/* ATENDIMENTO CONJUNTO (#2542): quem participa desta conversa, e a
-                    porta para convidar mais um. Fica na barra de ações, junto das
-                    outras ações do cabeçalho, e ANTES de "Assumir" porque ela responde
-                    à pergunta que a barra faz primeiro: "quem mais está aqui comigo?".
-                    O componente só desenha o botão para quem a rota aceitaria (dono ou
-                    gestor+) e não desenha NADA quando não há participante nem permissão
-                    de convidar — nenhum espaço vazio no cabeçalho de quem só foi ler. */}
-                <ParticipantesDaConversa
-                  conversationId={conversation.id}
-                  podeConvidar={podeConvidar}
-                  atendenteId={user.id}
-                />
-                {!encerrada && (
-                  <SnoozeButton
-                    conversationId={conversation.id}
-                    snoozeUntil={conversation.snooze_until ?? null}
-                  />
-                )}
-                {encerrada && podeEnsinar && (
-                  <EnsinarAgenteButton conversationId={conversation.id} encerrada={encerrada} />
-                )}
-                {/* ARQUIVAR (#923): tira da frente sem destruir.
-                    A conversa já arquivada não mostra o botão — arquivar duas vezes não
-                    é um gesto que exista, e o botão só reapareceria como um clique que
-                    não muda nada. Fechada E resolvida mostram: são exatamente as que se
-                    quer mandar para o arquivo depois de encerradas, e é o caminho que
-                    faz a aba "Arquivadas" deixar de ser uma pasta morta.
-                    A permissão é a mesma de fechar (a rota `/conversations/[id]` é
-                    `requireSupportWrite`): quem pode encerrar, pode arquivar. */}
-                {status !== "archived" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={arquivar.isPending}
-                    // GUIA CURTA (#3003): "Arquivar" parece "guardar e pronto", e não é —
-                    // numa conversa ainda aberta ele ENCERRA o atendimento (o diálogo de
-                    // confirmação diz isso com todas as letras, e a guia diz antes dele).
-                    // Ela NÃO some do inbox: sai da Fila e de Minhas, e segue em Todas e
-                    // em Arquivadas (`tabToFilter` em InboxLayout).
-                    title={t("Guarda a conversa na aba Arquivadas. Se ainda estiver aberta, o atendimento é encerrado.")}
-                    onClick={() => setConfirmArquivarOpen(true)}
-                  >
-                    {arquivar.isPending ? t("Arquivando...") : t("Arquivar")}
-                  </Button>
-                )}
-                {/* PESSOAL (spec 21, etapa 15): marcar tira a conversa do inbox na
-                    hora; desmarcar relista. O `data-testid` é contrato do e2e da
-                    spec (`contato-pessoal-sai-da-operacao.spec.ts`). */}
-                {podeMarcarPessoal && c?.id && !ehPessoal && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={marcarPessoal.isPending}
-                    data-testid="marcar-pessoal"
-                    title={t("Tira este contato da operação: a conversa sai do inbox.")}
-                    onClick={() => setConfirmPessoalOpen(true)}
-                  >
-                    {t("Marcar como pessoal")}
-                  </Button>
-                )}
-                {podeMarcarPessoal && c?.id && ehPessoal && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={desmarcarPessoal.isPending}
-                    data-testid="desmarcar-pessoal"
-                    title={t("Devolve este contato à operação: a conversa volta ao inbox.")}
-                    onClick={() => desmarcarPessoal.mutate()}
-                  >
-                    {desmarcarPessoal.isPending ? t("Desmarcando...") : t("Desmarcar pessoal")}
-                  </Button>
-                )}
-                {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra
-                    na tela — e ele já tem um "Ver contato", para o MESMO contato, a um
-                    palmo de distância. Duas portas idênticas na mesma tela não são
-                    redundância inofensiva: são a linha a mais que empurrava a barra de
-                    ações para uma segunda fileira justo na largura mais apertada.
-                    Medido: sem a duplicata, os botões voltam a caber em UMA linha em
-                    1280px.
+                  `provider`/`lastInboundAt`, `bloqueio` e `encerrada` vêm para o
+                  botão seguir a MESMA régua do composer: janela de 24h (a rota não
+                  barra quem envia da tela — vira 131047 silencioso, #1614), a trava
+                  de contato e a de conversa encerrada. Os textos saem da mesma função
+                  do composer (lib/inbox/motivo-do-envio-bloqueado.ts); encerrada só
+                  desabilita, sem texto, como o composer faz. `supportReadonly` fica
+                  de fora: ele mora no `user`, que este componente não recebe. */}
+              <VideoCallButton
+                conversationId={conversation.id}
+                provider={conversation.channel_sessions?.provider ?? null}
+                lastInboundAt={conversation.last_inbound_at}
+                bloqueio={motivoDoContato(c, t)}
+                encerrada={status === "closed"}
+              />
+              {/* ATENDIMENTO CONJUNTO (#2542): quem participa desta conversa, e a
+                  porta para convidar mais um. Fica na barra de ações, junto das
+                  outras ações do cabeçalho, e ANTES de "Assumir" porque ela responde
+                  à pergunta que a barra faz primeiro: "quem mais está aqui comigo?".
+                  O componente só desenha o botão para quem a rota aceitaria (dono ou
+                  gestor+) e não desenha NADA quando não há participante nem permissão
+                  de convidar — nenhum espaço vazio no cabeçalho de quem só foi ler. */}
+              {encerrada && podeEnsinar && (
+                <EnsinarAgenteButton conversationId={conversation.id} encerrada={encerrada} />
+              )}
+              {/* ARQUIVAR (#923): tira da frente sem destruir.
+                  A conversa já arquivada não mostra o botão — arquivar duas vezes não
+                  é um gesto que exista, e o botão só reapareceria como um clique que
+                  não muda nada. Fechada E resolvida mostram: são exatamente as que se
+                  quer mandar para o arquivo depois de encerradas, e é o caminho que
+                  faz a aba "Arquivadas" deixar de ser uma pasta morta.
+                  A permissão é a mesma de fechar (a rota `/conversations/[id]` é
+                  `requireSupportWrite`): quem pode encerrar, pode arquivar. */}
+              {status !== "archived" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={arquivar.isPending}
+                  // GUIA CURTA (#3003): "Arquivar" parece "guardar e pronto", e não é —
+                  // numa conversa ainda aberta ele ENCERRA o atendimento (o diálogo de
+                  // confirmação diz isso com todas as letras, e a guia diz antes dele).
+                  // Ela NÃO some do inbox: sai da Fila e de Minhas, e segue em Todas e
+                  // em Arquivadas (`tabToFilter` em InboxLayout).
+                  title={t("Guarda a conversa na aba Arquivadas. Se ainda estiver aberta, o atendimento é encerrado.")}
+                  onClick={() => setConfirmArquivarOpen(true)}
+                >
+                  {arquivar.isPending ? t("Arquivando...") : t("Arquivar")}
+                </Button>
+              )}
+              {/* PESSOAL (spec 21, etapa 15): marcar tira a conversa do inbox na
+                  hora; desmarcar relista. O `data-testid` é contrato do e2e da
+                  spec (`contato-pessoal-sai-da-operacao.spec.ts`). */}
+              {podeMarcarPessoal && c?.id && !ehPessoal && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={marcarPessoal.isPending}
+                  data-testid="marcar-pessoal"
+                  title={t("Tira este contato da operação: a conversa sai do inbox.")}
+                  onClick={() => setConfirmPessoalOpen(true)}
+                >
+                  {t("Marcar como pessoal")}
+                </Button>
+              )}
+              {podeMarcarPessoal && c?.id && ehPessoal && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={desmarcarPessoal.isPending}
+                  data-testid="desmarcar-pessoal"
+                  title={t("Devolve este contato à operação: a conversa volta ao inbox.")}
+                  onClick={() => desmarcarPessoal.mutate()}
+                >
+                  {desmarcarPessoal.isPending ? t("Desmarcando...") : t("Desmarcar pessoal")}
+                </Button>
+              )}
+              {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra
+                  na tela — e ele já tem um "Ver contato", para o MESMO contato, a um
+                  palmo de distância. Duas portas idênticas na mesma tela não são
+                  redundância inofensiva: são a linha a mais que empurrava a barra de
+                  ações para uma segunda fileira justo na largura mais apertada.
+                  Medido: sem a duplicata, os botões voltam a caber em UMA linha em
+                  1280px.
 
-                    Abaixo de 1280 o painel não existe, e aí esta é a única porta para o
-                    contato — por isso a condição é a mesma do painel, e não um valor
-                    escolhido à parte. Não é esconder ação; é não repeti-la. */}
-              </div>
-            </details>
+                  Abaixo de 1280 o painel não existe, e aí esta é a única porta para o
+                  contato — por isso a condição é a mesma do painel, e não um valor
+                  escolhido à parte. Não é esconder ação; é não repeti-la. */}
+            </MaisAcoesRecolhidas>
           </>
         ) : (
           <>

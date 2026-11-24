@@ -362,9 +362,9 @@ export function ConversationListItem({
         <ChannelLogo channel={canal} size={16} className="absolute -bottom-1 -right-1 rounded-md bg-background ring-2 ring-background" />
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1" data-rd-chat={rd("item-corpo")}>
         {naFila && (
-          <div className="mb-1 flex items-center gap-1.5">
+          <div className="mb-1 flex items-center gap-1.5" data-rd-chat={rd("fila")}>
             {queuePosition !== undefined && (
               <span
                 className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-2xs font-medium tabular-nums text-accent"

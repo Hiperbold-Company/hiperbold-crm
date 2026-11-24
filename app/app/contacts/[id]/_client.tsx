@@ -5,12 +5,13 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
 import { useRedesign } from "@/lib/redesign/contexto";
+import { MaisAcoesRecolhidas } from "@/components/redesign/MaisAcoesRecolhidas";
 import { corDoAvatar } from "@/components/inbox/redesign/marca";
 import { iniciaisDoNome } from "@/lib/ui/iniciais";
 import Link from "next/link";
 import { useState } from "react";
 import { format } from "date-fns";
-import { ShieldCheck, PencilSimple, LockOpen, CaretLeft, DotsThree } from "@/lib/ui/icons";
+import { ShieldCheck, PencilSimple, LockOpen, CaretLeft } from "@/lib/ui/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { FichasDoModulo } from "@/components/modulos/FichasDoModulo";
@@ -380,20 +381,10 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
                 {/* Onda 3: as ações raras ficam num "Mais ações" que só ESCONDE —
                     os diálogos continuam montados. Sem ação rara, nada de gatilho. */}
                 {podeMarcarPessoal || podeJuntar ? (
-                  <details
-                    data-rd-contatos={rd("mais-acoes")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") e.currentTarget.removeAttribute("open");
-                    }}
+                  <MaisAcoesRecolhidas
+                    marca={{ "data-rd-contatos": rd("mais-acoes") }}
+                    marcaDaLista={{ "data-rd-contatos": rd("mais-acoes-lista") }}
                   >
-                    <summary aria-label={t("Mais ações")}>
-                      <DotsThree size={20} weight="bold" aria-hidden />
-                    </summary>
-                    {/* Escolher uma ação fecha a lista; o diálogo dela segue montado. */}
-                    <div
-                      data-rd-contatos={rd("mais-acoes-lista")}
-                      onClick={(e) => e.currentTarget.closest("details")?.removeAttribute("open")}
-                    >
                       {/* PESSOAL (spec 21, etapa 15): gerente marca e desmarca; sem
                           exceção de envio — quem é pessoal não recebe por nenhum caminho.
                           Marcar confirma (esconde da operação); desmarcar é direto. */}
@@ -498,8 +489,7 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
                           <span>{t("Juntar com outra ficha")}</span>
                         </Button>
                       )}
-                    </div>
-                  </details>
+                  </MaisAcoesRecolhidas>
                 ) : null}
               </>
             ) : (
@@ -684,7 +674,7 @@ export function ContactDetailClient({ contactId, paineisDeModulo = [], acessosMc
           {isAdmin && <TabsTrigger value="lgpd">LGPD</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4">
+        <TabsContent value="overview" className="mt-4" data-rd-contatos={rd("visao-geral")}>
           <Card className="p-4" data-rd-contatos={rd("cartao")}>
             <dl className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2" data-rd-contatos={rd("dados")}>
               <div>

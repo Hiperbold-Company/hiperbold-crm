@@ -5,8 +5,9 @@
  * quatro estados (aberta pela IA, minha, encerrada, arquivada de grupo).
  *
  * Ligada: as ações do dia a dia (Buscar, Assumir/Liberar, Devolver/Pausar,
- * Transferir, Fechar/Reabrir, Ver contato) ficam à vista; as raras (Ligar,
- * Reservar serviço, Vídeo, Convidar, Lembrar, Ensinar, Arquivar, pessoal) vão
+ * Transferir, Fechar/Reabrir, Ver contato, e Lembrar e Convidar, que mostram
+ * estado) ficam à vista; as raras (Ligar, Reservar serviço, Vídeo, Ensinar,
+ * Arquivar, pessoal) vão
  * para um "Mais ações" que só ESCONDE — tudo continua montado. O CONJUNTO de
  * ações alcançáveis é o mesmo por papel e por estado; sem ação rara, nada de
  * gatilho vazio.
@@ -97,8 +98,6 @@ const RARAS = [
   "Ligar",
   "Reservar serviço",
   "Vídeo",
-  "Convidar",
-  "Lembrar",
   "Ensinar o agente",
   "Arquivar",
   "Marcar como pessoal",
@@ -145,7 +144,7 @@ describe("onda 3 — Conversas, chave LIGADA", () => {
       expect(rotulos(mais).sort()).toEqual(rarasDoCaso.sort());
     }
     // As do dia a dia nunca vão para o menu.
-    for (const r of ["Assumir", "Liberar", "Transferir", "Fechar", "Reabrir", "Buscar nesta conversa"]) {
+    for (const r of ["Assumir", "Liberar", "Transferir", "Fechar", "Reabrir", "Buscar nesta conversa", "Lembrar", "Convidar"]) {
       if (antes.includes(r)) expect(mais ? rotulos(mais) : []).not.toContain(r);
     }
   });
