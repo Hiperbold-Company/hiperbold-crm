@@ -4956,13 +4956,6 @@
     background: var(--color-surface-elevated);
   }
 
-  /* Ações em texto numa linha só (v49: Editar · Juntar · Apagar). */
-  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child:has(> button[data-slot="button"]) {
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 2px;
-    white-space: nowrap;
-  }
   [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child > button[data-slot="button"]:is([data-variant="outline"], [data-variant="ghost"]) {
     height: auto;
     min-height: 28px;
@@ -4977,6 +4970,16 @@
   }
   [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child > button[data-slot="button"]:is([data-variant="outline"], [data-variant="ghost"]):hover {
     background: var(--color-accent-soft);
+  }
+}
+
+/* Ações em texto numa linha só (v49: Editar · Juntar · Apagar): só a partir de 1280px, onde a linha cabe; entre 768 e 1279 as ações seguem quebrando para ficarem na vista. */
+@media (min-width: 1280px) {
+  [data-redesign="ligado"] [data-rd-configuracoes="area"] [data-rd-configuracoes="cartao"] table td:last-child:has(> button[data-slot="button"]) {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
   }
 }
 

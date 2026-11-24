@@ -19,7 +19,8 @@ import {
 import { Users } from "@/lib/ui/icons";
 import type { AdminUserRow } from "@/hooks/useAdminUsers";
 import { useT } from "@/hooks/i18n/useT";
-import { iniciaisDoNome, useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
+import { useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 
 // ---------------------------------------------------------------------------
 // Role badge
@@ -159,9 +160,11 @@ export function UsersTableAdmin({
                   {rd("nome") && row.full_name ? (
                     // Chave ligada (v49): avatar de iniciais do nome já mostrado, decorativo.
                     <span data-rd-plataforma={rd("nome")}>
-                      <span aria-hidden data-rd-plataforma={rd("avatar")}>
-                        {iniciaisDoNome(row.full_name)}
-                      </span>
+                      {iniciaisDoNome(row.full_name) && (
+                        <span aria-hidden data-rd-plataforma={rd("avatar")}>
+                          {iniciaisDoNome(row.full_name)}
+                        </span>
+                      )}
                       {row.full_name}
                     </span>
                   ) : (

@@ -52,7 +52,7 @@ import { UsersTableAdmin, UsersTableAdminSkeleton } from "@/components/admin/use
 import { ProvedorDeConfirmacao } from "@/components/ui/confirmar";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
-import { iniciaisDoNome, marcaDaPlataforma } from "@/lib/redesign/plataforma";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 // Polyfills que o Radix Select exige e o jsdom não tem.
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -320,7 +320,7 @@ describe("onda 5 — peças marcadas com a chave ligada", () => {
       expect(container.querySelector(`[data-rd-plataforma="${peca}"]`), peca).not.toBeNull();
     }
     const avatares = Array.from(container.querySelectorAll('[data-rd-plataforma="avatar"]'));
-    expect(avatares.map((a) => a.textContent)).toEqual(["CB", "LA", "SC"]);
+    expect(avatares.map((a) => a.textContent)).toEqual(["CE", "LA", "SF"]);
     for (const a of avatares) expect(a.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByRole("cell", { name: "Clínica Bem Estar" })).toBeTruthy();
   });
@@ -342,14 +342,6 @@ describe("onda 5 — peças marcadas com a chave ligada", () => {
       expect(marcaDaPlataforma(true)(p)).toBe(p);
       expect(marcaDaPlataforma(false)(p)).toBeUndefined();
     }
-  });
-
-  it("iniciaisDoNome: duas primeiras palavras, maiúsculas, vazio sem nome", () => {
-    expect(iniciaisDoNome("Clínica Bem Estar")).toBe("CB");
-    expect(iniciaisDoNome("  ana  ")).toBe("A");
-    expect(iniciaisDoNome("élio souza")).toBe("ÉS");
-    expect(iniciaisDoNome("")).toBe("");
-    expect(iniciaisDoNome(null)).toBe("");
   });
 });
 

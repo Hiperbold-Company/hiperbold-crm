@@ -91,7 +91,7 @@ export function TodasAsSecoes({
                     onClick={onNavigate}
                     aria-current={aqui ? "page" : undefined}
                     className={cn(
-                      "flex min-h-12 items-center gap-3 border-b border-border px-4 py-2 text-base last:border-b-0",
+                      "flex min-h-12 items-center gap-3 border-b border-border px-4 py-2 text-base last:border-b-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                       aqui ? "bg-accent-soft font-semibold text-accent" : "text-foreground active:bg-surface-elevated",
                     )}
                   >
@@ -107,7 +107,7 @@ export function TodasAsSecoes({
                   {...intencao(hub.href)}
                   onClick={onNavigate}
                   aria-current={pathname === hub.href ? "page" : undefined}
-                  className="flex min-h-12 items-center gap-3 border-b border-border px-4 py-2 text-base text-muted-foreground last:border-b-0 active:bg-surface-elevated"
+                  className="flex min-h-12 items-center gap-3 border-b border-border px-4 py-2 text-base text-muted-foreground last:border-b-0 active:bg-surface-elevated focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <ArrowRight size={20} aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{t(hub.label)}</span>

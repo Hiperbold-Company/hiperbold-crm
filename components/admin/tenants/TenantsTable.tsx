@@ -18,7 +18,8 @@ import { ExcluirOrganizacaoDialog } from "./ExcluirOrganizacaoDialog";
 import type { AdminTenantRow } from "@/hooks/useAdminTenants";
 import { TenantRowActions } from "./TenantRowActions";
 import { useT } from "@/hooks/i18n/useT";
-import { iniciaisDoNome, useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
+import { useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 
 // ---------------------------------------------------------------------------
 // Status badge
@@ -180,9 +181,11 @@ export function TenantsTable({
                   {rd("nome") ? (
                     // Chave ligada (v49): avatar de iniciais do nome já mostrado, decorativo.
                     <span data-rd-plataforma={rd("nome")}>
-                      <span aria-hidden data-rd-plataforma={rd("avatar")}>
-                        {iniciaisDoNome(row.display_name)}
-                      </span>
+                      {iniciaisDoNome(row.display_name) && (
+                        <span aria-hidden data-rd-plataforma={rd("avatar")}>
+                          {iniciaisDoNome(row.display_name)}
+                        </span>
+                      )}
                       {row.display_name}
                     </span>
                   ) : (

@@ -74,6 +74,8 @@ vi.mock("@/components/shell/redesign/MarcaECartaoDaEmpresa", () => ({
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 
 import { BarraInferiorNova } from "@/components/shell/redesign/BarraInferiorNova";
+import { useNavegacaoDaMoldura } from "@/components/shell/redesign/navegacao";
+import { TodasAsSecoes } from "@/components/shell/redesign/TodasAsSecoes";
 import { ProvedorDaCentralDeAjuda } from "@/lib/ajuda/contexto";
 import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
 
@@ -137,6 +139,29 @@ describe("onda 5 celular — a barra de abas e o \"Mais\" mantêm os mesmos cont
       fireEvent.click(barra.querySelector("button")!);
       expect(screen.getByRole("dialog")).toBeTruthy();
       expect(controles()).toMatchSnapshot();
+    });
+  }
+});
+
+/** O menu do computador (`celular` omitido): o HTML de antes da onda 5, que a prop nova não pode mexer. */
+function TodasAsSecoesDoComputador() {
+  const nav = useNavegacaoDaMoldura();
+  return <TodasAsSecoes todas={nav.todas} pathname={nav.pathname} />;
+}
+
+describe("onda 5 celular — \"Todas as seções\" do computador (celular omitido) não mudou", () => {
+  for (const caso of [
+    { nome: "admin da plataforma em Contatos", pathname: "/app/contacts", admin: true },
+    { nome: "admin da empresa em Conversas", pathname: "/app/inbox", admin: false },
+  ]) {
+    it(`${caso.nome}: retrato do HTML`, () => {
+      h.pathname = caso.pathname;
+      h.admin = caso.admin;
+      const { container } = render(<TodasAsSecoesDoComputador />);
+      const html = container.innerHTML.replace(/_r_[0-9a-z]+_/g, "_r_xx_");
+      expect(html).toContain('aria-labelledby="todas-');
+      expect(html).not.toContain("rounded-2xl");
+      expect(html).toMatchSnapshot();
     });
   }
 });

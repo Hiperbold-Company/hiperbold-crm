@@ -126,7 +126,7 @@ function PainelMaisCelular() {
   const iniciais = iniciaisDoNome(user.full_name) ?? user.email.slice(0, 2).toUpperCase();
   const fechar = () => setAberto(false);
   const linha =
-    "flex min-h-13 w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left text-base text-foreground last:border-b-0";
+    "flex min-h-13 w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left text-base text-foreground last:border-b-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
   return (
     <Sheet open={aberto} onOpenChange={setAberto}>
