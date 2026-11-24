@@ -104875,6 +104875,58 @@ reset lock_timeout;
 
 notify pgrst, 'reload schema';
 
+-- ---- tipo do documento do contato (migration 1020, fork Hiperbold) ----
+set lock_timeout = '3s';
+
+alter table public.contacts
+  add column if not exists document_type text;
+
+alter table public.contacts
+  drop constraint if exists contacts_document_type_check;
+
+alter table public.contacts
+  add constraint contacts_document_type_check
+  check (document_type is null or document_type in (
+    'us_drivers_license', 'us_state_id', 'us_passport', 'us_green_card',
+    'us_itin', 'foreign_passport', 'br_cpf'
+  ));
+
+comment on column public.contacts.document_type is
+  'O TIPO do documento gravado em cpf_hash/cpf_encrypted (migration 1020). Só preenchido em país com seletor '
+  '(EUA), onde o titular escolhe entre os tipos de lib/legal/tipos-de-documento.ts; null no Brasil e em Portugal '
+  '(tipo implícito CPF/NIF) e em contato sem documento. O gatilho trg_contacts_tipo_segue_o_documento zera o tipo '
+  'sempre que o par do documento fica nulo (anonimização LGPD inclusive). Sem SSN de propósito.';
+
+-- O tipo morre junto com o documento: quem zera o par (fn_lgpd_cascade_redact_contact, merge, qualquer
+-- caminho futuro) zera o tipo sem precisar saber dele. Sem HTTP, sem leitura de outra tabela.
+create or replace function public.fn_contacts_tipo_segue_o_documento()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $fn$
+begin
+  if new.cpf_hash is null then
+    new.document_type := null;
+  end if;
+  return new;
+end;
+$fn$;
+
+revoke execute on function public.fn_contacts_tipo_segue_o_documento() from public, anon, authenticated;
+
+drop trigger if exists trg_contacts_tipo_segue_o_documento on public.contacts;
+create trigger trg_contacts_tipo_segue_o_documento
+  before insert or update on public.contacts
+  for each row execute function public.fn_contacts_tipo_segue_o_documento();
+
+-- A coluna nova segue a régua de grant por coluna da 0967/0998: tudo menos cpf_hash/cpf_encrypted é
+-- legível e gravável por anon/authenticated (a RLS decide a linha). O tipo sozinho não é segredo; o
+-- número continua só do servidor.
+grant select (document_type), insert (document_type), update (document_type)
+  on table public.contacts to anon, authenticated;
+
+reset lock_timeout;
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

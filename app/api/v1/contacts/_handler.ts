@@ -25,7 +25,7 @@ import { roleAtLeast } from "@/lib/auth/types";
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
 import { mesclarConsentimento } from "@/lib/contacts/consentimento";
-import { hashCpf } from "@/lib/contacts/cpf";
+import { hashDocumento } from "@/lib/contacts/cpf";
 import {
   CPF_SEM_LINHA,
   cifrarCpfDoContato,
@@ -78,7 +78,7 @@ type SB = SupabaseClient;
 // 0967, D-216), e pedir qualquer uma — ou `select *` — com a sessão do usuário dá "permission denied". Quem precisa de
 // "tem CPF?" usa `idsComCpf` (lib/contacts/cpf-do-contato.ts), com o cliente de serviço.
 const SELECT_COLS =
-  "id, organization_id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, email_normalized, phone_number, birthdate, is_blocked, blocked_reason, is_personal, contact_type, ai_opt_out, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, first_service_at";
+  "id, organization_id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, email_normalized, phone_number, birthdate, document_type, is_blocked, blocked_reason, is_personal, contact_type, ai_opt_out, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, first_service_at";
 
 interface CursorPayload {
   sort: string | null;
@@ -673,18 +673,22 @@ export async function createContactHandler(
 
   // O CPF NÃO vai no INSERT do usuário (D-216: o papel `authenticated` não grava `cpf_hash`/`cpf_encrypted`). Ele
   // é gravado logo depois pelo servidor, sobre o contato que a RLS acabou de aceitar criar.
-  let cpfParaGravar: { hash: string; cifrado: string } | null = null;
+  // O TIPO do documento (migration 1020) vem validado pelo schema do país: `undefined` em Brasil e Portugal (o
+  // schema recusa o campo ali), o escolhido nos EUA. Normalização e hash seguem o tipo — `hashCpf` de sempre sem ele.
+  let cpfParaGravar: { hash: string; cifrado: string; tipo?: string } | null = null;
   if (input.cpf) {
-    const hash = hashCpf(input.cpf);
+    const tipo = input.document_type ?? null;
+    const hash = hashDocumento(input.cpf, tipo);
     // Sem a chave do servidor não há como gravar o CPF com segurança: recusa, nunca grava em claro nem com hash fraco.
     if (!hash) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
     // `cpf_hash` e `cpf_encrypted` vão juntos (contacts_cpf_consistency): sem a chave de cifra do banco, recusa
     // antes de criar o contato.
-    const cifrado = await cifrarCpfDoContato(input.cpf);
+    const cifrado = await cifrarCpfDoContato(input.cpf, tipo);
     if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
     // Confere o CPF repetido ANTES de inserir: o caminho normal não cria para depois apagar.
     await recusarCpfDeOutroContato(ctx.organization_id, hash, null, ctx.requestId, ctx.idioma ?? "pt-BR");
-    cpfParaGravar = { hash, cifrado };
+    // Sem tipo (Brasil, Portugal) o objeto é o de sempre; o helper grava `document_type: null`.
+    cpfParaGravar = tipo ? { hash, cifrado, tipo } : { hash, cifrado };
   }
 
   const { data: created, error: insErr } = await supabase
@@ -929,13 +933,15 @@ export async function patchContactHandler(
     );
   }
   // O CPF NÃO vai no UPDATE do usuário (D-216): o servidor o grava depois, sobre o contato que a RLS aceitou alterar.
-  let cpfParaGravar: { hash: string; cifrado: string } | null = null;
+  let cpfParaGravar: { hash: string; cifrado: string; tipo?: string } | null = null;
   if (input.cpf !== undefined) {
-    const hash = hashCpf(input.cpf);
+    const tipo = input.document_type ?? null;
+    const hash = hashDocumento(input.cpf, tipo);
     if (!hash) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
-    const cifrado = await cifrarCpfDoContato(input.cpf);
+    const cifrado = await cifrarCpfDoContato(input.cpf, tipo);
     if (!cifrado) throw new ApiError(503, "cpf_indisponivel", undefined, ctx.requestId);
-    cpfParaGravar = { hash, cifrado };
+    // Sem tipo (Brasil, Portugal) o objeto é o de sempre; o helper grava `document_type: null`.
+    cpfParaGravar = tipo ? { hash, cifrado, tipo } : { hash, cifrado };
     // Recusa antes de tocar em qualquer campo (PATCH tudo-ou-nada).
     await recusarCpfDeOutroContato(ctx.organization_id, hash, contactId, ctx.requestId, ctx.idioma ?? "pt-BR");
   }
@@ -994,6 +1000,8 @@ export async function patchContactHandler(
   const fields = [
     ...Object.keys(patch).filter((k) => k !== "updated_at"),
     ...(cpfParaGravar ? ["cpf_hash", "cpf_encrypted"] : []),
+    // O tipo só existe nos EUA; no Brasil e em Portugal a auditoria segue nomeando o par, como sempre.
+    ...(cpfParaGravar?.tipo ? ["document_type"] : []),
   ];
 
   /**

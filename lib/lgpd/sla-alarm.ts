@@ -373,6 +373,8 @@ function prazoInternoForaDoBrasil(
   mesLegalVencido: boolean,
   t: (texto: string) => string,
 ): string {
+  // País revisado SEM lei geral (EUA): não há prazo legal para comparar.
+  if (perfil.lei === null && perfil.semLeiGeral) return t("Prazo interno do sistema.");
   const rgpd = perfil.lei?.nome === "RGPD" && citacaoDaLei(perfil) !== null;
   if (!rgpd) return t("Prazo interno do sistema, mais curto que o prazo legal.");
   if (mesLegalVencido) return t("O prazo do art. 12.º, n.º 3 do RGPD (um mês) venceu.");

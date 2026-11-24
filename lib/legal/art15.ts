@@ -33,6 +33,8 @@
  */
 import { z } from "zod";
 
+import { perfilDoPais } from "./perfil-do-pais";
+
 /**
  * `organizations.settings.art15` — só as alíneas que o responsável preenche.
  * String vazia ou só espaço vira `null` (`trim`): campo com espaço não é
@@ -88,7 +90,10 @@ export function art15DoControlador(settings: unknown): Art15DoControlador {
  * e derruba a página inteira, inclusive no Brasil.
  */
 export function alineasDoArt15Visiveis(pais: string | null): boolean {
-  return (pais ?? "BR") !== "BR";
+  if ((pais ?? "BR") === "BR") return false;
+  // As alíneas são do art. 15.º do RGPD: país revisado SEM lei geral (EUA) não
+  // tem esse artigo, e o cartão lhe pediria informações que lei nenhuma exige.
+  return perfilDoPais(pais).lei?.revisada === true;
 }
 
 /** O que o relatório imprime onde o responsável deixou a alínea em branco. */

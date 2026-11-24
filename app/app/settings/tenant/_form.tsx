@@ -209,6 +209,20 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
                 )}
               </p>
             )}
+            {/* Estados Unidos: revisado SEM lei geral (24/11/2026). Mesma régua
+                de Portugal — quem responde pelo documento sabe que a revisão
+                foi feita por IA e que trocar o país muda a régua do documento. */}
+            {perfil.semLeiGeral && (
+              <p
+                role="note"
+                data-testid="aviso-pais-sem-lei-geral"
+                className="rounded-md border border-warning bg-warning-bg p-3 text-xs text-warning-fg"
+              >
+                {t(
+                  "Nos Estados Unidos não há lei federal geral de proteção de dados como a LGPD ou o RGPD, e a lei da Flórida (Florida Digital Bill of Rights) só alcança empresas com receita anual acima de US$ 1 bilhão. Por isso o documento de acesso enviado ao titular não cita lei nenhuma. Esta conclusão vem de uma revisão feita por IA, não de parecer jurídico: confirme com o seu advogado, sobretudo se você atende moradores de estados com lei própria, como a Califórnia. Trocar o país muda a regra do documento do contato: a partir daí, todo documento novo pede o tipo (carteira de motorista, passaporte, Green Card, ITIN, CPF…); os documentos já gravados continuam legíveis como estão.",
+                )}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="media_retention_days">{t("Retenção de mídia (dias)")}</Label>

@@ -58,6 +58,36 @@
  * o titular é brasileiro e as duas leis podem valer — citar o RGPD não é
  * falso, mas é incompleto.
  *
+ * ─── Estados Unidos: revisado, e SEM lei geral para citar (24/11/2026) ────
+ *
+ * A régua acima tinha um só caminho para entrar: a lei revisada. Os Estados
+ * Unidos não cabem nele, e não por falta de revisão: em 2026-11-24 a revisão
+ * concluiu que NÃO HÁ lei federal geral de proteção de dados equivalente à
+ * LGPD ou ao RGPD, e que a lei da Flórida — onde estão os clientes que pediram
+ * o país, em Orlando — não alcança uma empresa comum: o Florida Digital Bill of
+ * Rights (SB 262, 2023; Fla. Stat. § 501.701 e seguintes) só vale para
+ * "controller" com receita bruta anual acima de US$ 1 bilhão. Citar a LGPD ou
+ * o RGPD a um titular em Orlando seria a citação errada; não citar nada é o
+ * certo.
+ *
+ * Por isso a régua ganhou um SEGUNDO caminho, explícito: `semLeiGeral`, um
+ * registro com a data e a fonte da revisão, só possível com `lei: null`. O que
+ * ela NÃO abre: país sem revisão nenhuma continua de fora — `lei: null` sozinho
+ * não é oferecido, e `semLeiGeral` ao lado de uma lei (revisada ou não) também
+ * não, porque as duas afirmações se contradizem. Os dois casos têm teste em
+ * `tests/unit/perfil-estados-unidos.test.ts`.
+ *
+ * A mesma ressalva de Portugal: é revisão AUTOMATIZADA, feita por IA por
+ * delegação do dono do produto, e NÃO é parecer jurídico. Leis ESTADUAIS
+ * gerais (Califórnia, Virgínia, Colorado e outras) podem alcançar uma
+ * organização que atende moradores desses estados; o perfil é do país e não
+ * as cita, e a tela de Configurações diz isso a quem escolhe o país.
+ *
+ * O documento do titular dos EUA também é diferente: não há um documento
+ * nacional, e o titular ESCOLHE qual informa (`tiposDeDocumento`, ver
+ * `./tipos-de-documento.ts`). Brasil e Portugal não declaram o campo e seguem
+ * como estavam — o tipo implícito é o CPF e o NIF.
+ *
  * ─── A separação documento × forma (regra adotada do #928) ────────────────
  *
  * Não se inventa dígito verificador. País com checksum público documentado
@@ -69,6 +99,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { HOLIDAYS_BR_ISO } from "@/lib/lgpd/holidays-br";
 import { HOLIDAYS_PT_ISO } from "@/lib/lgpd/holidays-pt";
+import { HOLIDAYS_US_ISO } from "@/lib/lgpd/holidays-us";
+
+import { isValidCpf } from "./cpf";
+import {
+  TIPOS_DE_DOCUMENTO,
+  TIPOS_DE_DOCUMENTO_DO_CONTATO,
+  type TipoDeDocumento,
+} from "./tipos-de-documento";
 
 /** ISO-3166 alpha-2, em maiúsculas. `null`/vazio na coluna significa Brasil. */
 export type CodigoDePais = string;
@@ -216,6 +254,16 @@ export interface AutoridadeDeSupervisao {
   site: string;
 }
 
+/** O registro da revisão que concluiu "não há lei geral a citar". */
+export interface RevisaoSemLeiGeral {
+  /** Data da revisão, `YYYY-MM-DD`. */
+  revisadoEm: string;
+  /** O que foi conferido — vai para quem audita o perfil, não para a tela. */
+  fonte: string;
+  /** Revisão automatizada (IA), sem parecer jurídico — a tela declara. */
+  revisadaPorIa: true;
+}
+
 export interface CalendarioDeDiasUteis {
   /** Datas `YYYY-MM-DD` dos feriados nacionais, no formato de `holidays-br.ts`. */
   feriados: readonly string[];
@@ -268,6 +316,21 @@ export interface PerfilDoPais {
   /** `null` quando o país ainda não tem lei revisada para citar. */
   lei: LeiCitada | null;
   /**
+   * A revisão concluiu que o país NÃO TEM lei geral de proteção de dados a
+   * citar (ver o cabeçalho, bloco dos Estados Unidos). Só vale com `lei: null`:
+   * é o segundo caminho de `paisesOferecidos()`, e o documento de acesso não
+   * cita lei nenhuma — nem diz "não declarada", porque aqui a ausência foi
+   * revisada.
+   */
+  semLeiGeral?: RevisaoSemLeiGeral;
+  /**
+   * Os documentos entre os quais o titular ESCOLHE (Estados Unidos). Ausente =
+   * um documento só, o de `documento`, com o tipo implícito (Brasil, Portugal).
+   * Presente = todo documento gravado leva `document_type`, e a tela mostra o
+   * seletor antes do número.
+   */
+  tiposDeDocumento?: readonly TipoDeDocumento[];
+  /**
    * Os papéis do documento, no vocabulário do país (issue #2344).
    *
    * Vêm do perfil junto com `lei`, porque a mesma troca de país troca os dois:
@@ -292,24 +355,12 @@ export interface PerfilDoPais {
 export const PAIS_PADRAO: CodigoDePais = "BR";
 
 /**
- * O mod-11 da Receita Federal — a regra brasileira, e a única do repositório
- * que confere dígito verificador. Mora aqui porque é o PERFIL que valida; quem
- * importava de `lib/schemas/contacts` continua importando (re-export).
+ * O mod-11 da Receita Federal mora em `./cpf` desde que os tipos de documento
+ * dos Estados Unidos (`./tipos-de-documento`) passaram a usá-lo também: lá ele
+ * é o tipo `br_cpf`, e importar daqui criaria um ciclo entre os dois módulos.
+ * Quem importava daqui continua importando (re-export).
  */
-export function isValidCpf(raw: string): boolean {
-  const s = raw.replace(/\D/g, "");
-  if (!/^\d{11}$/.test(s) || /^(\d)\1{10}$/.test(s)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(s[i]!, 10) * (10 - i);
-  let d1 = (sum * 10) % 11;
-  if (d1 === 10) d1 = 0;
-  if (d1 !== parseInt(s[9]!, 10)) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(s[i]!, 10) * (11 - i);
-  let d2 = (sum * 10) % 11;
-  if (d2 === 10) d2 = 0;
-  return d2 === parseInt(s[10]!, 10);
-}
+export { isValidCpf };
 
 /**
  * O mod-11 do NIF português — o dígito de controlo da Autoridade Tributária,
@@ -483,11 +534,88 @@ const PERFIL_PT: PerfilDoPais = {
   ],
 };
 
+const TIPOS_DOS_ESTADOS_UNIDOS: readonly TipoDeDocumento[] = TIPOS_DE_DOCUMENTO_DO_CONTATO.map(
+  (codigo) => TIPOS_DE_DOCUMENTO[codigo],
+);
+
+/**
+ * O documento "genérico" dos EUA — para quem lê `perfil.documento` sem um tipo
+ * em mãos (rótulo de coluna, PDF de acesso). Quem GRAVA usa o tipo escolhido
+ * (`validaDocumentoDoContato`); este `valida` só diz se o valor caberia em
+ * ALGUM dos tipos e não serve de régua de escrita.
+ */
+const DOCUMENTO_US: DocumentoDoTitular = {
+  rotulo: "Documento",
+  exemplo: "D12345678",
+  regra: "a forma do tipo de documento escolhido; só o CPF confere dígito verificador",
+  mensagemInvalido: "Documento inválido para o tipo escolhido",
+  confereDigito: false,
+  apelidosDoCabecalho: ["documento", "document", "document_number", "numero_do_documento", "id_number"],
+  valida: (valor) => TIPOS_DOS_ESTADOS_UNIDOS.some((tipo) => tipo.valida(valor)),
+  normaliza: (valor) => valor.replace(/[\s./-]/g, "").toUpperCase(),
+};
+
+const PERFIL_US: PerfilDoPais = {
+  codigo: "US",
+  nome: "Estados Unidos",
+  documento: DOCUMENTO_US,
+  tiposDeDocumento: TIPOS_DOS_ESTADOS_UNIDOS,
+  // O par da tela da organização nos EUA: o nome legal registrado e o EIN
+  // (Employer Identification Number, o número federal da empresa no IRS — o
+  // análogo do CNPJ). A coluna continua `cnpj`; muda só o rótulo.
+  empresa: {
+    rotuloNomeLegal: "Nome legal da empresa (Legal name)",
+    rotuloNumero: "EIN",
+  },
+  telefoneExemplo: "+14075551234",
+  idioma: "en-US",
+  fusoDoSugerido: "America/New_York",
+  // Sem lei geral a citar — e isso foi REVISADO (ver o cabeçalho). O
+  // documento de acesso não cita lei nenhuma.
+  lei: null,
+  semLeiGeral: {
+    revisadoEm: "2026-11-24",
+    fonte:
+      "Ausência de lei federal geral de proteção de dados nos EUA; Florida Digital Bill of Rights (SB 262/2023, Fla. Stat. § 501.701 e seguintes), aplicável só a controller com receita bruta anual acima de US$ 1 bilhão.",
+    revisadaPorIa: true,
+  },
+  // Sem lei geral, não há o vocabulário legal de "controlador" e "encarregado":
+  // os papéis são descritos pelo que fazem.
+  papel: {
+    controlador: "Responsável pelos dados",
+    encarregado: "Contato de privacidade",
+  },
+  calendario: {
+    feriados: HOLIDAYS_US_ISO,
+    rotulo: "feriados federais dos Estados Unidos",
+  },
+  padroesDePii: [
+    {
+      // ANTES do SSN: o miolo de `+1 407-555-1234` não casa o SSN (3-2-4),
+      // mas o telefone é o dono do número e entra primeiro por clareza.
+      tipo: "telefoneUS",
+      marcador: "[TELEFONE]",
+      fonte: "\\+1[\\s.-]?\\(?\\d{3}\\)?[\\s.-]?\\d{3}[\\s.-]?\\d{4}\\b",
+      naoCobre: "telefone americano sem o `+1` (os 10 dígitos soltos são indistinguíveis de outros números)",
+    },
+    {
+      // O SSN não é coletado pelo produto (não é tipo de documento oferecido),
+      // mas o titular o digita numa conversa — e ele não pode chegar ao modelo.
+      tipo: "ssn",
+      marcador: "[SSN]",
+      fonte: "\\b\\d{3}[-\\s]\\d{2}[-\\s]\\d{4}\\b",
+      naoCobre:
+        "SSN com os 9 dígitos colados, sem separador (indistinguível de outro número de 9 dígitos); o ITIN tem a mesma forma e também vira `[SSN]`",
+    },
+  ],
+};
+
 /**
  * O registro de países conhecidos.
  *
  * ⚠️ Conhecer ≠ oferecer. A lista que o operador escolhe é
- * `paisesOferecidos()`, e ela exige `lei.revisada`. Entram aqui, à medida do
+ * `paisesOferecidos()`, e ela exige `lei.revisada` (ou a revisão registrada
+ * de que não há lei geral, `semLeiGeral` — ver o cabeçalho). Entram aqui, à medida do
  * trabalho de cada país: documento (forma, e checksum só quando é público),
  * lei com citação revisada, calendário de feriados e padrões de PII. País
  * incompleto mora aqui com o que já tem — nunca meio perfil publicado.
@@ -498,6 +626,7 @@ const PERFIL_PT: PerfilDoPais = {
 export const PERFIS_DO_PAIS: Record<CodigoDePais, PerfilDoPais> = {
   BR: PERFIL_BR,
   PT: PERFIL_PT,
+  US: PERFIL_US,
 };
 
 /** O perfil de um código; vazio ou desconhecido degrada para o Brasil. */
@@ -507,11 +636,76 @@ export function perfilDoPais(codigo: CodigoDePais | null | undefined): PerfilDoP
   return PERFIS_DO_PAIS[chave] ?? PERFIS_DO_PAIS[PAIS_PADRAO]!;
 }
 
+/**
+ * O país passou pela régua do cabeçalho: lei com citação revisada, OU a
+ * revisão registrada de que não há lei geral a citar — esta só com `lei: null`
+ * (uma lei declarada ao lado de "não há lei" é contradição, e não entra).
+ */
+export function paisRevisado(perfil: PerfilDoPais): boolean {
+  if (perfil.lei) return perfil.lei.revisada === true && !perfil.semLeiGeral;
+  return perfil.semLeiGeral !== undefined && perfil.semLeiGeral.revisadoEm.trim() !== "";
+}
+
 /** O que o seletor de Configurações › Empresa oferece. */
 export function paisesOferecidos(): PerfilDoPais[] {
   return Object.values(PERFIS_DO_PAIS)
-    .filter((p) => p.lei?.revisada === true)
+    .filter(paisRevisado)
     .sort((a, b) => a.nome.localeCompare(b.nome));
+}
+
+/**
+ * O país DECIDE, por revisão, que o documento não cita lei: `semLeiGeral`.
+ * Diferente de "lei não revisada" — lá o documento diz que a citação não foi
+ * declarada; aqui não há o que declarar.
+ */
+export function semLeiGeralRevisada(perfil: PerfilDoPais): boolean {
+  return perfil.lei === null && perfil.semLeiGeral !== undefined;
+}
+
+/**
+ * A régua do documento do CONTATO, com o tipo que veio junto.
+ *
+ * País de documento único (Brasil, Portugal): o tipo não existe — `tipo`
+ * presente é recusado (`tipo_nao_aceito`), e o número segue a régua de sempre.
+ * País com seletor (Estados Unidos): número sem tipo é recusado
+ * (`tipo_obrigatorio`), tipo fora da lista do país também (`tipo_invalido`), e
+ * o número segue a régua DO TIPO.
+ */
+export type ResultadoDoDocumento =
+  | { ok: true; tipo: TipoDeDocumento | null; normalizado: string }
+  | { ok: false; motivo: "tipo_nao_aceito" | "tipo_obrigatorio" | "tipo_invalido" | "numero_invalido"; mensagem: string };
+
+export function validaDocumentoDoContato(
+  perfil: PerfilDoPais,
+  valor: string,
+  tipo: string | null | undefined,
+): ResultadoDoDocumento {
+  const tipos = perfil.tiposDeDocumento;
+  const informouTipo = typeof tipo === "string" && tipo.trim() !== "";
+  if (!tipos || tipos.length === 0) {
+    if (informouTipo) {
+      return {
+        ok: false,
+        motivo: "tipo_nao_aceito",
+        mensagem: "Este país usa um documento só; não envie o tipo do documento",
+      };
+    }
+    if (!perfil.documento.valida(valor)) {
+      return { ok: false, motivo: "numero_invalido", mensagem: perfil.documento.mensagemInvalido };
+    }
+    return { ok: true, tipo: null, normalizado: perfil.documento.normaliza(valor) };
+  }
+  if (!informouTipo) {
+    return { ok: false, motivo: "tipo_obrigatorio", mensagem: "Escolha o tipo do documento" };
+  }
+  const escolhido = tipos.find((t) => t.codigo === tipo.trim());
+  if (!escolhido) {
+    return { ok: false, motivo: "tipo_invalido", mensagem: "Tipo de documento não aceito" };
+  }
+  if (!escolhido.valida(valor)) {
+    return { ok: false, motivo: "numero_invalido", mensagem: escolhido.mensagemInvalido };
+  }
+  return { ok: true, tipo: escolhido, normalizado: escolhido.normaliza(valor) };
 }
 
 /** A citação pronta para o documento, ou `null` quando não há lei revisada. */

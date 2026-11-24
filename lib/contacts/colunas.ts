@@ -66,4 +66,5 @@ export const COLUNAS_DO_CONTATO_SEM_CPF = [
   "busca_sem_acento",
   "ai_opt_out",
   "contact_type",
+  "document_type",
 ].join(", ");

@@ -10,7 +10,7 @@
  * A autorização continua onde estava: a leitura/escrita das outras colunas passa pelo cliente do usuário (RLS). Estas
  * funções só rodam depois dela, sobre um contato que a RLS já mostrou ao usuário.
  */
-import { cifrarCpfDaInstalacao, normalizeCpf } from "@/lib/contacts/cpf";
+import { cifrarCpfDaInstalacao, normalizarDocumento } from "@/lib/contacts/cpf";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface ErroDeCpf {
@@ -55,8 +55,8 @@ export async function idsPorHashDeCpf(
  * não consegue cifrar (chave mestra ausente): quem chama NÃO grava o CPF nesse caso, nem só o hash, porque a
  * constraint `contacts_cpf_consistency` exige `cpf_hash` e `cpf_encrypted` juntos ou nenhum.
  */
-export async function cifrarCpfDoContato(cpf: string): Promise<string | null> {
-  return cifrarCpfDaInstalacao(createAdminClient(), normalizeCpf(cpf));
+export async function cifrarCpfDoContato(cpf: string, tipo?: string | null): Promise<string | null> {
+  return cifrarCpfDaInstalacao(createAdminClient(), normalizarDocumento(cpf, tipo));
 }
 
 /** Código do `ErroDeCpf` quando nenhuma linha foi gravada: contato inexistente, de outra organização ou anonimizado. */
@@ -75,11 +75,14 @@ export const CPF_SEM_LINHA = "cpf_contato_nao_gravavel";
 export async function gravarCpfDoContatoPorUsuario(
   organizationId: string,
   contactId: string,
-  cpf: { hash: string; cifrado: string },
+  cpf: { hash: string; cifrado: string; tipo?: string | null },
 ): Promise<ErroDeCpf | null> {
+  // O TIPO vai junto com o par, sempre (migration 1020): `null` em Brasil e
+  // Portugal (tipo implícito), o escolhido nos EUA. Gravar o número sem
+  // reescrever o tipo deixaria o tipo antigo sobre um número novo.
   const { data, error } = await createAdminClient()
     .from("contacts")
-    .update({ cpf_hash: cpf.hash, cpf_encrypted: cpf.cifrado })
+    .update({ cpf_hash: cpf.hash, cpf_encrypted: cpf.cifrado, document_type: cpf.tipo ?? null })
     .eq("organization_id", organizationId)
     .eq("id", contactId)
     .eq("is_anonymized", false)

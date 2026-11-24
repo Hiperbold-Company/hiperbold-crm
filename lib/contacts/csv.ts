@@ -1,4 +1,9 @@
 import { perfilDoPais, type DocumentoDoTitular } from "@/lib/legal/perfil-do-pais";
+import {
+  TIPOS_DE_DOCUMENTO,
+  type TipoDeDocumento,
+  type TipoDeDocumentoDoContato,
+} from "@/lib/legal/tipos-de-documento";
 import { normalizePhoneBR } from "@/lib/webhooks/inbound";
 import { normalizarTags } from "@/lib/contacts/tag-normalizada";
 /**
@@ -265,6 +270,64 @@ const HEADER_ALIASES: Record<string, readonly string[]> = {
   tags: ["tags", "etiquetas", "grupos"],
 };
 
+/**
+ * A coluna do TIPO do documento — só reconhecida em país com seletor (EUA). No
+ * Brasil e em Portugal ela não existe: uma coluna "tipo de documento" numa
+ * planilha brasileira fica fora do mapa, como qualquer coluna desconhecida.
+ */
+const APELIDOS_DO_TIPO_DE_DOCUMENTO: readonly string[] = [
+  "document_type",
+  "tipo_de_documento",
+  "tipo_do_documento",
+  "tipo_documento",
+  "id_type",
+];
+
+/**
+ * O que a CÉLULA do tipo pode dizer, já normalizado por `normalizaValorDoTipo`:
+ * o código (`us_passport`), o rótulo da tela em qualquer forma, e os nomes que
+ * quem monta a planilha escreve em inglês, português ou espanhol. "Passport"
+ * sozinho NÃO está: seria o americano ou o estrangeiro, e adivinhar grava o
+ * número sob a régua errada.
+ */
+const APELIDOS_DOS_VALORES_DO_TIPO: Record<TipoDeDocumentoDoContato, readonly string[]> = {
+  us_drivers_license: ["drivers_license", "driver_s_license", "driver_license", "carteira_de_motorista", "licencia_de_conducir", "cnh_americana"],
+  us_state_id: ["state_id", "identidade_estadual", "identificacion_estatal"],
+  us_passport: ["us_passport", "u_s_passport", "passaporte_americano", "pasaporte_estadounidense"],
+  us_green_card: ["green_card", "permanent_resident_card", "tarjeta_de_residencia_permanente"],
+  us_itin: ["itin"],
+  foreign_passport: ["foreign_passport", "passaporte_estrangeiro", "pasaporte_extranjero"],
+  br_cpf: ["cpf", "cpf_brasil"],
+};
+
+function normalizaValorDoTipo(v: string): string {
+  return v
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/** O tipo que a célula nomeia, entre os tipos do PAÍS; `null` quando não casa nenhum. */
+export function tipoDaCelula(
+  celula: string,
+  tipos: readonly TipoDeDocumento[],
+): TipoDeDocumento | null {
+  const v = normalizaValorDoTipo(celula);
+  if (v === "") return null;
+  for (const tipo of tipos) {
+    const apelidos = [
+      tipo.codigo,
+      normalizaValorDoTipo(tipo.rotulo),
+      ...(APELIDOS_DOS_VALORES_DO_TIPO[tipo.codigo] ?? []),
+    ];
+    if (apelidos.includes(v)) return TIPOS_DE_DOCUMENTO[tipo.codigo];
+  }
+  return null;
+}
+
 function normalizaHeader(h: string): string {
   return h
     .normalize("NFD")
@@ -290,12 +353,17 @@ export function mapHeader(
   header: string[],
   t?: (text: string) => string,
   documento?: DocumentoDoTitular,
+  /** Os tipos de documento do país (EUA); ausente = sem coluna de tipo, como sempre. */
+  tiposDeDocumento?: readonly TipoDeDocumento[],
 ): { indices: Record<string, number>; motivo: string | null } {
   const _t = t || ((x) => x);
   const doc = documento ?? perfilDoPais(null).documento;
   const aliases: Record<string, readonly string[]> = {
     ...HEADER_ALIASES,
     cpf: [...(HEADER_ALIASES.cpf ?? []), ...doc.apelidosDoCabecalho],
+    ...(tiposDeDocumento && tiposDeDocumento.length > 0
+      ? { document_type: APELIDOS_DO_TIPO_DE_DOCUMENTO }
+      : {}),
   };
   const indices: Record<string, number> = {};
   header.forEach((rawCell, idx) => {
@@ -324,6 +392,8 @@ export interface LinhaNormalizada {
   email?: string;
   phone_number?: string;
   cpf?: string;
+  /** Só em país com seletor (EUA): o código do tipo que a célula nomeou. */
+  document_type?: TipoDeDocumentoDoContato;
   birthdate?: string;
   tags?: string[];
 }
@@ -389,6 +459,8 @@ export function mapLinha(
   /** O exemplo de telefone do PAÍS da organização; sem ele, a mensagem de erro
    *  ensinava o DDI brasileiro a quem importa uma planilha de Lisboa. */
   telefoneExemplo?: string,
+  /** Os tipos de documento do país (EUA); ausente = o documento único de `documento`. */
+  tiposDeDocumento?: readonly TipoDeDocumento[],
 ): { contato: LinhaNormalizada; motivo: string | null } {
   const _t = t || ((x) => x);
   const doc = documento ?? perfilDoPais(null).documento;
@@ -438,8 +510,27 @@ export function mapLinha(
   // documento de outro país pode ter LETRA no meio — o `\D` apagava a letra e
   // gravava um valor que não é o documento de ninguém (medido na issue #1033:
   // `003862011LA042` virava `003862011042`). O perfil sabe o que preservar.
-  const cpf = doc.normaliza(get("cpf"));
-  if (cpf !== "") contato.cpf = cpf;
+  if (tiposDeDocumento && tiposDeDocumento.length > 0) {
+    // País com seletor (EUA): o número só se lê com o tipo ao lado, e é o TIPO
+    // que normaliza (passaporte guarda letra; ITIN, só dígitos). Tipo sem
+    // número é ignorado — o documento é opcional, e a célula solta não grava nada.
+    const bruto = get("cpf");
+    if (bruto !== "") {
+      const celulaDoTipo = get("document_type");
+      if (celulaDoTipo === "") {
+        return { contato: {}, motivo: _t("documento sem o tipo — preencha a coluna do tipo de documento") };
+      }
+      const tipo = tipoDaCelula(celulaDoTipo, tiposDeDocumento);
+      if (tipo === null) {
+        return { contato: {}, motivo: _t("tipo de documento não aceito: ") + `"${celulaDoTipo}"` };
+      }
+      contato.cpf = tipo.normaliza(bruto);
+      contato.document_type = tipo.codigo;
+    }
+  } else {
+    const cpf = doc.normaliza(get("cpf"));
+    if (cpf !== "") contato.cpf = cpf;
+  }
 
   const birthdateRaw = get("birthdate");
   if (birthdateRaw !== "") {
