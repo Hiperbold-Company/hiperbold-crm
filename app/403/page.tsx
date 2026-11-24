@@ -1,6 +1,8 @@
 import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
+import { PaginaDoSistema } from "@/components/redesign/PaginaDoSistema";
+import { marcaDaSaida } from "@/lib/branding/saida";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -18,7 +20,29 @@ export default async function ForbiddenPage() {
   } = await supabase.auth.getUser();
   const idioma = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
-  const rd = marcaDoSistema(await redesignNaRequisicao());
+  const ligado = await redesignNaRequisicao();
+  const rd = marcaDoSistema(ligado);
+  const t = (texto: string) => traduzir(texto, idioma);
+
+  if (ligado) {
+    return (
+      <IdiomaProvider locale={idioma}>
+        <PaginaDoSistema
+          codigo="403"
+          tom="aviso"
+          titulo={t("Você não tem acesso a esta tela")}
+          linhas={[
+            t("Esta parte do sistema é liberada só para alguns papéis da equipe."),
+            t("Se precisa dela, fale com quem administra a sua empresa."),
+          ]}
+          principal={{ tipo: "link", href: "/app/inicio", rotulo: t("Voltar ao Início") }}
+          secundaria={{ tipo: "voltar", rotulo: t("Voltar à página anterior") }}
+          marca={await marcaDaSaida(null)}
+          idioma={idioma}
+        />
+      </IdiomaProvider>
+    );
+  }
 
   return (
     <IdiomaProvider locale={idioma}>

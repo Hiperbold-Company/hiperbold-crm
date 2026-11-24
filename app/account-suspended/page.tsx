@@ -20,6 +20,7 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { ehOperante, tipoDaSuspensao } from "@/lib/organizacao/operante";
+import { Pause } from "@/lib/ui/icons";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -102,13 +103,22 @@ export default async function AccountSuspendedPage({
     .map((o) => ({ id: o.organization_id, nome: o.organization_name }));
   const pedidoAberto = administra ? pedidoValido : undefined;
 
-  const rd = marcaDoSistema(await redesignNaRequisicao());
+  const ligado = await redesignNaRequisicao();
+  const rd = marcaDoSistema(ligado);
 
   return (
     <IdiomaProvider locale={idioma}>
       <main className="flex min-h-screen flex-col items-center gap-8 p-4 sm:p-8" data-rd-sistema={rd("pagina")}>
         <Card className="w-full max-w-md space-y-4 p-8 text-center" data-rd-sistema={rd("cartao")}>
-          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>{t("Conta suspensa")}</h1>
+          {/* Onda 2 (v49): ícone de pausa e título que diz o estado. Desligada, nada disto existe. */}
+          {ligado ? (
+            <span className="mx-auto flex items-center justify-center" data-rd-sistema="icone" data-tom="pausa" aria-hidden="true">
+              <Pause weight="bold" />
+            </span>
+          ) : null}
+          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>
+            {ligado ? t("A conta está pausada") : t("Conta suspensa")}
+          </h1>
           {/* Quem participa de várias empresas precisa saber QUAL parou. Dado, não interface: sem t(). */}
           <p className="text-base font-medium" data-rd-sistema={rd("destaque")}>{ativa.name}</p>
           {mostra === "pagamento" ? (

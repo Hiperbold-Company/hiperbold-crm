@@ -29,7 +29,12 @@ export type PecaDoSistema =
   | "voltar"
   | "documento"
   | "codigo"
-  | "erro-id";
+  | "erro-id"
+  /* onda 2: o cartão do v49 (components/redesign/PaginaDoSistema.tsx) */
+  | "logo"
+  | "icone"
+  | "rotulo"
+  | "rodape";
 
 export type MarcaDoSistema = (peca: PecaDoSistema) => PecaDoSistema | undefined;
 

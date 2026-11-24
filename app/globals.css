@@ -5137,6 +5137,80 @@
     padding: 36px 40px;
   }
 }
+/* ── Onda 2: o cartão do v49 (components/redesign/PaginaDoSistema.tsx) ──
+   Logo em cima, ícone redondo com o tom, rótulo "Erro NNN", ações em coluna
+   (principal azul cheia, secundária como link) e a marca no rodapé. */
+[data-redesign="ligado"] main[data-rd-sistema="pagina"] {
+  gap: 20px;
+}
+[data-redesign="ligado"] [data-rd-sistema="logo"] {
+  min-height: 32px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-sistema="icone"] {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  font-size: 26px;
+}
+[data-redesign="ligado"] [data-rd-sistema="icone"][data-tom="aviso"],
+[data-redesign="ligado"] [data-rd-sistema="icone"][data-tom="pausa"] {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+[data-redesign="ligado"] [data-rd-sistema="icone"][data-tom="info"] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+[data-redesign="ligado"] [data-rd-sistema="icone"][data-tom="erro"] {
+  background: var(--color-error-bg);
+  color: var(--color-error-fg);
+}
+[data-redesign="ligado"] [data-rd-sistema="rotulo"] {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-sistema="cartao"] [data-rd-sistema="titulo"] {
+  margin-bottom: 8px;
+}
+[data-redesign="ligado"] [data-rd-sistema="cartao"] [data-rd-sistema="texto"] + [data-rd-sistema="texto"] {
+  margin-top: 4px;
+}
+[data-redesign="ligado"] section[data-rd-sistema="cartao"] [data-rd-sistema="acoes"] {
+  margin-top: 24px;
+}
+[data-redesign="ligado"] section[data-rd-sistema="cartao"] [data-rd-sistema="acoes"] > :first-child {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+[data-redesign="ligado"] section[data-rd-sistema="cartao"] [data-rd-sistema="acoes"] > :first-child:hover {
+  background: var(--color-accent-hover);
+}
+[data-redesign="ligado"] section[data-rd-sistema="cartao"] [data-rd-sistema="acoes"] > :nth-child(2) {
+  min-height: 40px;
+  background: transparent;
+  color: var(--color-accent);
+}
+[data-redesign="ligado"] section[data-rd-sistema="cartao"] [data-rd-sistema="acoes"] > :nth-child(2):hover {
+  text-decoration: underline;
+}
+[data-redesign="ligado"] section[data-rd-sistema="cartao"] [data-rd-sistema="acoes"] > :focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+[data-redesign="ligado"] [data-rd-sistema="rodape"] {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 /* redesign: sistema — fim ─────────────────────── */
 
 /* redesign: plataforma ───────────────────────────────

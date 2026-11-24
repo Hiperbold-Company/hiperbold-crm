@@ -12,7 +12,7 @@
  * Desligada, a página é byte a byte a de sempre — provado pelo HTML inteiro,
  * não só pela ausência de atributo, porque a onda 2 acrescenta ELEMENTOS.
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -26,7 +26,6 @@ vi.mock("@/lib/i18n/idiomaAnonimo", () => ({ idiomaDoVisitante: async () => h.id
 vi.mock("@/lib/branding/saida", () => ({
   marcaDaSaida: async () => ({ nome: "Marca Teste", logoUrl: null, accent: "#123456" }),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ back: vi.fn(), refresh: vi.fn() }) }));
 
 import ForbiddenPage from "@/app/403/page";
 import InternalErrorPage from "@/app/500/page";
@@ -86,7 +85,7 @@ describe("onda 2 — páginas de sistema, chave LIGADA", () => {
     expect(container.querySelectorAll('[data-rd-sistema="texto"]').length).toBe(2);
 
     const acoes = container.querySelector('[data-rd-sistema="acoes"]') as HTMLElement;
-    const controles = within(acoes).getAllByRole(/^(link|button)$/ as unknown as "link");
+    const controles = Array.from(acoes.querySelectorAll("a, button"));
     expect(controles[0]!.textContent).toMatch(e.principal);
     expect(controles[1]!.textContent).toMatch(e.secundaria);
   });

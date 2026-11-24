@@ -14772,5 +14772,21 @@
   "Seções da IA": "AI sections",
   "Métricas": "Metrics",
   "Montar": "Build",
-  "Ensinar": "Teach"
+  "Ensinar": "Teach",
+  "Você não tem acesso a esta tela": "You don't have access to this screen",
+  "Esta parte do sistema é liberada só para alguns papéis da equipe.": "This part of the system is only open to some team roles.",
+  "Se precisa dela, fale com quem administra a sua empresa.": "If you need it, talk to whoever manages your company.",
+  "Voltar ao Início": "Back to Home",
+  "Voltar à página anterior": "Back to the previous page",
+  "Não achamos esta página": "We couldn't find this page",
+  "O link pode estar errado ou a página mudou de lugar.": "The link may be wrong or the page has moved.",
+  "Confira o endereço ou siga para o Início.": "Check the address or go to Home.",
+  "Ir para o Início": "Go to Home",
+  "Algo deu errado do nosso lado": "Something went wrong on our side",
+  "Não é nada que você fez. Já registramos o ocorrido.": "It's nothing you did. We've already logged it.",
+  "Tente de novo em instantes.": "Try again in a moment.",
+  "Estamos em manutenção": "We're under maintenance",
+  "Estamos atualizando o sistema. Seus dados estão seguros.": "We're updating the system. Your data is safe.",
+  "Atualizar a página": "Refresh the page",
+  "A conta está pausada": "The account is paused"
 }

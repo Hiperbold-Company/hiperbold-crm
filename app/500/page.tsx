@@ -1,6 +1,8 @@
 import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
+import { PaginaDoSistema } from "@/components/redesign/PaginaDoSistema";
+import { marcaDaSaida } from "@/lib/branding/saida";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -30,7 +32,29 @@ export default async function InternalErrorPage() {
   } = await supabase.auth.getUser();
   const idioma = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
-  const rd = marcaDoSistema(await redesignNaRequisicao());
+  const ligado = await redesignNaRequisicao();
+  const rd = marcaDoSistema(ligado);
+  const t = (texto: string) => traduzir(texto, idioma);
+
+  if (ligado) {
+    return (
+      <IdiomaProvider locale={idioma}>
+        <PaginaDoSistema
+          codigo="500"
+          tom="erro"
+          titulo={t("Algo deu errado do nosso lado")}
+          linhas={[
+            t("Não é nada que você fez. Já registramos o ocorrido."),
+            t("Tente de novo em instantes."),
+          ]}
+          principal={{ tipo: "recarregar", rotulo: t("Tentar de novo") }}
+          secundaria={{ tipo: "link", href: "/app/inicio", rotulo: t("Ir para o Início") }}
+          marca={await marcaDaSaida(null)}
+          idioma={idioma}
+        />
+      </IdiomaProvider>
+    );
+  }
 
   return (
     <IdiomaProvider locale={idioma}>
