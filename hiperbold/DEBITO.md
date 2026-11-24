@@ -4,6 +4,21 @@ Toda pendência do fork da Hiperbold (técnica, conta, custo, terceiro) fica aqu
 
 ## Abertas
 
+- [ ] **D-245 · Redesign onda 4 (IA e Automações): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 4 é só visual. O v49 não tem tela de celular para IA nem Automações, nem tela do editor do agente.
+  - **Automações:**
+    - cartões de resumo no topo (Ligadas agora, Rodaram este mês, Negócios criados, Precisam de atenção);
+    - no cartão: "Quando … Então …" e "N vezes este mês";
+    - no editor: o aviso "Alterações não salvas" e o painel "Como esta automação roda", que resume o fluxo em texto.
+  - **Agentes:**
+    - interruptor liga/desliga no cartão;
+    - "N conversas atendidas no mês" e o nicho no cartão;
+    - filtros Todos, Ligados, Desligados e Arquivados com contadores (o CRM tem um seletor e "Incluir arquivados").
+  - **Follow-ups:** Retomadas, Responderam e Pararam no STOP em cada régua; as linhas Agente, Começa quando e Tentativas no cartão.
+  - **Roteadores:** conversas roteadas no mês, e Conexão, Caminhos e Se nenhum servir no cartão.
+  - **Conhecimento:** cartões de topo (materiais, trechos aprendidos, perguntas respondidas no mês) e a tabela com "Agentes que usam", situação e progresso da leitura.
+  - **Casos e Execuções da IA:**
+    - números do topo (casos no mês, % que terminaram em venda, % que passaram para humano; execuções no mês, % que deram certo, falharam hoje);
+    - as tabelas com Assunto, Desfecho, Duração e Resultado (hoje Casos é lista com detalhe ao lado e Execuções é lista explicada).
 - [ ] **D-244 · Redesign onda 3 (Conversas, Pipeline, Contatos): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 3 foi só visual.
   - **Pipeline:** resumo "N em aberto · R$ total" no cabeçalho do funil; filtro pronto "Parados há mais de 7 dias" (o CRM tem "Apenas atrasados", que é outra regra); "Mais filtros" recolhendo os filtros raros (hoje viram uma linha que rola de lado); "Novo negócio" e as visões como no v49, mas sem o resumo.
   - **Contatos:** filtros prontos "Só clientes" e "Com mensagem sem ler"; rodapé paginado "Página 1 de 12 · 284 contatos" (o CRM carrega rolando); na ficha, os cartões "Negócios" (com etapa e valor) e "Memória do contato" na coluna da direita.
