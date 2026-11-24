@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PaginaDoSistema } from "@/components/redesign/PaginaDoSistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { marcaDaSaida } from "@/lib/branding/saida";
+import { marcaDoAmbiente } from "@/lib/redesign/marca-do-sistema";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -33,7 +33,8 @@ export default async function ServiceUnavailablePage() {
           ]}
           principal={{ tipo: "recarregar", rotulo: t("Atualizar a página") }}
           secundaria={{ tipo: "link", href: "/app/inicio", rotulo: t("Ir para o Início") }}
-          marca={await marcaDaSaida(null)}
+          // Manutenção: o banco pode estar fora, então a marca vem só do ambiente.
+          marca={marcaDoAmbiente()}
           idioma={idioma}
         />
       </IdiomaProvider>

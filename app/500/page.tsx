@@ -2,7 +2,7 @@ import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 import { PaginaDoSistema } from "@/components/redesign/PaginaDoSistema";
-import { marcaDaSaida } from "@/lib/branding/saida";
+import { marcaDoSistemaComTeto } from "@/lib/redesign/marca-do-sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -52,7 +52,7 @@ export default async function InternalErrorPage() {
           // (proxy.ts) e mantém a URL da tela que falhou.
           principal={{ tipo: "voltar", rotulo: t("Tentar de novo") }}
           secundaria={{ tipo: "link", href: "/app/inicio", rotulo: t("Ir para o Início") }}
-          marca={await marcaDaSaida(null)}
+          marca={await marcaDoSistemaComTeto()}
           idioma={idioma}
         />
       </IdiomaProvider>

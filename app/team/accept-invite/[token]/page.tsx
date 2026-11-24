@@ -26,7 +26,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { rotuloDoPapel } from "@/lib/auth/types";
 import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
 import { LogoDaMarca } from "@/components/redesign/LogoDaMarca";
-import { marcaDaSaida, type MarcaDeSaida } from "@/lib/branding/saida";
+import { marcaDoSistemaComTeto, type MarcaDoSistema } from "@/lib/redesign/marca-do-sistema";
 import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
@@ -59,7 +59,7 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   // Onda 2 do redesign: com a chave ligada, a casca das telas de entrada (logo
   // e painel azul). Desligada, `marca` é null e `Shell` é a de sempre.
   const ligado = await redesignNaRequisicao();
-  const marca = ligado ? await marcaDaSaida(null) : null;
+  const marca = ligado ? await marcaDoSistemaComTeto() : null;
 
   // O gargalo de enumeração é AQUI, não no aceite: a rota é pública e cada
   // GET testa um token. Sem teto, varrer o espaço de tokens sai de graça
@@ -206,7 +206,7 @@ function Shell({
 }: {
   idioma: Idioma;
   /** Só existe com a chave do redesign ligada. */
-  marca: MarcaDeSaida | null;
+  marca: MarcaDoSistema | null;
   t: (texto: string) => string;
   children: React.ReactNode;
 }) {

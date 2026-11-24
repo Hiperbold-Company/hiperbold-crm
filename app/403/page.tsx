@@ -2,7 +2,7 @@ import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 import { PaginaDoSistema } from "@/components/redesign/PaginaDoSistema";
-import { marcaDaSaida } from "@/lib/branding/saida";
+import { marcaDoSistemaComTeto } from "@/lib/redesign/marca-do-sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -37,7 +37,7 @@ export default async function ForbiddenPage() {
           ]}
           principal={{ tipo: "link", href: "/app/inicio", rotulo: t("Voltar ao Início") }}
           secundaria={{ tipo: "voltar", rotulo: t("Voltar à página anterior") }}
-          marca={await marcaDaSaida(null)}
+          marca={await marcaDoSistemaComTeto()}
           idioma={idioma}
         />
       </IdiomaProvider>
