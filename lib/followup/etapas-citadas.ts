@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { FlowNode } from "./graph-schema";
 import type { NomesDeValor } from "./vocabulario";
-import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao-regua";
 
 /**
  * As etapas que um grafo cita — regras de condição e destino de `move_lead` —, lidas do banco.

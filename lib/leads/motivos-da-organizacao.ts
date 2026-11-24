@@ -35,29 +35,6 @@ import {
 
 export * from "@/lib/leads/motivos-da-organizacao-regua";
 
-/**
- * Lê a lista da organização. FAIL-OPEN: falha de leitura (sessão sem segundo fator que a RLS barra,
- * rede, dublê de teste que não serve a tabela) devolve `null`, e quem chama cai no legado do funil —
- * a mesma degradação de `settingsDoFunil`. O banco continua sendo a régua final.
- */
-export async function lerMotivosDaOrganizacao(
-  supabase: SupabaseClient,
-  organizationId: string | null | undefined,
-): Promise<unknown[] | null> {
-  if (!organizationId) return null;
-  try {
-    const { data, error } = await supabase
-      .from("organizations")
-      .select("settings")
-      .eq("id", organizationId)
-      .maybeSingle();
-    if (error || !data) return null;
-    return listaDaOrganizacao((data as { settings?: unknown }).settings);
-  } catch {
-    return null;
-  }
-}
-
 export interface ResultadoDoAcrescimo {
   lista: unknown[];
   mudou: boolean;

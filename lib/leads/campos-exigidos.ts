@@ -46,7 +46,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
 import { camposDoFunil, camposVisiveisNoFunil, escopoDoCampo } from "@/lib/leads/campos-do-funil";
-import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao-regua";
 import { logger } from "@/lib/logger";
 import { camposVisiveis } from "@/lib/schemas/mostrar-quando";
 import type { CustomFieldDef } from "@/lib/schemas/settings";

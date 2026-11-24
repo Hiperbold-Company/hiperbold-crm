@@ -1,8 +1,10 @@
 /**
- * A RÉGUA PURA dos motivos de perda da organização (migration 1021) — sem banco, sem audit, para
- * caber no navegador (a janela de perder e o filtro do quadro a importam). O porquê inteiro está em
+ * A RÉGUA dos motivos de perda da organização (migration 1021) — sem `next/headers`, sem audit e
+ * sem client próprio (a leitura recebe o client de quem chama), para caber no navegador (a janela de perder e o filtro do quadro a importam). O porquê inteiro está em
  * `lib/leads/motivos-da-organizacao.ts`, que é a porta do servidor.
  */
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { pipelineConfigPatchSchema } from "@/lib/schemas/settings";
 
 /** A chave do settings EFETIVO que carrega a lista legada do funil (só aceitação). */
@@ -105,3 +107,27 @@ export function listaDoTexto(texto: string, categorias: Readonly<Record<string, 
     .map((rotulo): MotivoDePerdaGravado => (categorias[rotulo] ? { label: rotulo, categoria: categorias[rotulo] } : rotulo));
   return listaLimpa(itens);
 }
+
+/**
+ * Lê a lista da organização. FAIL-OPEN: falha de leitura (sessão sem segundo fator que a RLS barra,
+ * rede, dublê de teste que não serve a tabela) devolve `null`, e quem chama cai no legado do funil —
+ * a mesma degradação de `settingsDoFunil`. O banco continua sendo a régua final.
+ */
+export async function lerMotivosDaOrganizacao(
+  supabase: SupabaseClient,
+  organizationId: string | null | undefined,
+): Promise<unknown[] | null> {
+  if (!organizationId) return null;
+  try {
+    const { data, error } = await supabase
+      .from("organizations")
+      .select("settings")
+      .eq("id", organizationId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return listaDaOrganizacao((data as { settings?: unknown }).settings);
+  } catch {
+    return null;
+  }
+}
+
