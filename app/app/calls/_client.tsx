@@ -30,6 +30,8 @@ import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 import { useT } from "@/hooks/i18n/useT";
 import { useCallsQuery, useDialCall, type CallRow } from "@/hooks/calls/useCallsQuery";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { ListaPadrao } from "@/components/redesign/ListaPadrao";
+import { useRedesign } from "@/lib/redesign/contexto";
 
 function fmtDate(iso: string | null, idioma: string): string {
   if (!iso) return "—";
@@ -136,6 +138,112 @@ export function CallsClient() {
   const idioma = useTagDeIdioma();
   const { data: calls, isLoading } = useCallsQuery();
   const [selected, setSelected] = useState<CallRow | null>(null);
+  const ligado = useRedesign();
+
+  if (ligado) {
+    const todas = calls ?? [];
+    const atendidas = todas.filter((c) => c.answered_at != null).length;
+    const feitasPelaIa = todas.filter((c) => c.handled_by !== "human").length;
+    const statusPresentes = (Object.keys(STATUS_LABEL) as CallRow["status"][]).filter((st) =>
+      todas.some((c) => c.status === st),
+    );
+    return (
+      <ListaPadrao<CallRow>
+        rotulo={t("Chamadas")}
+        descricao={t("Histórico de ligações (voz por IA) com transcrição.")}
+        acoes={<DialerDialog />}
+        resumo={[
+          { rotulo: t("Chamadas na lista"), valor: String(todas.length) },
+          { rotulo: t("Atendidas"), valor: String(atendidas) },
+          { rotulo: t("Feitas pela IA"), valor: String(feitasPelaIa) },
+        ]}
+        busca={{ placeholder: t("Buscar por contato ou transcrição") }}
+        pilulas={[
+          { id: "todas", rotulo: t("Todas"), contagem: todas.length },
+          ...statusPresentes.map((st) => ({
+            id: st,
+            rotulo: t(STATUS_LABEL[st]),
+            contagem: todas.filter((c) => c.status === st).length,
+          })),
+        ]}
+        colunas={[
+          {
+            id: "contato",
+            titulo: t("Contato"),
+            celula: (c) => <span className="font-semibold">{counterpartLabel(c)}</span>,
+          },
+          { id: "direcao", titulo: t("Direção"), celula: (c) => (c.direction === "outbound" ? t("Saída") : t("Entrada")) },
+          { id: "status", titulo: t("Status"), celula: (c) => t(STATUS_LABEL[c.status]) },
+          { id: "por", titulo: t("Atendido por"), celula: (c) => (c.handled_by === "ai" ? t("IA") : t("Humano")) },
+          { id: "duracao", titulo: t("Duração"), celula: (c) => fmtDuration(c.duration_seconds) },
+          { id: "quando", titulo: t("Quando"), celula: (c) => fmtDate(c.started_at, idioma) },
+        ]}
+        linhas={todas}
+        chave={(c) => c.id}
+        filtrar={(c, { busca, pilula }) => {
+          if (pilula !== "todas" && c.status !== pilula) return false;
+          const q = busca.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            counterpartLabel(c).toLowerCase().includes(q) ||
+            counterpartNumber(c).toLowerCase().includes(q) ||
+            (c.transcript ?? []).some((turn) => turn.text.toLowerCase().includes(q))
+          );
+        }}
+        tituloDoPainel={(c) => `${t("Chamada com")} ${counterpartLabel(c)}`}
+        painel={(c) => (
+          <div className="space-y-5">
+            <dl className="m-0 flex flex-col text-[13px]">
+              {[
+                [t("Quando"), fmtDate(c.started_at, idioma)],
+                [t("Direção"), c.direction === "outbound" ? t("Saída") : t("Entrada")],
+                [t("Status"), t(STATUS_LABEL[c.status])],
+                [t("Atendido por"), c.handled_by === "ai" ? t("IA") : t("Humano")],
+                [t("Duração"), fmtDuration(c.duration_seconds)],
+              ].map(([rotulo, valor]) => (
+                <div
+                  key={rotulo}
+                  className="flex justify-between gap-4 border-b border-[var(--color-border)] py-2 last:border-b-0"
+                >
+                  <dt className="text-[var(--color-text-muted)]">{rotulo}</dt>
+                  <dd className="m-0 text-right font-medium">{valor}</dd>
+                </div>
+              ))}
+            </dl>
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                {t("Transcrição")}
+              </h3>
+              {c.transcript && c.transcript.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {c.transcript.map((turn, i) => (
+                    <div
+                      key={i}
+                      className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                        turn.speaker === "agent"
+                          ? "self-start bg-[var(--color-surface-elevated)]"
+                          : "self-end bg-[var(--color-accent-600)] text-[var(--color-accent-fg)]"
+                      }`}
+                    >
+                      <div className="mb-1 text-xs opacity-70">
+                        {turn.speaker === "agent" ? "Iara" : counterpartLabel(c)}
+                      </div>
+                      {turn.text || <span className="italic opacity-60">{t("(sem áudio detectado)")}</span>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
+                  {t("Sem transcrição pra esta chamada.")}
+                </p>
+              )}
+            </section>
+          </div>
+        )}
+        vazio={isLoading ? <Skeleton className="mx-auto h-10 w-full" /> : t("Nenhuma chamada ainda.")}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">

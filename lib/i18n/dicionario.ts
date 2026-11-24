@@ -29179,6 +29179,26 @@ export const DICIONARIO: Traducoes = {
   "Novo visual ligado para esta empresa.": { es: "Nuevo diseño activado para esta empresa." },
   "Novo visual desligado para esta empresa.": { es: "Nuevo diseño desactivado para esta empresa." },
   "Erro ao alterar o novo visual": { es: "Error al cambiar el nuevo diseño" },
+
+  // ─── Listas da onda 1 do redesign (ListaPadrao) ───
+  "Quem fez o quê e quando no sistema.": { es: "Quién hizo qué y cuándo en el sistema." },
+  "Ações carregadas": { es: "Acciones cargadas" },
+  "Pessoas distintas": { es: "Personas distintas" },
+  "Feitas pelo sistema ou integrações": { es: "Hechas por el sistema o integraciones" },
+  "Buscar por ação, recurso ou quem fez": { es: "Buscar por acción, recurso o quién la hizo" },
+  "Onde": { es: "Dónde" },
+  "Chamadas na lista": { es: "Llamadas en la lista" },
+  "Atendidas": { es: "Atendidas" },
+  "Feitas pela IA": { es: "Hechas por la IA" },
+  "Buscar por contato ou transcrição": { es: "Buscar por contacto o transcripción" },
+  "Passos no total": { es: "Pasos en total" },
+  "Com descrição": { es: "Con descripción" },
+  "Buscar por nome": { es: "Buscar por nombre" },
+  "Sem descrição": { es: "Sin descripción" },
+  "Seções da IA": { es: "Secciones de la IA" },
+  "Métricas": { es: "Métricas" },
+  "Montar": { es: "Montar" },
+  "Ensinar": { es: "Enseñar" },
 };
 
 /**

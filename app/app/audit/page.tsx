@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { AuditClient } from "./_client";
 
@@ -18,6 +19,9 @@ export default async function AuditPage() {
     redirect("/403");
   }
   const t = (texto: string) => traduzir(texto, user.idioma);
+
+  // Com o redesign, o título e a descrição são da própria lista (ListaPadrao).
+  if (await redesignNaRequisicao()) return <AuditClient />;
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">

@@ -40,6 +40,8 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { randomId } from "@/lib/random-id";
+import { ListaPadrao } from "@/components/redesign/ListaPadrao";
+import { useRedesign } from "@/lib/redesign/contexto";
 import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { ArrowBendUpLeft } from "@/lib/ui/icons";
 import { LIMITES_DO_PLANO } from "@/lib/tarefas/limites-do-plano";
@@ -75,6 +77,7 @@ function novoPasso(): PassoDePlano {
 export function PlanosDeTarefa() {
   const t = useT();
   const rd = useMarcaDoInicio();
+  const ligado = useRedesign();
   const qc = useQueryClient();
   const [rascunho, setRascunho] = useState<PlanoDeTarefas | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -152,6 +155,140 @@ export function PlanosDeTarefa() {
   function excluir(plano: PlanoDeTarefas) {
     if (!listaLida) return;
     salvar.mutate(planos.filter((p) => p.id !== plano.id));
+  }
+
+  if (ligado) {
+    const totalDePassos = planos.reduce((soma, p) => soma + p.passos.length, 0);
+    const comDescricao = planos.filter((p) => p.descricao?.trim()).length;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {erro || rascunho || q.isError ? (
+          <div className="space-y-4 px-7 pt-5">
+            {erro ? (
+              <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                {erro}
+              </p>
+            ) : null}
+            {q.isError && !listaLida ? (
+              <Card role="alert" className="space-y-2 p-4 text-sm">
+                <p>
+                  {t(
+                    "Não foi possível carregar os planos. Para não apagar os que já existem, criar e salvar ficam desativados até a lista carregar.",
+                  )}
+                </p>
+                <Button type="button" variant="outline" onClick={() => void q.refetch()}>
+                  {t("Tentar de novo")}
+                </Button>
+              </Card>
+            ) : null}
+            {rascunho ? (
+              <Editor
+                plano={rascunho}
+                onChange={setRascunho}
+                onCancelar={() => {
+                  setRascunho(null);
+                  setErro(null);
+                }}
+                onGuardar={guardar}
+                ocupado={salvar.isPending || !listaLida}
+              />
+            ) : null}
+          </div>
+        ) : null}
+        <ListaPadrao<PlanoDeTarefas>
+          rotulo={t("Planos de tarefa")}
+          descricao={t(
+            "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.",
+          )}
+          acoes={
+            <Button
+              type="button"
+              disabled={!listaLida}
+              onClick={() => {
+                setErro(null);
+                setRascunho(novoPlano());
+              }}
+            >
+              {t("Novo plano")}
+            </Button>
+          }
+          resumo={[
+            { rotulo: t("Planos"), valor: String(planos.length) },
+            { rotulo: t("Passos no total"), valor: String(totalDePassos) },
+            { rotulo: t("Com descrição"), valor: String(comDescricao) },
+          ]}
+          busca={{ placeholder: t("Buscar por nome") }}
+          pilulas={[
+            { id: "todos", rotulo: t("Todos"), contagem: planos.length },
+            { id: "com", rotulo: t("Com descrição"), contagem: comDescricao },
+            { id: "sem", rotulo: t("Sem descrição"), contagem: planos.length - comDescricao },
+          ]}
+          colunas={[
+            {
+              id: "nome",
+              titulo: t("Nome"),
+              celula: (p) => (
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate font-semibold">{p.nome}</span>
+                  {p.descricao ? (
+                    <span className="truncate text-xs text-[var(--color-text-muted)]">{p.descricao}</span>
+                  ) : null}
+                </span>
+              ),
+            },
+            { id: "tarefas", titulo: t("Tarefas"), celula: (p) => p.passos.length },
+          ]}
+          linhas={planos}
+          chave={(p) => p.id}
+          filtrar={(p, { busca, pilula }) =>
+            (pilula === "todos" || (pilula === "com") === !!p.descricao?.trim()) &&
+            p.nome.toLowerCase().includes(busca.trim().toLowerCase())
+          }
+          tituloDoPainel={(p) => p.nome}
+          painel={(p, fechar) => (
+            <div className="space-y-4">
+              {p.descricao ? <p className="text-sm text-[var(--color-text-muted)]">{p.descricao}</p> : null}
+              <section>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                  {t("Passos do plano")}
+                </h3>
+                <ol className="space-y-2 text-sm">
+                  {p.passos.map((passo) => (
+                    <li key={passo.ordem}>
+                      {passo.ordem}. {passo.titulo} — {t("Vence em (dias)")} {passo.vence_em_dias}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setErro(null);
+                    setRascunho({ ...p, descricao: p.descricao, passos: p.passos.map((x) => ({ ...x })) });
+                    fechar();
+                  }}
+                >
+                  {t("Editar")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    excluir(p);
+                    fechar();
+                  }}
+                >
+                  {t("Excluir")}
+                </Button>
+              </div>
+            </div>
+          )}
+          vazio={q.isLoading ? <Skeleton className="mx-auto h-10 w-full" /> : t("Nenhum plano cadastrado ainda.")}
+        />
+      </div>
+    );
   }
 
   return (
