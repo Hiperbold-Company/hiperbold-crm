@@ -47,7 +47,10 @@ export default async function InternalErrorPage() {
             t("Não é nada que você fez. Já registramos o ocorrido."),
             t("Tente de novo em instantes."),
           ]}
-          principal={{ tipo: "recarregar", rotulo: t("Tentar de novo") }}
+          // Voltar, e não recarregar: quem chega aqui por redirecionamento
+          // recarregaria a própria /500. A 503 recarrega porque é rewrite
+          // (proxy.ts) e mantém a URL da tela que falhou.
+          principal={{ tipo: "voltar", rotulo: t("Tentar de novo") }}
           secundaria={{ tipo: "link", href: "/app/inicio", rotulo: t("Ir para o Início") }}
           marca={await marcaDaSaida(null)}
           idioma={idioma}

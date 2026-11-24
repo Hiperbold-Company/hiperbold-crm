@@ -17,7 +17,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ ligado: false, caminho: "/onboarding/funil" }));
+const h = vi.hoisted(() => ({ ligado: false, caminho: "/onboarding/funil", soUmPasso: false }));
 
 vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => h.ligado }));
 vi.mock("next/navigation", () => ({
@@ -37,7 +37,7 @@ vi.mock("@/app/actions/onboarding/_shared", () => ({
 }));
 vi.mock("@/lib/onboarding/contexto", () => ({ contextoDoOnboarding: async () => ({}) }));
 vi.mock("@/lib/onboarding/passos", () => ({
-  passosVisiveis: () => [
+  passosVisiveis: () => h.soUmPasso ? [{ segmento: "plano", rotulo: "Plano", cumprido: () => false }] : [
     { segmento: "welcome", rotulo: "Boas-vindas", cumprido: (s: Record<string, boolean>) => !!s.welcome },
     { segmento: "funil", rotulo: "Seu funil", cumprido: () => false },
     { segmento: "connect-whatsapp", rotulo: "Conectar WhatsApp", cumprido: () => false },
@@ -65,6 +65,7 @@ afterEach(() => {
   cleanup();
   h.ligado = false;
   h.caminho = "/onboarding/funil";
+  h.soUmPasso = false;
 });
 
 describe("onda 2 — primeiro acesso, chave DESLIGADA", () => {
@@ -111,5 +112,16 @@ describe("onda 2 — primeiro acesso, chave LIGADA", () => {
     h.caminho = "/onboarding";
     render(await casca());
     expect(screen.queryByText(/^Passo \d+ de \d+$/)).toBeNull();
+  });
+
+  it("um passo só (caminho 'paga primeiro'): sem trilho, sem barra e sem 'Passo 1 de 1'", async () => {
+    h.ligado = true;
+    h.soUmPasso = true;
+    h.caminho = "/onboarding/plano";
+    const { container } = render(await casca());
+    expect(container.querySelector('[data-rd-entrar="trilho"]')).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByText(/^Passo \d+ de \d+$/)).toBeNull();
+    expect(within(container.querySelector('[data-rd-entrar="conteudo"]') as HTMLElement).getByText("conteúdo do passo")).toBeTruthy();
   });
 });
