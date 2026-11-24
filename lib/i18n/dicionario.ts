@@ -40,6 +40,23 @@ import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // Motivos de perda da organização e campos visíveis por funil (migration 1021, 24/11/2026).
+  "Motivos de perda": { es: "Motivos de pérdida", en: "Loss reasons" },
+  "Os motivos que a equipe escolhe ao marcar um negócio como perdido. A lista é da empresa e vale para todos os funis; a categoria agrupa o relatório de perdas.": { es: "Los motivos que el equipo elige al marcar un negocio como perdido. La lista es de la empresa y vale para todos los embudos; la categoría agrupa el informe de pérdidas.", en: "The reasons the team picks when marking a deal as lost. The list belongs to the company and applies to every pipeline; the category groups the loss report." },
+  "Não foi possível carregar os motivos agora. Recarregue a página.": { es: "No fue posible cargar los motivos ahora. Recargue la página.", en: "Could not load the reasons right now. Reload the page." },
+  "A lista aceita no máximo 50 motivos de perda.": { es: "La lista acepta como máximo 50 motivos de pérdida.", en: "The list accepts at most 50 loss reasons." },
+  "Cada motivo de perda cabe em até 80 caracteres.": { es: "Cada motivo de pérdida cabe en hasta 80 caracteres.", en: "Each loss reason fits up to 80 characters." },
+  "Motivos de perda salvos.": { es: "Motivos de pérdida guardados.", en: "Loss reasons saved." },
+  "Nada mudou.": { es: "Nada cambió.", en: "Nothing changed." },
+  "Sem nenhum motivo cadastrado, a equipe escolhe entre os motivos padrão do produto. \"Outro motivo\" está sempre na lista.": { es: "Sin ningún motivo registrado, el equipo elige entre los motivos estándar del producto. \"Otro motivo\" siempre está en la lista.", en: "With no reason registered, the team picks from the product's default reasons. \"Other reason\" is always on the list." },
+  "A lista de motivos de perda da empresa, a mesma em todos os funis, com a categoria de cada um.": { es: "La lista de motivos de pérdida de la empresa, la misma en todos los embudos, con la categoría de cada uno.", en: "The company's loss reasons list, the same in every pipeline, with each one's category." },
+  "Os motivos de perda são da empresa toda.": { es: "Los motivos de pérdida son de toda la empresa.", en: "Loss reasons belong to the whole company." },
+  "Editar os motivos de perda": { es: "Editar los motivos de pérdida", en: "Edit loss reasons" },
+  "Campos do negócio neste funil": { es: "Campos del negocio en este embudo", en: "Deal fields in this pipeline" },
+  "Mostrar neste funil": { es: "Mostrar en este embudo", en: "Show in this pipeline" },
+  "Esconder um campo não apaga o valor: ele continua no negócio e na API. Campo obrigatório fica sempre visível.": { es: "Ocultar un campo no borra el valor: sigue en el negocio y en la API. Un campo obligatorio siempre queda visible.", en: "Hiding a field does not erase its value: it stays on the deal and in the API. A required field always stays visible." },
+  "Só campos de negócio cadastrados na empresa podem ser mostrados no funil.": { es: "Solo los campos de negocio registrados en la empresa pueden mostrarse en el embudo.", en: "Only deal fields registered in the company can be shown in the pipeline." },
+  "Um campo obrigatório neste funil precisa estar visível. Mostre o campo ou tire a obrigatoriedade.": { es: "Un campo obligatorio en este embudo debe estar visible. Muestre el campo o quite la obligatoriedad.", en: "A required field in this pipeline must be visible. Show the field or remove the requirement." },
   // Campos personalizados da organização (migration 1015, 17/11/2026).
   "A chave não muda depois de criada.": { es: "La clave no cambia después de creada.", en: "The key cannot change after it is created." },
   "A chave usa letras, números e _ e começa por letra.": { es: "La clave usa letras, números y _ y empieza por letra.", en: "The key uses letters, numbers and _ and starts with a letter." },

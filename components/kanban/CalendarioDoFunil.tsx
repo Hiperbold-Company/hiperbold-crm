@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
-import { camposDeDataDoNegocio, camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
+import { camposDeDataDoNegocio, camposDoFunilVisiveis, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import {
   chaveDoDia,
   diasDaSemana,
@@ -369,7 +369,7 @@ export function CalendarioDoFunil({ pipelineId, pipeline: funil, stages, leads }
           }}
           lead={leadDoDossie}
           pipelineId={pipelineId}
-          fieldDefs={camposPorEscopo(camposDoFunil(funil.settings), "negocio")}
+          fieldDefs={camposPorEscopo(camposDoFunilVisiveis(funil.settings), "negocio")}
           stageName={stages.find((s) => s.id === leadDoDossie.stage_id)?.name ?? "—"}
           ownerNames={ownerNames}
           // O calendário já tem o funil em mão e NÃO está dentro da árvore do

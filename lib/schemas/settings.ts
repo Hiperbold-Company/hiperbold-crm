@@ -403,6 +403,16 @@ export const pipelineConfigPatchSchema = z.object({
   /** A obrigatoriedade dos campos da organização NESTE funil (1015). Substitui o mapa inteiro. */
   campos_obrigatorios: camposObrigatoriosDoFunilSchema.optional(),
   /**
+   * QUAIS campos do NEGÓCIO este funil mostra (decisão do dono do produto, 24/11/2026). O cadastro
+   * é da organização (1015); o funil só escolhe. `null` (ou a chave ausente) = mostra TODOS — o
+   * estado de todo funil que já existe e o de quem marca todas as caixas, para um campo criado
+   * depois aparecer sozinho. Lista explícita = só esses; campo criado depois fica escondido aqui.
+   * Esconder não apaga valor (continua em `custom_fields` e na API). Que cada chave é campo de
+   * NEGÓCIO da organização, e que todo campo obrigatório do funil está na lista, quem confere é
+   * `aplicarConfiguracaoDoFunil` (o Zod não conhece o cadastro).
+   */
+  campos_visiveis: z.array(customFieldSchema.shape.key).max(200).nullable().optional(),
+  /**
    * Os motivos de perda do funil (issue #1537): texto puro continua valendo —
    * nenhum funil existente precisa migrar dado — e quem quiser agrupar no
    * relatório "Perdas" grava `{ label, categoria }`. O rótulo é o mesmo de

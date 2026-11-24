@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { FlowNode } from "./graph-schema";
 import type { NomesDeValor } from "./vocabulario";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 
 /**
  * As etapas que um grafo cita — regras de condição e destino de `move_lead` —, lidas do banco.
@@ -65,6 +66,9 @@ export async function carregaEtapasCitadas(
   // Erro NÃO vira mapa vazio: vazio leria como "nenhuma dessas etapas existe" e
   // o publish recusaria um fluxo certo dizendo que a etapa foi apagada.
   if (error) return { ok: false, mensagem: error.message };
+  // 1021: o motivo do `move_lead` para etapa de perda confere contra a lista da ORGANIZAÇÃO (e a
+  // legada do funil, que o gatilho ainda aceita) — o settings EFETIVO.
+  const motivosDaOrganizacao = (data ?? []).length > 0 ? await lerMotivosDaOrganizacao(client, orgId) : null;
 
   for (const linha of (data ?? []) as Linha[]) {
     const funil = Array.isArray(linha.crm_pipelines) ? linha.crm_pipelines[0] : linha.crm_pipelines;
@@ -72,7 +76,10 @@ export async function carregaEtapasCitadas(
       nome: funil?.name ? `${linha.name} · ${funil.name}` : linha.name,
       arquivada: linha.is_archived,
       isPerda: linha.is_lost === true,
-      settingsDoFunil: (funil as { settings?: unknown } | undefined)?.settings ?? null,
+      settingsDoFunil: settingsComMotivosDaOrganizacao(
+        (funil as { settings?: unknown } | undefined)?.settings ?? null,
+        motivosDaOrganizacao,
+      ),
     });
   }
   return { ok: true, etapas };

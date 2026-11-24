@@ -34,7 +34,6 @@ import {
 } from "@/lib/leads/campos-pesquisaveis";
 import { atalhosDoFunil, motivoDaRecusaDoModelo, type AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
 import { modoDeReabertura } from "@/lib/leads/reabertura";
-import { CATEGORIAS_DE_PERDA } from "@/lib/schemas/leads";
 import { EditorDeAtalhos } from "./_atalhos-do-card";
 import {
   customFieldSchema,
@@ -254,36 +253,6 @@ export function normalizaMostrarQuando(
   condicao: CustomFieldDef["mostrar_quando"],
 ): CustomFieldDef["mostrar_quando"] {
   return mostrarQuandoSchema.safeParse(condicao).success ? condicao : undefined;
-}
-
-/**
- * Os RÓTULOS cadastrados (issue #1537): `lost_reasons` aceita texto puro E
- * `{ label, categoria }`, e esta caixa é sempre rótulo — o objeto é guardado
- * aqui embaixo, na hora de salvar.
- */
-function readLostReasons(settings: Record<string, unknown> | null): string[] {
-  if (!settings) return [];
-  const r = (settings as { lost_reasons?: unknown }).lost_reasons;
-  if (!Array.isArray(r)) return [];
-  return r
-    .map((item) => (typeof item === "string" ? item : (item as { label?: unknown })?.label))
-    .filter((v): v is string => typeof v === "string");
-}
-
-/** Rótulo → categoria gravada (issue #1537). Sem categoria é ausência, não "". */
-function readCategorias(settings: Record<string, unknown> | null): Record<string, string> {
-  const saida: Record<string, string> = {};
-  if (!settings) return saida;
-  const r = (settings as { lost_reasons?: unknown }).lost_reasons;
-  if (!Array.isArray(r)) return saida;
-  for (const item of r) {
-    if (typeof item !== "object" || item === null) continue;
-    const { label, categoria } = item as { label?: unknown; categoria?: unknown };
-    if (typeof label === "string" && typeof categoria === "string" && categoria.trim()) {
-      saida[label.trim()] = categoria.trim();
-    }
-  }
-  return saida;
 }
 
 
@@ -722,11 +691,7 @@ function PipelineEditor({
   const [deal, setDeal] = useState(v.deal ?? "Negócio");
   const [won, setWon] = useState(v.won ?? "Ganho");
   const [lost, setLost] = useState(v.lost ?? "Perdido");
-  const [reasonsText, setReasonsText] = useState(readLostReasons(pipeline.settings).join(", "));
   const [wonReasonsText, setWonReasonsText] = useState(readWonReasons(pipeline.settings).join(", "));
-  const [categorias, setCategorias] = useState<Record<string, string>>(() =>
-    readCategorias(pipeline.settings),
-  );
   const [wonRequired, setWonRequired] = useState(
     (pipeline.settings as { won_reason_required?: unknown } | null)?.won_reason_required === true,
   );
@@ -766,6 +731,15 @@ function PipelineEditor({
   const [entradaEtapaId, setEntradaEtapaId] = useState<string | null>(entradaInicial.stage_id);
   // 1015: os campos vêm da organização (projeção em `settings.fields`); daqui só sai a regra.
   const camposDoNegocio = camposDoFunil(pipeline.settings).filter((f) => escopoDoCampo(f) === "negocio");
+  // Quais campos do NEGÓCIO este funil mostra (decisão de 24/11/2026). Sem lista gravada = todos.
+  const [visiveis, setVisiveis] = useState<Set<string>>(() => {
+    const gravada = (pipeline.settings as { campos_visiveis?: unknown } | null)?.campos_visiveis;
+    return new Set(
+      Array.isArray(gravada)
+        ? gravada.filter((k): k is string => typeof k === "string")
+        : camposDoNegocio.map((f) => f.key),
+    );
+  });
   const [obrigatorios, setObrigatorios] = useState<Record<string, CustomFieldDef["obrigatorio_em"]>>(() => {
     const inicial: Record<string, CustomFieldDef["obrigatorio_em"]> = {};
     for (const f of camposDoFunil(pipeline.settings)) {
@@ -793,18 +767,6 @@ function PipelineEditor({
         return normal ? [[chave, normal]] : [];
       }),
     );
-    const reasons = reasonsText
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    // #1537: motivo com categoria vira `{ label, categoria }`; sem categoria
-    // continua string pura — formato que todo funil já tem e que o trigger
-    // aceita igual.
-    const motivosComCategoria = reasons.map((rotulo) => {
-      const categoria = categorias[rotulo];
-      return categoria ? { label: rotulo, categoria } : rotulo;
-    });
-
     const wonReasons = wonReasonsText
       .split(",")
       .map((s2) => s2.trim())
@@ -852,7 +814,14 @@ function PipelineEditor({
       vocabulary: { lead, deal, won, lost },
       // 1015: `fields` não sai mais daqui (é projeção do banco); a regra do funil sim.
       campos_obrigatorios: camposObrigatorios,
-      lost_reasons: motivosComCategoria,
+      // Todas marcadas = `null` (mostra todos, inclusive o campo criado depois); senão, a lista.
+      ...(camposDoNegocio.length > 0
+        ? {
+            campos_visiveis: camposDoNegocio.every((f) => visiveis.has(f.key))
+              ? null
+              : camposDoNegocio.filter((f) => visiveis.has(f.key)).map((f) => f.key),
+          }
+        : {}),
       won_reasons: wonReasons,
       won_reason_required: wonRequired,
       comanda_no_ganho: comandaNoGanho,
@@ -891,11 +860,6 @@ function PipelineEditor({
     });
   }
 
-
-  const motivosDaCaixa = reasonsText
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
 
   // ─── A ENTRADA DAS CONVERSAS DO INBOX (#3011) ──────────────────────────
   // Quem pode ser escolhido, o que está escolhido hoje, e o que fazer quando a
@@ -948,53 +912,16 @@ function PipelineEditor({
         </div>
       </div>
 
-      <div className="space-y-1">
-        <Label className="text-xs">{t("Motivos de perda (separados por vírgula)")}</Label>
-        <Input value={reasonsText} onChange={(e) => setReasonsText(e.target.value)} />
-        {/*
-          #1537 — a categoria de CADA motivo, não um campo só: é ela que o
-          relatório "Perdas" e o filtro do quadro agrupam. Só aparece para
-          motivo já escrito na caixa de cima: a lista continua sendo texto e a
-          ordem continua sendo a do texto; o que muda é que cada item ganhou
-          um campo. `__sem__` porque o Select recusa value="".
-        */}
-        {motivosDaCaixa.map((motivo) => {
-          const opcoes = [
-            ...new Set([
-              ...CATEGORIAS_DE_PERDA,
-              ...(categorias[motivo] ? [categorias[motivo]] : []),
-            ]),
-          ];
-          return (
-            <div key={motivo} className="flex items-center gap-2">
-              <span className="w-56 truncate text-xs text-muted-foreground">{motivo}</span>
-              <Select
-                value={categorias[motivo] ?? "__sem__"}
-                onValueChange={(valor) =>
-                  setCategorias((atual) => {
-                    const proximo = { ...atual };
-                    if (valor === "__sem__") delete proximo[motivo];
-                    else proximo[motivo] = valor;
-                    return proximo;
-                  })
-                }
-              >
-                <SelectTrigger className="h-8 w-56 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__sem__">{t("Sem categoria")}</SelectItem>
-                  {opcoes.map((categoria) => (
-                    <SelectItem key={categoria} value={categoria}>
-                      {categoria}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          );
-        })}
-      </div>
+      {/*
+        1021 (decisão de 24/11/2026): os motivos de perda são da EMPRESA, iguais em todos os funis.
+        O campo saiu daqui; a lista se edita em Configurações › Motivos de perda.
+      */}
+      <p className="text-xs text-muted-foreground" data-testid="motivos-de-perda-sao-da-empresa">
+        {t("Os motivos de perda são da empresa toda.")}{" "}
+        <Link href="/app/settings/motivos-de-perda" className="font-medium text-foreground underline underline-offset-2">
+          {t("Editar os motivos de perda")}
+        </Link>
+      </p>
 
       <div className="space-y-1">
         <Label className="text-xs">{t("Motivos de ganho (separados por vírgula)")}</Label>
@@ -1184,7 +1111,10 @@ function PipelineEditor({
           cada campo do NEGÓCIO passa a ser exigido. Grava em `settings.campos_obrigatorios`, e o
           banco a junta à definição — o `obrigatorio_em` que `campos-exigidos` lê não mudou. */}
       <div className="space-y-2" data-testid={`obrigatoriedade-${pipeline.id}`}>
-        <Label className="text-xs">{t("Campos obrigatórios neste funil")}</Label>
+        <Label className="text-xs">{t("Campos do negócio neste funil")}</Label>
+        <p className="text-xs text-muted-foreground">
+          {t("Esconder um campo não apaga o valor: ele continua no negócio e na API. Campo obrigatório fica sempre visível.")}
+        </p>
         <p className="text-xs text-muted-foreground">
           {t("Marque em quais etapas cada campo do negócio precisa estar preenchido. Criar, renomear ou excluir campos é em Configurações › Campos Personalizados.")}{" "}
           <Link href="/app/settings/campos-personalizados" className="underline">
@@ -1196,17 +1126,45 @@ function PipelineEditor({
         ) : (
           camposDoNegocio.map((f) => {
             const regra = obrigatorios[f.key];
-            const mudar = (proxima: CustomFieldDef["obrigatorio_em"]) =>
+            const visivel = visiveis.has(f.key);
+            const mudar = (proxima: CustomFieldDef["obrigatorio_em"]) => {
               setObrigatorios((atuais) => {
                 const copia = { ...atuais };
                 if (proxima) copia[f.key] = proxima;
                 else delete copia[f.key];
                 return copia;
               });
+              // Campo obrigatório é sempre visível: exigir um campo o mostra neste funil.
+              if (proxima) setVisiveis((atuais) => new Set(atuais).add(f.key));
+            };
+            const mostrar = (marcado: boolean) => {
+              setVisiveis((atuais) => {
+                const proximo = new Set(atuais);
+                if (marcado) proximo.add(f.key);
+                else proximo.delete(f.key);
+                return proximo;
+              });
+              // Esconder tira a obrigatoriedade (o valor gravado no negócio não é apagado).
+              if (!marcado) {
+                setObrigatorios((atuais) => {
+                  const copia = { ...atuais };
+                  delete copia[f.key];
+                  return copia;
+                });
+              }
+            };
             return (
               <fieldset key={f.key} className="rounded-md border border-border p-2" data-testid={`obrigatorio-${f.key}`}>
                 <legend className="px-1 text-xs font-medium">{f.label}</legend>
-                <div className="flex flex-wrap gap-3 text-xs">
+                <label className="mb-1 flex items-center gap-1 text-xs" data-testid={`visivel-${f.key}`}>
+                  <Checkbox
+                    aria-label={`${t("Mostrar neste funil")} — ${f.label}`}
+                    checked={visivel}
+                    onChange={(e) => mostrar(e.target.checked)}
+                  />
+                  {t("Mostrar neste funil")}
+                </label>
+                <div className={`flex flex-wrap gap-3 text-xs ${visivel ? "" : "opacity-50"}`}>
                   {etapas.map((etapa) => (
                     <label key={etapa.id} className="flex items-center gap-1">
                       <Checkbox

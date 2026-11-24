@@ -118,6 +118,10 @@ export const AUDIT_ACTIONS = [
   "profile.updated",
   "org.updated",
   "pipeline.config_updated",
+  // A lista de motivos de perda da ORGANIZAÇÃO (migration 1021) mudou — pela tela de Configurações ›
+  // Motivos de perda, pela configuração do funil (API/MCP, que acrescentam) ou pelo Cold Call. Só
+  // quando a lista muda de fato.
+  "organization.lost_reasons_updated",
   "mfa.recovery_codes_regenerated",
   "notification_prefs.changed",
   "onboarding.welcome_completed",

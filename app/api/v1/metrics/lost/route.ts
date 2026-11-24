@@ -20,6 +20,7 @@ import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { agruparPerdas, type PerdaLinha } from "@/lib/metrics/perdas";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 
 export const dynamic = "force-dynamic";
 
@@ -107,13 +108,22 @@ export async function GET(req: NextRequest): Promise<Response> {
     acabou = lote.length === 0 || (totalNaJanela !== null && linhas.length >= totalNaJanela);
   }
 
+  // 1021: a categoria sai da lista da ORGANIZAÇÃO (a legada do funil fica como segunda fonte), e o
+  // negócio cujo funil não está mais aqui resolve só pela organização.
+  const motivosDaOrganizacao = await lerMotivosDaOrganizacao(supabase, activeOrg.orgId);
   const settingsPorFunil: Record<string, unknown> = {};
-  for (const funil of funis.data ?? []) settingsPorFunil[funil.id] = funil.settings;
+  for (const funil of funis.data ?? []) {
+    settingsPorFunil[funil.id] = settingsComMotivosDaOrganizacao(funil.settings, motivosDaOrganizacao);
+  }
 
   const nomesDasEtapas: Record<string, string> = {};
   for (const etapa of etapas.data ?? []) nomesDasEtapas[etapa.id] = etapa.name;
 
-  const relatorio = agruparPerdas(linhas, { settingsPorFunil, etapas: nomesDasEtapas });
+  const relatorio = agruparPerdas(linhas, {
+    settingsPorFunil,
+    settings: settingsComMotivosDaOrganizacao({}, motivosDaOrganizacao),
+    etapas: nomesDasEtapas,
+  });
 
   return ok(
     {

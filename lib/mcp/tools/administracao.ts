@@ -83,7 +83,9 @@ export const crmGetPipelineConfig: McpToolDefinition<typeof getPipelineConfigSha
   name: "crm_get_pipeline_config",
   description:
     "Devolve a configuração de UM pipeline: vocabulário (lead/deal/won/lost), campos personalizados (fields), " +
-    "motivos de perda (lost_reasons) e de ganho (won_reasons, won_reason_required), a política de reabertura, " +
+    "motivos de perda (lost_reasons — desde a 1021 é a lista da ORGANIZAÇÃO, a mesma em todos os funis) e de " +
+    "ganho (won_reasons, won_reason_required), os campos do negócio que o funil mostra (campos_visiveis, null = " +
+    "todos), a política de reabertura, " +
     "a comanda no ganho (comanda_no_ganho), a etapa de entrada do Inbox (entrada_do_inbox), o recorte de " +
     "encerrados (ocultar_encerrados_dias, 0 = desligado) e os atalhos do card (atalhos). " +
     "Use antes de crm_update_pipeline_config para não sobrescrever o que já existe.",
@@ -118,7 +120,10 @@ export const crmUpdatePipelineConfig: McpToolDefinition<typeof updatePipelineCon
   description:
     "Grava a configuração de um pipeline. `config` aceita: vocabulary (merge por chave), fields (só em organização " +
     "sem campos da organização; com eles, use crm_create/update/delete_pipeline_field), campos_obrigatorios (chave → " +
-    "{etapas, ao_ganhar, ao_perder}, SUBSTITUI o mapa deste funil), lost_reasons, won_reasons, " +
+    "{etapas, ao_ganhar, ao_perder}, SUBSTITUI o mapa deste funil), lost_reasons (ACRESCENTA à lista de motivos da " +
+    "ORGANIZAÇÃO, sem apagar os outros; categoria informada substitui; a resposta traz a lista da organização), " +
+    "campos_visiveis (chaves de campos do NEGÓCIO que este funil mostra; null = todos; campo obrigatório tem de " +
+    "estar na lista), won_reasons, " +
     "won_reason_required, reabertura, reabertura_campos, comanda_no_ganho, entrada_do_inbox, " +
     "ocultar_encerrados_dias e atalhos. Chave ausente não muda. Exige papel admin.",
   inputSchema: updatePipelineConfigShape,

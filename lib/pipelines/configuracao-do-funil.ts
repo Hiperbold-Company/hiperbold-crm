@@ -25,9 +25,14 @@ import type { Idioma } from "@/lib/i18n/idiomas";
 import { diasDeRecorte } from "@/lib/kanban/recorte-de-encerrados";
 import { entradaDoInboxDeclarada, type EntradaDoInboxDeclarada } from "@/lib/leads/entrada-do-inbox";
 import {
+  acrescentarMotivosDaOrganizacaoComAudit,
+  lerMotivosDaOrganizacao,
+} from "@/lib/leads/motivos-da-organizacao";
+import {
   pipelineConfigPatchSchema,
   type PipelineConfigPatch,
 } from "@/lib/schemas/settings";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /** O teto de campos personalizados por funil (o mesmo de `pipelineConfigPatchSchema`). */
 export const LIMITE_DE_CAMPOS = 50;
@@ -39,7 +44,13 @@ export interface ConfiguracaoDoFunil {
   /** Só as chaves de configuração que esta superfície edita — o resto de `settings` fica de fora. */
   settings: {
     fields: unknown[];
+    /**
+     * 1021: a lista de motivos de perda da ORGANIZAÇÃO (a do funil virou legado). Organização sem a
+     * lista própria (instalação antes da 1021) devolve a do funil, como antes.
+     */
     lost_reasons: unknown[];
+    /** Os campos do negócio que o funil mostra; `null` = todos. */
+    campos_visiveis: string[] | null;
     won_reasons: string[];
     won_reason_required: boolean;
     reabertura: "mesmo_registro" | "novo_negocio";
@@ -53,6 +64,8 @@ export interface ConfiguracaoDoFunil {
     /** Os atalhos do card (#3487) como gravados; ausente = nenhum. A tela revalida cada um ao desenhar. */
     atalhos: unknown[];
   };
+  /** 1021: o que o patch mandou em `lost_reasons` e não coube no teto de 50 da organização. */
+  lost_reasons_nao_couberam?: unknown[];
 }
 
 /**
@@ -78,7 +91,7 @@ type Linha = {
   settings: Record<string, unknown> | null;
 };
 
-function paraConfiguracao(row: Linha): ConfiguracaoDoFunil {
+function paraConfiguracao(row: Linha, motivosDaOrganizacao: unknown[] | null = null): ConfiguracaoDoFunil {
   const settings = row.settings ?? {};
   return {
     id: row.id,
@@ -86,7 +99,9 @@ function paraConfiguracao(row: Linha): ConfiguracaoDoFunil {
     vocabulary: row.vocabulary ?? {},
     settings: {
       fields: Array.isArray(settings.fields) ? settings.fields : [],
-      lost_reasons: Array.isArray(settings.lost_reasons) ? settings.lost_reasons : [],
+      lost_reasons:
+        motivosDaOrganizacao ?? (Array.isArray(settings.lost_reasons) ? settings.lost_reasons : []),
+      campos_visiveis: camposVisiveisDeclarados(settings),
       won_reasons: Array.isArray(settings.won_reasons) ? (settings.won_reasons as string[]) : [],
       won_reason_required: settings.won_reason_required === true,
       reabertura: settings.reabertura === "novo_negocio" ? "novo_negocio" : "mesmo_registro",
@@ -115,7 +130,10 @@ export async function lerConfiguracaoDoFunil(
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "not_found" };
-  return { ok: true, dados: paraConfiguracao(data as Linha) };
+  return {
+    ok: true,
+    dados: paraConfiguracao(data as Linha, await lerMotivosDaOrganizacao(supabase, organizationId)),
+  };
 }
 
 /**
@@ -208,6 +226,41 @@ export async function aplicarConfiguracaoDoFunil(
     }
   }
 
+  // 1015 + decisão de 24/11/2026: `campos_visiveis` só aceita chave de campo do NEGÓCIO que existe.
+  // Organização com cadastro próprio: confere em `custom_field_definitions`; no legado, nos campos do
+  // negócio que o funil declara (`fields`, conferido dentro do laço sobre o settings lido).
+  let chavesDoNegocioDaOrganizacao: Set<string> | null = null;
+  if (Array.isArray(parsed.data.campos_visiveis)) {
+    const chaves = await chavesDosCamposDoNegocio(supabase, organizationId);
+    if (chaves === "erro") {
+      return { ok: false, error: traduzir(MENSAGEM_CAMPOS_SEM_CONFERENCIA, input.idioma ?? "pt-BR") };
+    }
+    chavesDoNegocioDaOrganizacao = chaves;
+  }
+
+  // 1021: os motivos de perda são da ORGANIZAÇÃO. `lost_reasons` no patch do funil ACRESCENTA à lista
+  // da empresa (sem apagar os outros; categoria informada substitui) e não grava mais no funil — a
+  // resposta devolve a lista da organização. Conferido ANTES da escrita do funil: falha aqui não
+  // deixa meia-configuração gravada.
+  let motivosNaoCouberam: unknown[] = [];
+  if (parsed.data.lost_reasons !== undefined && parsed.data.lost_reasons.length > 0) {
+    const r = await acrescentarMotivosDaOrganizacaoComAudit(createAdminClient(), {
+      organizationId,
+      motivos: parsed.data.lost_reasons,
+      autor: input.autor,
+      requestId: input.requestId,
+      origem: "configuracao_do_funil",
+    });
+    if (!r.ok) {
+      return {
+        ok: false,
+        error: r.erro,
+        erroDoBanco: { etapa: "gravacao", erro: { message: r.erro } },
+      };
+    }
+    motivosNaoCouberam = r.dados.nao_couberam;
+  }
+
   // LER-MODIFICAR-GRAVAR com trava otimista: dois salvamentos ao mesmo tempo (duas abas, a tela e um
   // token) liam o MESMO `settings`, cada um mesclava só as suas chaves e o último gravava o objeto
   // inteiro por cima — a chave do primeiro sumia em silêncio. O UPDATE só vale se a linha ainda tem o
@@ -242,7 +295,12 @@ export async function aplicarConfiguracaoDoFunil(
         bruto && typeof bruto === "object" && !Array.isArray(bruto) ? (bruto as Record<string, unknown>) : {};
       nextSettings.campos_obrigatorios = input.editarObrigatorios(atuais);
     }
-    if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
+    // 1021: `lost_reasons` NÃO grava mais no funil (foi para a organização, acima). A lista legada
+    // que o funil tinha fica como está: o gatilho ainda a aceita.
+    if (parsed.data.campos_visiveis !== undefined) {
+      if (parsed.data.campos_visiveis === null) delete nextSettings.campos_visiveis;
+      else nextSettings.campos_visiveis = [...new Set(parsed.data.campos_visiveis)];
+    }
     if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
     if (parsed.data.won_reason_required !== undefined) {
       nextSettings.won_reason_required = parsed.data.won_reason_required;
@@ -269,6 +327,18 @@ export async function aplicarConfiguracaoDoFunil(
     if (parsed.data.atalhos !== undefined) {
       nextSettings.atalhos = parsed.data.atalhos;
     }
+
+    // Os campos visíveis: só chave de campo do NEGÓCIO, e todo campo OBRIGATÓRIO no funil tem de
+    // estar visível (esconder o obrigatório travaria a etapa por um campo que a ficha não mostra).
+    // A régua é RECUSAR, não corrigir em silêncio: a tela marca a caixa sozinha ao exigir o campo e
+    // tira a exigência ao esconder; quem chama pela API recebe a lista do que não bate.
+    const recusaDosVisiveis = recusaDosCamposVisiveis(
+      nextSettings,
+      chavesDoNegocioDaOrganizacao ?? chavesDoNegocioDoLegado(currentSettings),
+      Array.isArray(parsed.data.campos_visiveis),
+      input.idioma ?? "pt-BR",
+    );
+    if (recusaDosVisiveis) return recusaDosVisiveis;
 
     // Campo que passa a ser do Contato e que uma regra ativa do gatilho por data lê (#2791):
     // a regra seguiria ligada e pararia de disparar em silêncio. Confere a cada tentativa,
@@ -318,6 +388,8 @@ export async function aplicarConfiguracaoDoFunil(
       campos_obrigatorios_count:
         parsed.data.campos_obrigatorios !== undefined ? Object.keys(parsed.data.campos_obrigatorios).length : null,
       lost_reasons_count: parsed.data.lost_reasons?.length ?? null,
+      campos_visiveis_count:
+        parsed.data.campos_visiveis === undefined ? null : (parsed.data.campos_visiveis?.length ?? "todos"),
       won_reasons_count: parsed.data.won_reasons?.length ?? null,
       won_reason_required: parsed.data.won_reason_required ?? null,
       reabertura: parsed.data.reabertura ?? null,
@@ -330,5 +402,99 @@ export async function aplicarConfiguracaoDoFunil(
     },
   });
 
-  return lerConfiguracaoDoFunil(supabase, organizationId, pipelineId);
+  const lida = await lerConfiguracaoDoFunil(supabase, organizationId, pipelineId);
+  if (lida.ok && motivosNaoCouberam.length > 0) {
+    return { ok: true, dados: { ...lida.dados, lost_reasons_nao_couberam: motivosNaoCouberam } };
+  }
+  return lida;
+}
+
+/** `details.campos_visiveis_invalidos` / `details.campos_obrigatorios_escondidos`: a recusa dos visíveis. */
+export const CAMPOS_VISIVEIS_INVALIDOS = "campos_visiveis_invalidos";
+export const CAMPOS_OBRIGATORIOS_ESCONDIDOS = "campos_obrigatorios_escondidos";
+
+export const MENSAGEM_CAMPOS_VISIVEIS_INVALIDOS =
+  "Só campos de negócio cadastrados na empresa podem ser mostrados no funil.";
+export const MENSAGEM_CAMPOS_OBRIGATORIOS_ESCONDIDOS =
+  "Um campo obrigatório neste funil precisa estar visível. Mostre o campo ou tire a obrigatoriedade.";
+
+/** A lista declarada no settings; ausente, nula ou torta = `null` (todos). */
+function camposVisiveisDeclarados(settings: Record<string, unknown>): string[] | null {
+  const bruto = settings.campos_visiveis;
+  return Array.isArray(bruto) ? bruto.filter((k): k is string => typeof k === "string") : null;
+}
+
+/** As chaves dos campos de NEGÓCIO da organização (1015); `null` = organização no legado. */
+async function chavesDosCamposDoNegocio(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<Set<string> | null | "erro"> {
+  const { data, error } = await supabase
+    .from("custom_field_definitions")
+    .select("key, entidade")
+    .eq("organization_id", organizationId);
+  if (error) return "erro";
+  const linhas = (data ?? []) as { key: string; entidade: string }[];
+  if (linhas.length === 0) return null;
+  return new Set(linhas.filter((l) => l.entidade === "negocio").map((l) => l.key));
+}
+
+/** Organização no legado: as chaves de negócio que o próprio funil declara em `fields`. */
+function chavesDoNegocioDoLegado(settings: Record<string, unknown>): Set<string> {
+  const campos = Array.isArray(settings.fields) ? settings.fields : [];
+  return new Set(
+    campos
+      .filter((c) => c && typeof c === "object" && (c as { escopo?: unknown }).escopo !== "contato")
+      .map((c) => (c as { key?: unknown }).key)
+      .filter((k): k is string => typeof k === "string"),
+  );
+}
+
+/** As chaves com alguma regra de obrigatoriedade no funil (`campos_obrigatorios`, 1015). */
+function chavesObrigatorias(settings: Record<string, unknown>): string[] {
+  const mapa = settings.campos_obrigatorios;
+  if (!mapa || typeof mapa !== "object" || Array.isArray(mapa)) return [];
+  return Object.entries(mapa as Record<string, unknown>)
+    .filter(([, regra]) => {
+      if (!regra || typeof regra !== "object") return false;
+      const r = regra as { etapas?: unknown; ao_ganhar?: unknown; ao_perder?: unknown };
+      return (Array.isArray(r.etapas) && r.etapas.length > 0) || r.ao_ganhar === true || r.ao_perder === true;
+    })
+    .map(([chave]) => chave);
+}
+
+function recusaDosCamposVisiveis(
+  proximo: Record<string, unknown>,
+  chavesDoNegocio: Set<string>,
+  conferirChaves: boolean,
+  idioma: Idioma,
+): ResultadoDaConfiguracao<never> | null {
+  const visiveis = camposVisiveisDeclarados(proximo);
+  if (visiveis === null) return null;
+  if (conferirChaves) {
+    const invalidas = visiveis.filter((k) => !chavesDoNegocio.has(k));
+    if (invalidas.length > 0) {
+      return {
+        ok: false,
+        error: "validation_failed",
+        details: {
+          [CAMPOS_VISIVEIS_INVALIDOS]: invalidas,
+          mensagem: traduzir(MENSAGEM_CAMPOS_VISIVEIS_INVALIDOS, idioma),
+        },
+      };
+    }
+  }
+  const lista = new Set(visiveis);
+  const escondidos = chavesObrigatorias(proximo).filter((k) => !lista.has(k));
+  if (escondidos.length > 0) {
+    return {
+      ok: false,
+      error: "validation_failed",
+      details: {
+        [CAMPOS_OBRIGATORIOS_ESCONDIDOS]: escondidos,
+        mensagem: traduzir(MENSAGEM_CAMPOS_OBRIGATORIOS_ESCONDIDOS, idioma),
+      },
+    };
+  }
+  return null;
 }

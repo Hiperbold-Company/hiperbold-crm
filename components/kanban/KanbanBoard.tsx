@@ -24,7 +24,7 @@ import { LeadDossier } from "./LeadDossier";
 import { RetomarComoNovoNegocioDialog } from "./RetomarComoNovoNegocioDialog";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { linhasDoCartao } from "@/lib/kanban/linhas-do-cartao";
-import { camposPorEscopo, camposDoFunil } from "@/lib/leads/campos-do-funil";
+import { camposDoFunilVisiveis, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 
 interface KanbanBoardProps {
   pipelineId: string;
@@ -428,7 +428,7 @@ export function KanbanBoard({
           onOpenChange={(v: boolean) => !v && setDossieId(null)}
           lead={leadDoDossie}
           pipelineId={pipelineId}
-          fieldDefs={camposPorEscopo(camposDoFunil(data.pipeline.settings ?? null), "negocio")}
+          fieldDefs={camposPorEscopo(camposDoFunilVisiveis(data.pipeline.settings ?? null), "negocio")}
           stageName={
             data.stages.find((s) => s.id === leadDoDossie.stage_id)?.name ?? "—"
           }
