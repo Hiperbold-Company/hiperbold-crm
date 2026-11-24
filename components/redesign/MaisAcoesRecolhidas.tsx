@@ -55,7 +55,12 @@ export function MaisAcoesRecolhidas({
         {...marcaDaLista}
         onClick={(e) => {
           if ((e.target as HTMLElement).closest("button, a")) {
-            (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+            const detalhes = e.currentTarget.closest("details") as HTMLDetailsElement | null;
+            detalhes?.removeAttribute("open");
+            // O botão escolhido some com a lista. O foco passa ao "⋯" ANTES de o
+            // diálogo montar, e o diálogo o devolve ao "⋯" ao fechar (sem isto
+            // ele cairia no <body>).
+            detalhes?.querySelector("summary")?.focus();
           }
         }}
       >
