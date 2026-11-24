@@ -11,7 +11,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  *
  * O painel fica FORA de `/app`, então o provedor do redesign não o envolve por
  * conta própria: `app/admin/(protected)/layout.tsx` (servidor) lê
- * `redesignLigado()` e monta o `ProvedorDoRedesign`.
+ * `await redesignNaRequisicao()` e monta o `ProvedorDoRedesign`.
  *
  * Este arquivo NUNCA importa `lib/redesign/chave.ts` (server-only).
  */

@@ -30,7 +30,7 @@ import {
 import { fontesDaEmpresa } from "@/lib/recursos-opcionais/estado";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { marcaDosAjustes } from "@/lib/redesign/ajustes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Recursos opcionais" };
@@ -81,7 +81,7 @@ export default async function RecursosOpcionaisPage() {
 
   return (
     <div className="flex h-full flex-col gap-8 overflow-y-auto p-6">
-      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")} className="space-y-1">
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")} className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Recursos opcionais", idioma)}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {traduzir(

@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasMetricas } from "@/lib/redesign/metricas";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
@@ -222,7 +222,7 @@ export default async function AgentEditorPage({ params }: { params: Promise<{ id
     []) as unknown as MaterialDoAcervo[];
   const materiais = [...materiaisVivos, ...materiaisArquivadosMarcados];
 
-  const rd = marcaDasMetricas(redesignLigado());
+  const rd = marcaDasMetricas(await redesignNaRequisicao());
 
   return (
     <div className="flex h-full flex-col gap-6 p-6" data-rd-metricas={rd("agente-tela")}>

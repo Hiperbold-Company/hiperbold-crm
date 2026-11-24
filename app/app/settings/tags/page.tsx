@@ -41,7 +41,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PainelDeTags } from "./_painel";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { TagsInternasForm } from "./_tags-internas-form";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 
 export const metadata = { title: "Tags" };
@@ -101,7 +101,7 @@ export default async function TagsPage({ searchParams }: { searchParams: Promise
 
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
-  const rd = marcaDasConfiguracoes(redesignLigado());
+  const rd = marcaDasConfiguracoes(await redesignNaRequisicao());
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto md:p-6">

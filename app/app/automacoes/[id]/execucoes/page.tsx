@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -23,7 +23,7 @@ export default async function ExecucoesDaAutomacaoPage({ params }: { params: Pro
   const { id } = await params;
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
-  const rd = marcaDasAutomacoes(redesignLigado());
+  const rd = marcaDasAutomacoes(await redesignNaRequisicao());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
   if (ROLE_RANK[activeOrg.role] < ROLE_RANK.manager) redirect("/403");

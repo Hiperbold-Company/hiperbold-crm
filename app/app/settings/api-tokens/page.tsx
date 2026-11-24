@@ -12,7 +12,7 @@ import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { marcaDosAjustes } from "@/lib/redesign/ajustes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,7 @@ export default async function ApiTokensPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Chaves de integração", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
           {traduzir("Tokens server-to-server. Plaintext exibido", idioma)}{" "}

@@ -13,7 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { acessoAntecipado } from "@/lib/hiperbold/funcoes-ocultas";
 import { marcaDasConexoes } from "@/lib/redesign/conexoes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Conexões" };
@@ -28,7 +28,7 @@ export default async function ConnectionsPage() {
     redirect("/403");
   }
   const idioma = user.idioma;
-  const rd = marcaDasConexoes(redesignLigado());
+  const rd = marcaDasConexoes(await redesignNaRequisicao());
 
   const key = process.env.WAHA_API_KEY;
   const wahaConfigured = Boolean(

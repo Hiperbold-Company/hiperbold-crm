@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
 import { FlowsList } from "../followups/_components/FlowsList";
 import { ComoUsar } from "./_components/ComoUsar";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoRoteamento } from "@/lib/redesign/roteamento";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ const FLOW_COLUMNS = "id, name, status, active_version_id, handoff_policy, updat
 export default async function AtendimentoFlowsPage() {
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
-  const rd = marcaDoRoteamento(redesignLigado());
+  const rd = marcaDoRoteamento(await redesignNaRequisicao());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
 

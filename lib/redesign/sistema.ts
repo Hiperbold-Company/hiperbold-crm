@@ -12,7 +12,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * valor é `undefined` e o React não escreve atributo nenhum: DOM idêntico.
  *
  * Quase todas estas páginas ficam FORA de `/app`, onde o provedor do redesign
- * não existe. Por isso a página de servidor lê `redesignLigado()` e passa o
+ * não existe. Por isso a página de servidor lê `await redesignNaRequisicao()` e passa o
  * booleano a `marcaDoSistema`. Este arquivo NUNCA importa
  * `lib/redesign/chave.ts` (server-only).
  */

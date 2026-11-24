@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +26,7 @@ export default async function AdminForbiddenPage() {
   // ele, o texto sai em espanhol com `lang="pt-BR"` — leitor de tela na voz
   // errada, e o navegador oferecendo traduzir "do português". As telas que
   // resolvem o idioma "como `admin/forbidden`" fazem o mesmo.
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <IdiomaProvider locale={idioma}>

@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import type { Metadata } from "next";
 
@@ -42,7 +42,7 @@ export default async function ExclusaoDeDadosPage({
     idiomaDoVisitante(null),
   ]);
   const t = (texto: string) => traduzir(texto, idioma);
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-6" data-rd-sistema={rd("pagina")}>

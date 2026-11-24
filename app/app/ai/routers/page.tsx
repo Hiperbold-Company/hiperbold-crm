@@ -6,7 +6,7 @@ import { listSelectableChannels } from "@/lib/channels/selectable";
 import { createClient } from "@/lib/supabase/server";
 import type { RouterListItem } from "@/hooks/ai/useRouters";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { RoutersClient } from "./_client";
 
@@ -17,7 +17,7 @@ export default async function RoutersPage() {
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
   const idioma = user.idioma;
-  const rd = marcaDasAutomacoes(redesignLigado());
+  const rd = marcaDasAutomacoes(await redesignNaRequisicao());
 
   if (!(user.is_platform_admin && !user.support) && ROLE_RANK[activeOrg.role] < ROLE_RANK.manager) {
     redirect("/403");

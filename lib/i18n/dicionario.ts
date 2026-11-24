@@ -29173,6 +29173,12 @@ export const DICIONARIO: Traducoes = {
   "Tenho 9h30 ou 10h. Qual fica melhor para você?": { es: "Tengo a las 9:30 o a las 10:00. ¿Cuál le queda mejor?", en: "I have 9:30 or 10:00. Which works better for you?" },
   "9h30 está ótimo!": { es: "¡9:30 está perfecto!", en: "9:30 is great!" },
   "Consulta marcada e negócio movido para \"Agendado\"": { es: "Cita agendada y negocio movido a \"Agendado\"", en: "Appointment booked and deal moved to \"Scheduled\"" },
+  // Painel da plataforma › empresa › Novo visual (redesign por empresa).
+  "Novo visual": { es: "Nuevo diseño" },
+  "Liga o novo visual só para esta empresa. As outras continuam no visual atual.": { es: "Activa el nuevo diseño solo para esta empresa. Las demás siguen con el diseño actual." },
+  "Novo visual ligado para esta empresa.": { es: "Nuevo diseño activado para esta empresa." },
+  "Novo visual desligado para esta empresa.": { es: "Nuevo diseño desactivado para esta empresa." },
+  "Erro ao alterar o novo visual": { es: "Error al cambiar el nuevo diseño" },
 };
 
 /**

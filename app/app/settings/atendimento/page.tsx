@@ -34,7 +34,7 @@ import { TelefoneDeFichaVazia } from "./_telefoneDeFichaVazia";
 import { NomeInformado } from "./_nomeInformado";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { marcaDosAjustes } from "@/lib/redesign/ajustes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +81,7 @@ export default async function AtendimentoSettingsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">
           {traduzir("Distribuição de atendimento", idioma)}
         </h1>

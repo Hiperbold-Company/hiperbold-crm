@@ -6513,5 +6513,12 @@
   "Endereço do MCP:": "MCP 地址：",
   "Como conectar um assistente de IA": "如何连接 AI 助手",
   "Automação duplicada. A cópia está desligada.": "自动化已复制。副本处于关闭状态。",
-  "Follow-up duplicado. A cópia está desligada.": "跟进已复制。副本处于关闭状态。"
+  "Follow-up duplicado. A cópia está desligada.": "跟进已复制。副本处于关闭状态。",
+  "Novo visual": "新外观",
+  "Liga o novo visual só para esta empresa. As outras continuam no visual atual.": "仅为此公司开启新外观。其他公司继续使用当前外观。",
+  "Novo visual ligado para esta empresa.": "已为此公司开启新外观。",
+  "Novo visual desligado para esta empresa.": "已为此公司关闭新外观。",
+  "Erro ao alterar o novo visual": "更改新外观时出错",
+  "Ligado": "开启",
+  "Desligado": "关闭"
 }

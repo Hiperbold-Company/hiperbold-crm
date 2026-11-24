@@ -6,7 +6,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * Tarefas levam o prefixo `tarefas-`; as de Planos, `planos-`.
  *
  * Este arquivo NÃO é "use client": a página de servidor chama `marcaDoInicio`
- * (função pura) com `redesignLigado()` de `lib/redesign/chave.ts` — que é
+ * (função pura) com `await redesignNaRequisicao()` de `lib/redesign/chave.ts` — que é
  * server-only e nunca pode ser importado aqui. Componente cliente usa o hook.
  */
 export type PecaDoInicio =

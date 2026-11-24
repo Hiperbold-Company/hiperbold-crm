@@ -22,7 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ ligado: false, idioma: "pt-BR" }));
 
-vi.mock("@/lib/redesign/chave", () => ({ redesignLigado: () => h.ligado }));
+vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => h.ligado }));
 vi.mock("@/lib/branding/saida", () => ({
   marcaDaSaida: async () => ({ nome: "Marca X", logoUrl: "https://exemplo.test/logo.png", logoDarkUrl: null }),
 }));
@@ -66,7 +66,7 @@ describe("redesign: entrar, DOM", () => {
 
   it("o layout do primeiro acesso marca página, cabeçalho e conteúdo pela mesma regra", () => {
     const fonte = readFileSync(join(process.cwd(), "app/onboarding/layout.tsx"), "utf8");
-    expect(fonte).toContain("marcaDeEntrar(redesignLigado())");
+    expect(fonte).toContain("marcaDeEntrar(await redesignNaRequisicao())");
     for (const p of ["pagina", "cabecalho", "conteudo"]) expect(fonte).toContain(`rd("${p}")`);
   });
 
@@ -91,7 +91,7 @@ describe("redesign: entrar, DOM", () => {
 
   it("/get-started marca página, cartão e painel pela mesma regra", () => {
     const fonte = readFileSync(join(process.cwd(), "app/get-started/page.tsx"), "utf8");
-    expect(fonte).toContain("marcaDeEntrar(redesignLigado())");
+    expect(fonte).toContain("marcaDeEntrar(await redesignNaRequisicao())");
     for (const p of ["pagina", "cartao"]) expect(fonte).toContain(`rd("${p}")`);
     expect(fonte).toContain("<PainelDeEntrar");
   });

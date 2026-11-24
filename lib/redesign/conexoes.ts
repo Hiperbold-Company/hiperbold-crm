@@ -11,7 +11,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * atributo nenhum: DOM idêntico ao de antes.
  *
  * Este arquivo NUNCA importa `lib/redesign/chave.ts` (server-only). A página,
- * que é de servidor, lê `redesignLigado()` e passa o booleano a
+ * que é de servidor, lê `await redesignNaRequisicao()` e passa o booleano a
  * `marcaDasConexoes`.
  */
 export type PecaDasConexoes =

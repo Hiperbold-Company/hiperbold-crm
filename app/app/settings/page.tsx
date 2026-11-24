@@ -4,7 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Configurações" };
@@ -42,7 +42,7 @@ export default async function SettingsHubPage() {
       title={traduzir("Configurações", idioma)}
       subtitle={traduzir("Sua conta, os dados da empresa e quem tem acesso ao quê.", idioma)}
       locale={idioma}
-      redesignConfiguracoes={redesignLigado()}
+      redesignConfiguracoes={await redesignNaRequisicao()}
     />
   );
 }

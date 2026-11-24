@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ export default async function NotFound() {
   } = await supabase.auth.getUser();
   const idioma = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8" data-rd-sistema={rd("pagina")}>

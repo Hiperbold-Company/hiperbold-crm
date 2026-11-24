@@ -29,7 +29,7 @@ import { render } from "@/tests/helpers/render-com-confirmacao";
 
 const chave = vi.hoisted(() => ({ ligado: false }));
 
-vi.mock("@/lib/redesign/chave", () => ({ redesignLigado: () => chave.ligado }));
+vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => chave.ligado }));
 vi.mock("@/app/actions/settings/updateProfile", () => ({
   updateProfile: vi.fn(async () => ({ ok: true })),
 }));
@@ -102,12 +102,8 @@ describe("chave desligada: DOM idêntico ao de sempre", () => {
     expect(container.querySelectorAll(ATRIBUTO)).toHaveLength(0);
   });
 
-  it("o layout da área devolve os filhos sem casca", () => {
-    const { container } = render(
-      <SettingsLayout>
-        <p>filho</p>
-      </SettingsLayout>,
-    );
+  it("o layout da área devolve os filhos sem casca", async () => {
+    const { container } = render(await SettingsLayout({ children: <p>filho</p> }));
     expect(container.querySelectorAll(ATRIBUTO)).toHaveLength(0);
     expect(container.firstElementChild?.tagName).toBe("P");
   });
@@ -132,12 +128,8 @@ describe("chave ligada: as peças aparecem", () => {
     expect(screen.getByRole("button", { name: "Salvar" })).toBeInTheDocument();
   });
 
-  it("o layout da área embrulha os filhos na casca", () => {
-    const { container } = render(
-      <SettingsLayout>
-        <p>filho</p>
-      </SettingsLayout>,
-    );
+  it("o layout da área embrulha os filhos na casca", async () => {
+    const { container } = render(await SettingsLayout({ children: <p>filho</p> }));
     const casca = container.querySelector('[data-rd-configuracoes="area"]');
     expect(casca).not.toBeNull();
     expect(casca?.textContent).toBe("filho");

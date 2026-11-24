@@ -99,7 +99,7 @@ describe("marcas das telas Desempenho e Agentes", () => {
     expect(lib).not.toMatch(/from "@\/lib\/redesign\/chave"/);
     for (const f of ["app/app/metrics/page.tsx", "app/app/ai/agents/page.tsx"]) {
       const fonte = fs.readFileSync(path.join(process.cwd(), f), "utf8");
-      expect(fonte).toContain("marcaDasMetricas(redesignLigado())");
+      expect(fonte).toContain("marcaDasMetricas(await redesignNaRequisicao())");
       expect(fonte).not.toMatch(/data-rd-metricas="/);
     }
   });

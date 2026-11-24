@@ -6,7 +6,7 @@ import { papelPode } from "@/lib/permissoes/resolver";
 import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
 
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasMetricas } from "@/lib/redesign/metricas";
 
 import { MetricsClient } from "./_components/MetricsClient";
@@ -39,7 +39,7 @@ export default async function MetricsPage() {
     funis = data ?? [];
   }
   const t = (texto: string) => traduzir(texto, idioma);
-  const rd = marcaDasMetricas(redesignLigado());
+  const rd = marcaDasMetricas(await redesignNaRequisicao());
 
   return (
     <div className="flex h-full flex-col gap-4 sm:gap-6 md:p-6" data-rd-metricas={rd("tela")}>

@@ -11,7 +11,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { lerCadastroNaTela, planoInicialDoSeletor } from "@/lib/cobranca/cadastro";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
 import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
@@ -60,7 +60,7 @@ export default async function GetStartedPage() {
   // O nome em texto vem do resolvedor do BANCO (`marcaDaSaida`), não do
   // `branding()` — o banco vence e o `.env` é o piso.
   const marca = await marcaDaSaida(null);
-  const rd = marcaDeEntrar(redesignLigado());
+  const rd = marcaDeEntrar(await redesignNaRequisicao());
 
   // Os planos do cadastro (#2846): quem chega aqui sem plano escolhido (conta
   // nova pelo Google, ou cadastro anterior à cobrança) escolhe agora. Vem

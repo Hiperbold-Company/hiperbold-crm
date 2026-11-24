@@ -21,7 +21,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { InterruptorAiDecide } from "./_interruptor";
 import { marcaDosAjustes } from "@/lib/redesign/ajustes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,7 @@ export default async function AutomacoesSettingsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Limite da IA nas automações", idioma)}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">{traduzir(DESCRICAO, idioma)}</p>
       </header>

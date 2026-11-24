@@ -3,7 +3,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { SEM_PREFERENCIA_DE_IDIOMA } from "@/lib/schemas/settings";
 import { ProfileForm } from "./_form";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function ProfilePage() {
   //                    uma preferência que ela nunca escolheu — e daí em diante
   //                    a troca de idioma da empresa passaria por cima dela.
   const idioma = user.idioma;
-  const rd = marcaDasConfiguracoes(redesignLigado());
+  const rd = marcaDasConfiguracoes(await redesignNaRequisicao());
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header data-rd-configuracoes={rd("cabecalho")}>

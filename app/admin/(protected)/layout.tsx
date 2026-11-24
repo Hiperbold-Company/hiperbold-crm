@@ -7,7 +7,7 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { instalacaoSemSmtp } from "@/lib/email/estado";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
 
 export default async function ProtectedAdminLayout({ children }: { children: ReactNode }) {
@@ -37,7 +37,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       <ProvedorDeConfirmacao>
         {/* O painel fica fora de `/app`: o provedor do redesign precisa ser
             montado aqui, com o booleano lido no servidor. */}
-        <ProvedorDoRedesign ligado={redesignLigado()}>
+        <ProvedorDoRedesign ligado={await redesignNaRequisicao()}>
           <AdminShell userEmail={user.email ?? ""} modulosLigados={modulos} semSmtp={semSmtp}>
             {children}
           </AdminShell>

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
@@ -21,7 +21,7 @@ export default async function FollowupFlowsPage() {
   // idioma vem resolvido em `user.idioma` (a cadeia pessoa → organização →
   // padrão vive em `lib/auth/server.ts`).
   const t = (texto: string) => traduzir(texto, user.idioma);
-  const rd = marcaDasAutomacoes(redesignLigado());
+  const rd = marcaDasAutomacoes(await redesignNaRequisicao());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
   // Fluxos (edição) segue exigindo manager+; a Fila (leitura) é de qualquer

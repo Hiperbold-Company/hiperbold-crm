@@ -10,7 +10,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * valor é `undefined` e o React não escreve atributo nenhum: DOM idêntico.
  *
  * Este arquivo NUNCA importa `lib/redesign/chave.ts` (server-only) e não tem
- * `"use client"`. Página de SERVIDOR usa `marcaDosAjustes(redesignLigado())`;
+ * `"use client"`. Página de SERVIDOR usa `marcaDosAjustes(await redesignNaRequisicao())`;
  * componente de cliente usa `useMarcaDosAjustes()`.
  */
 export type PecaDosAjustes =

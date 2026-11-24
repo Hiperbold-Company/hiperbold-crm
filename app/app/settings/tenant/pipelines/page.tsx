@@ -17,7 +17,7 @@ import { PipelinesClient, type EtapaDoFunil, type PipelineRow } from "./_client"
 import { traduzir } from "@/lib/i18n/dicionario";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { marcaDosAjustes } from "@/lib/redesign/ajustes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +108,7 @@ export default async function PipelinesSettingsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header data-rd-ajustes={marcaDosAjustes(redesignLigado())("cabecalho")}>
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">
           {traduzir("Etapas do funil", idioma)}
         </h1>

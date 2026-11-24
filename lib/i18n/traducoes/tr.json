@@ -11424,5 +11424,10 @@
   "Endereço do MCP:": "MCP adresi:",
   "Como conectar um assistente de IA": "Bir yapay zekâ asistanı nasıl bağlanır",
   "Automação duplicada. A cópia está desligada.": "Otomasyon çoğaltıldı. Kopya kapalı.",
-  "Follow-up duplicado. A cópia está desligada.": "Takip çoğaltıldı. Kopya kapalı."
+  "Follow-up duplicado. A cópia está desligada.": "Takip çoğaltıldı. Kopya kapalı.",
+  "Novo visual": "Yeni görünüm",
+  "Liga o novo visual só para esta empresa. As outras continuam no visual atual.": "Yeni görünümü yalnızca bu şirket için açar. Diğerleri mevcut görünümde kalır.",
+  "Novo visual ligado para esta empresa.": "Bu şirket için yeni görünüm açıldı.",
+  "Novo visual desligado para esta empresa.": "Bu şirket için yeni görünüm kapatıldı.",
+  "Erro ao alterar o novo visual": "Yeni görünüm değiştirilirken hata oluştu"
 }

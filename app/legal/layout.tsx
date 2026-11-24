@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 
@@ -31,7 +31,7 @@ export default async function LegalLayout({ children }: { children: React.ReactN
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
 
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <IdiomaProvider locale={idioma}>

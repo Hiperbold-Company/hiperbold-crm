@@ -14749,5 +14749,10 @@
   "Adicionar outra versão": "Add another version",
   "Com mais de uma versão, cada comentário recebe uma delas, sorteada. Variar o texto ajuda a não parecer spam para o Instagram.": "With more than one version, each comment gets one of them at random. Varying the text helps avoid looking like spam to Instagram.",
   "versões": "versions",
-  "Limite de 10 versões": "Limit of 10 versions"
+  "Limite de 10 versões": "Limit of 10 versions",
+  "Novo visual": "New look",
+  "Liga o novo visual só para esta empresa. As outras continuam no visual atual.": "Turns on the new look for this company only. The others keep the current look.",
+  "Novo visual ligado para esta empresa.": "New look turned on for this company.",
+  "Novo visual desligado para esta empresa.": "New look turned off for this company.",
+  "Erro ao alterar o novo visual": "Error changing the new look"
 }

@@ -16,7 +16,7 @@ import { SectorsClient } from "./_components/SectorsClient";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { marcaDosAjustes } from "@/lib/redesign/ajustes";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Equipe" };
@@ -57,7 +57,7 @@ export default async function TeamPage({
   const isAdmin = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
   const isManager = !!activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
 
-  const rd = marcaDosAjustes(redesignLigado());
+  const rd = marcaDosAjustes(await redesignNaRequisicao());
 
   return (
     <div data-rd-ajustes={rd("pagina")} className="flex h-full flex-col gap-6 md:p-6">

@@ -4,7 +4,7 @@ import { marcaDaSaida } from "@/lib/branding/saida";
 import { createClient } from "@/lib/supabase/server";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
@@ -49,7 +49,7 @@ import { marcaDeEntrar } from "@/lib/redesign/entrar";
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const marca = await marcaDaSaida(null);
-  const rd = marcaDeEntrar(redesignLigado());
+  const rd = marcaDeEntrar(await redesignNaRequisicao());
   // A maioria destas telas roda ANTES do login (não há usuário nenhum), mas
   // duas — `/login/mfa` e, em parte, `/login/recovery` — rodam com uma sessão
   // parcial já criada (primeiro fator verificado, segundo pendente). Onde há
@@ -67,7 +67,7 @@ export default async function PublicLayout({ children }: { children: React.React
 
   return (
     <IdiomaProvider locale={locale}>
-      <ProvedorDoRedesign ligado={redesignLigado()}>
+      <ProvedorDoRedesign ligado={await redesignNaRequisicao()}>
       <div
         className="flex min-h-screen items-center justify-center bg-background p-6"
         data-rd-entrar={rd("pagina")}

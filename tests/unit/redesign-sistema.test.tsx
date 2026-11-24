@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ ligado: false }));
 
-vi.mock("@/lib/redesign/chave", () => ({ redesignLigado: () => h.ligado }));
+vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => h.ligado }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
 }));
@@ -49,7 +49,7 @@ async function paginas() {
   return [
     await ForbiddenPage(),
     await InternalErrorPage(),
-    ServiceUnavailablePage(),
+    await ServiceUnavailablePage(),
     await NotFound(),
     await AcessoRevogadoPage(),
   ];

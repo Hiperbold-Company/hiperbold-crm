@@ -11,7 +11,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * é `undefined` e o React não escreve atributo nenhum: DOM idêntico ao de antes.
  *
  * Este arquivo NUNCA importa `lib/redesign/chave.ts` (server-only). Página de
- * servidor lê `redesignLigado()` e passa o booleano a `marcaDoRoteamento`.
+ * servidor lê `await redesignNaRequisicao()` e passa o booleano a `marcaDoRoteamento`.
  */
 export type PecaDoRoteamento =
   | "pagina"

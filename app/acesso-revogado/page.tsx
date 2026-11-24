@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,7 +37,7 @@ export default async function AcessoRevogadoPage() {
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
 
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <IdiomaProvider locale={idioma}>

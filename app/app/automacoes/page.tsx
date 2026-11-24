@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -36,7 +36,7 @@ const LIMITE_POR_TIPO = 500;
 export default async function AutomacoesPage() {
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
-  const rd = marcaDasAutomacoes(redesignLigado());
+  const rd = marcaDasAutomacoes(await redesignNaRequisicao());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
   if (ROLE_RANK[activeOrg.role] < ROLE_RANK.manager) redirect("/403");

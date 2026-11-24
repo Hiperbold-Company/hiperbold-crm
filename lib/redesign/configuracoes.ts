@@ -10,7 +10,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * protótipo v49. Desligada, nada é escrito: o DOM sai idêntico ao de antes.
  *
  * Este arquivo NÃO importa `chave.ts` (é `server-only`). Página de SERVIDOR
- * decide com `redesignLigado()` e usa `marcaDasConfiguracoes(ligado)`;
+ * decide com `await redesignNaRequisicao()` e usa `marcaDasConfiguracoes(ligado)`;
  * componente de cliente usa `useMarcaDasConfiguracoes()`. Sem `"use client"`
  * de propósito: a função pura tem de ser chamável no servidor (o hook só roda
  * em componente de cliente; no servidor `useRedesign` é só uma referência).
@@ -30,7 +30,7 @@ export type MarcaDasConfiguracoes = (
   peca: PecaDasConfiguracoes,
 ) => PecaDasConfiguracoes | undefined;
 
-/** Pura, para página de servidor: `marcaDasConfiguracoes(redesignLigado())`. */
+/** Pura, para página de servidor: `marcaDasConfiguracoes(await redesignNaRequisicao())`. */
 export function marcaDasConfiguracoes(ligado: boolean): MarcaDasConfiguracoes {
   return (peca) => (ligado ? peca : undefined);
 }

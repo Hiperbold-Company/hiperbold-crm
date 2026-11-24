@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { redirect } from "next/navigation";
@@ -102,7 +102,7 @@ export default async function AccountSuspendedPage({
     .map((o) => ({ id: o.organization_id, nome: o.organization_name }));
   const pedidoAberto = administra ? pedidoValido : undefined;
 
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <IdiomaProvider locale={idioma}>

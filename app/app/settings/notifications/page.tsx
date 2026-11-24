@@ -9,7 +9,7 @@ import { PushProntoNesteEndereco } from "./_push-neste-endereco";
 import { TaskReminderPrefs } from "./_tarefas";
 import { SonsDosAvisos } from "./_sons";
 import { ConteudoNaTelaBloqueada } from "./_tela-bloqueada";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +54,7 @@ export default async function NotificationsPage() {
   // padrão vive em `lib/auth/server.ts`), sem reler o `locale` cru.
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
-  const rd = marcaDasConfiguracoes(redesignLigado());
+  const rd = marcaDasConfiguracoes(await redesignNaRequisicao());
   const pushPronto = vapidPronto();
 
   return (

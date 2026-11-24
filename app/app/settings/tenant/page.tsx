@@ -19,7 +19,7 @@ import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { camposDoNegocioDosFunis } from "@/lib/leads/compras-do-contato";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 
 export const dynamic = "force-dynamic";
@@ -73,7 +73,7 @@ export default async function TenantSettingsPage() {
   // "O que a empresa faz" vive onde o onboarding o grava (`onboarding_state.welcome.o_que_faz`).
   const oQueFaz = row?.onboarding_state?.welcome?.o_que_faz;
   const idioma = user.idioma;
-  const rd = marcaDasConfiguracoes(redesignLigado());
+  const rd = marcaDasConfiguracoes(await redesignNaRequisicao());
   // O bloco lido pela MESMA função que o relatório lê (`art15DoControlador`):
   // o que a tela mostra é o que o PDF vai imprimir, inclusive o `null` de quem
   // deixou a alínea em branco.

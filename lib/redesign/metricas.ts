@@ -6,7 +6,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * prefixo `agentes-`.
  *
  * SEM a marca de cliente no topo, de propósito: a página de SERVIDOR usa
- * `marcaDasMetricas(redesignLigado())`, e o componente cliente usa o hook.
+ * `marcaDasMetricas(await redesignNaRequisicao())`, e o componente cliente usa o hook.
  * Este arquivo nunca importa `lib/redesign/chave.ts` (server-only).
  */
 export type PecaDasMetricas =

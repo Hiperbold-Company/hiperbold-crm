@@ -15,7 +15,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * validação ou Turnstile.
  *
  * Este arquivo NUNCA importa `lib/redesign/chave.ts` (server-only). O layout,
- * que é de servidor, lê `redesignLigado()` e passa o booleano a `marcaDeEntrar`.
+ * que é de servidor, lê `await redesignNaRequisicao()` e passa o booleano a `marcaDeEntrar`.
  */
 export type PecaDeEntrar =
   | "pagina"

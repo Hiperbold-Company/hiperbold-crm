@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDaAgenda } from "@/lib/redesign/agenda";
 import { RiskRadarList } from "./_components/RiskRadarList";
 
@@ -19,7 +19,7 @@ export default async function RadarPage() {
   // padrão vive em `lib/auth/server.ts`), sem reler o `locale` cru.
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
-  const rd = marcaDaAgenda(redesignLigado());
+  const rd = marcaDaAgenda(await redesignNaRequisicao());
 
   return (
     <div className="flex h-full flex-col gap-6 md:p-6" data-rd-agenda={rd("radar-tela")}>

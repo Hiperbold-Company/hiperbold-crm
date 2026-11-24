@@ -96,7 +96,7 @@ describe("POST /admin/tenants/[id]/redesign", () => {
 
     expect(h.escritasDiretas).toEqual([]);
     expect(h.audit).toHaveBeenCalledTimes(1);
-    const auditoria = h.audit.mock.calls[0][0] as Record<string, unknown>;
+    const auditoria = h.audit.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(auditoria.action).toBe("tenant.redesign_changed");
     expect(auditoria.organizationId).toBe(TENANT);
     expect(auditoria.actorUserId).toBe(h.ator);

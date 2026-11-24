@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { redirect } from "next/navigation";
@@ -9,7 +9,7 @@ export default async function SupportEndedPage() {
   if (!user) redirect("/login");
   const t = (text: string) => traduzir(text, user.idioma);
   if (!user.support) redirect("/app/inbox");
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
   return <main className="min-h-screen bg-background" data-rd-sistema={rd("pagina")}>
     <ImpersonateBanner ended impersonating={{tenantId: user.support.organization_id,
       tenantName: user.support.name, expiresAt: user.support.expires_at}} />

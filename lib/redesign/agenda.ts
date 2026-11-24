@@ -10,7 +10,7 @@ import { useRedesign } from "@/lib/redesign/contexto";
  * `radar-`.
  *
  * Este arquivo NÃO importa `chave.ts` (é `server-only`). Página de SERVIDOR usa
- * `marcaDaAgenda(redesignLigado())`; componente de cliente usa
+ * `marcaDaAgenda(await redesignNaRequisicao())`; componente de cliente usa
  * `useMarcaDaAgenda()`. Sem `"use client"` de propósito.
  */
 export type PecaDaAgenda =
@@ -41,7 +41,7 @@ export type PecaDaAgenda =
 
 export type MarcaDaAgenda = (peca: PecaDaAgenda) => PecaDaAgenda | undefined;
 
-/** Pura, para página de servidor: `marcaDaAgenda(redesignLigado())`. */
+/** Pura, para página de servidor: `marcaDaAgenda(await redesignNaRequisicao())`. */
 export function marcaDaAgenda(ligado: boolean): MarcaDaAgenda {
   return (peca) => (ligado ? peca : undefined);
 }

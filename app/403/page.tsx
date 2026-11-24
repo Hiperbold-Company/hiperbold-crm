@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export default async function ForbiddenPage() {
   } = await supabase.auth.getUser();
   const idioma = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
-  const rd = marcaDoSistema(redesignLigado());
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <IdiomaProvider locale={idioma}>

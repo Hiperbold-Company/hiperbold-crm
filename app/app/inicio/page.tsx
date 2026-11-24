@@ -19,7 +19,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { carregarPrimeirosPassos } from "@/lib/inicio/carregar";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoInicio } from "@/lib/redesign/inicio";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
@@ -40,7 +40,7 @@ export default async function InicioPage() {
 
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
-  const rd = marcaDoInicio(redesignLigado());
+  const rd = marcaDoInicio(await redesignNaRequisicao());
   const { passos, contagem } = await carregarPrimeirosPassos(createAdminClient(), activeOrg.orgId, user.id);
 
   // Os obrigatórios cumpridos: o checklist vira barra lateral e a área principal é o painel.

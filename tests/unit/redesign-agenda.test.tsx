@@ -160,7 +160,7 @@ describe("redesign da Agenda e do Radar: ligado marca as peças", () => {
 describe("as peças fora do jsdom deste arquivo usam a mesma marca condicional", () => {
   const ARQUIVOS: Record<string, { hook: string; pecas: string[] }> = {
     "app/app/agenda/_client.tsx": { hook: "useMarcaDaAgenda()", pecas: ["tela", "cabecalho", "barra", "visoes"] },
-    "app/app/radar/page.tsx": { hook: "marcaDaAgenda(redesignLigado())", pecas: ["radar-tela", "radar-cabecalho"] },
+    "app/app/radar/page.tsx": { hook: "marcaDaAgenda(await redesignNaRequisicao())", pecas: ["radar-tela", "radar-cabecalho"] },
   };
   it.each(Object.entries(ARQUIVOS))("%s", (arquivo, { hook, pecas }) => {
     const fonte = fs.readFileSync(path.join(process.cwd(), arquivo), "utf8");

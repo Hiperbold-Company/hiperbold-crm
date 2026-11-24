@@ -19,7 +19,7 @@ import { destinoSeJaConcluido } from "@/lib/onboarding/destino";
 import { compraPeloClienteDisponivel } from "@/lib/onboarding/precisa-pagar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
@@ -70,7 +70,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // de reforço do upstream.
   const logoDaInstalacao = marcaDoIcone.logoUrl;
 
-  const rd = marcaDeEntrar(redesignLigado());
+  const rd = marcaDeEntrar(await redesignNaRequisicao());
 
   return (
     <IdiomaProvider locale={idiomaDaTela(user.idioma)}>

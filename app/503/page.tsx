@@ -1,4 +1,4 @@
-import { redesignLigado } from "@/lib/redesign/chave";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,8 @@ import { traduzir } from "@/lib/i18n/dicionario";
 // sessão para consultar, fica no idioma padrão da instalação.
 const idioma = IDIOMA_PADRAO;
 
-export default function ServiceUnavailablePage() {
-  const rd = marcaDoSistema(redesignLigado());
+export default async function ServiceUnavailablePage() {
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8" data-rd-sistema={rd("pagina")}>
