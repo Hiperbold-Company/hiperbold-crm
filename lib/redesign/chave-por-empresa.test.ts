@@ -19,14 +19,20 @@ const h = vi.hoisted(() => ({
   falharOrg: false,
   falharLeitura: false,
   leituras: 0,
+  caminho: "/app/inbox" as string | null,
+  leuUsuario: 0,
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers(h.caminho === null ? {} : { "x-pathname": h.caminho }),
+}));
 vi.mock("@/lib/env", () => ({
   env: new Proxy({}, { get: (_t, k) => (k === "REDESIGN_HIPERBOLD" ? h.envValor : undefined) }),
 }));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: async () => {
+    h.leuUsuario += 1;
     if (h.falharUsuario) throw new Error("sessão quebrou");
     return h.usuario;
   },
@@ -62,6 +68,8 @@ beforeEach(() => {
   h.falharOrg = false;
   h.falharLeitura = false;
   h.leituras = 0;
+  h.caminho = "/app/inbox";
+  h.leuUsuario = 0;
 });
 
 describe("redesignDaEmpresa (regra pura sobre settings)", () => {
@@ -124,5 +132,32 @@ describe("redesignNaRequisicao (env × empresa × sessão × falha)", () => {
     h.settings = { redesign: { ligado: true } };
     preparar();
     await expect(redesignNaRequisicao()).resolves.toBe(false);
+  });
+
+  // Telas públicas: o proxy NÃO renova a sessão nelas (`isPublicPath` → segue
+  // direto). Ler a sessão num Server Component dessas telas pode girar o
+  // refresh token sem conseguir gravar o cookie novo e deslogar a pessoa depois.
+  // Por isso, nelas vale só a chave geral, e a sessão nem é lida.
+  it.each(["/login", "/legal/privacy", "/403"])(
+    "tela pública (%s) → só a chave geral, sem ler a sessão",
+    async (caminho) => {
+      h.caminho = caminho;
+      h.settings = { redesign: { ligado: true } };
+      expect(await redesignNaRequisicao()).toBe(false);
+      expect(h.leuUsuario).toBe(0);
+    },
+  );
+
+  it("tela pública com a chave geral ligada → ligado", async () => {
+    h.caminho = "/login";
+    h.envValor = "ligado";
+    expect(await redesignNaRequisicao()).toBe(true);
+  });
+
+  it("sem o cabeçalho de caminho do proxy → desligado, sem ler a sessão", async () => {
+    h.caminho = null;
+    h.settings = { redesign: { ligado: true } };
+    expect(await redesignNaRequisicao()).toBe(false);
+    expect(h.leuUsuario).toBe(0);
   });
 });
