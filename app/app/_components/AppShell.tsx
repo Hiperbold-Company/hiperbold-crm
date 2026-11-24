@@ -14,6 +14,7 @@ import { estiloDaReserva, useOcupacaoDoRodape } from "@/lib/ui/rodape-ocupado";
 import { ProvedorDaCentralDeAjuda } from "@/lib/ajuda/contexto";
 import { MenuLateral } from "@/components/shell/redesign/MenuLateral";
 import { BarraDaArea } from "@/components/shell/redesign/BarraDaArea";
+import { ColunaDaIA } from "@/components/shell/redesign/ColunaDaIA";
 import { BarraInferiorNova } from "@/components/shell/redesign/BarraInferiorNova";
 import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
 
@@ -68,6 +69,15 @@ export function AppShell({
   // o `p-6` inteiro é rodapé. Com o painel de chamada na tela, é ele que
   // decide a faixa que o conteúdo perde, e ninguém mais mede isso por fora.
   const ocupacaoDoRodape = useOcupacaoDoRodape();
+  const principal = (classe: string) => (
+    <main
+      className={classe}
+      style={estiloDaReserva(ocupacaoDoRodape)}
+      data-rodape-ocupado={ocupacaoDoRodape}
+    >
+      {children}
+    </main>
+  );
   return (
     /*
       `min-h-dvh`, e não `min-h-screen`: `100vh` no celular é a janela com a
@@ -135,13 +145,14 @@ export function AppShell({
           tela cheia o fim do conteúdo ficava atrás do indicador de home — e com
           peça fixa quem cobre isso é o terceiro termo do `max()` do contrato.
         */}
-            <main
-              className="flex-1 overflow-auto p-4 pb-area-segura sm:p-6"
-              style={estiloDaReserva(ocupacaoDoRodape)}
-              data-rodape-ocupado={ocupacaoDoRodape}
-            >
-              {children}
-            </main>
+            {redesign ? (
+              <div className="flex min-h-0 flex-1">
+                <ColunaDaIA />
+                {principal("min-w-0 flex-1 overflow-auto p-4 pb-area-segura sm:p-6")}
+              </div>
+            ) : (
+              principal("flex-1 overflow-auto p-4 pb-area-segura sm:p-6")
+            )}
           </div>
           {/*
         A BARRA DE ABAS DO CELULAR, irmã do `<main>` e não filha dele.

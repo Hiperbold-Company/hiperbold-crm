@@ -204,7 +204,7 @@ describe("gruposDaIA — a coluna lateral da IA (Montar, Ensinar, Acompanhar)", 
 
 describe("cerca — nenhuma porta fantasma", () => {
   it("todo caminho declarado nas áreas existe no catálogo", () => {
-    const doCatalogo = new Set(NAV_CATALOG.map((d) => d.href));
+    const doCatalogo = new Set<string>(NAV_CATALOG.map((d) => d.href));
     const declarados = AREAS_DO_V49.flatMap((a) => a.abas);
     const fantasmas = declarados.filter((h) => !doCatalogo.has(h));
     expect(fantasmas).toEqual([]);

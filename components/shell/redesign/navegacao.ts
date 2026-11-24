@@ -3,6 +3,16 @@ import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import {
+  areaDaTela,
+  abasDaAreaV49,
+  areasDoMenu,
+  caminhoNoCatalogo,
+  estaEm,
+  gruposDaIA,
+  type AreaDoMenu,
+  type AreaV49,
+} from "@/lib/redesign/areas";
+import {
   GRUPO_NO_RODAPE,
   NAV_GROUPS,
   searchable,
@@ -26,6 +36,12 @@ export interface NavegacaoDaMoldura {
   rodape: NavGroup["hub"] | undefined;
   /** Inventário completo ("Mais"): todo destino visível, por grupo, com o hub. */
   todas: Array<{ group: NavGroup; items: NavDestination[] }>;
+  /** As áreas do menu (v49), cada uma com o destino da primeira aba visível. */
+  areas: Array<AreaDoMenu<NavDestination>>;
+  /** A área da tela atual, quando ela está numa. */
+  area: AreaV49 | null;
+  /** Montar / Ensinar / Acompanhar, para a coluna da IA. */
+  gruposDaIA: Array<{ rotulo: string; itens: NavDestination[] }>;
   /** O destino em que a pessoa está, pelo prefixo mais longo. */
   atual: NavDestination | undefined;
   /** O nome para a faixa do celular: o da tela atual; em Configurações sem porta própria, "Configurações". */
@@ -35,26 +51,7 @@ export interface NavegacaoDaMoldura {
   pathname: string;
 }
 
-/** `/app/inbox` vale para `/app/inbox/123`, mas não para `/app/inboxes`. */
-export function estaEm(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-/**
- * Telas que o catálogo não lista com o próprio caminho, mas que pertencem a um
- * destino dele: o quadro de um funil (`/app/pipelines/<id>`) é o Pipeline.
- * Sem isto a moldura não acha a tela atual e, no celular, a faixa fica sem nome.
- */
-const CAMINHOS_DE_OUTRO_DESTINO: ReadonlyArray<readonly [string, string]> = [
-  ["/app/pipelines", "/app/kanban"],
-];
-
-export function caminhoNoCatalogo(pathname: string): string {
-  for (const [de, para] of CAMINHOS_DE_OUTRO_DESTINO) {
-    if (estaEm(pathname, de)) return para;
-  }
-  return pathname;
-}
+export { caminhoNoCatalogo, estaEm };
 
 /**
  * A aba da tela atual: a de caminho mais longo que contém a tela. Sem a
@@ -112,9 +109,23 @@ export function useNavegacaoDaMoldura(): NavegacaoDaMoldura {
 
   const titulo = tituloDaTela(pathname, atual);
 
-  const abasDaArea = atual
+  const area = areaDaTela(pathname, visiveis);
+  const abasDaArea = area
+    ? abasDaAreaV49(area, visiveis)
+    : atual
     ? visiveis.filter((d) => d.group === atual.group && (d.section ?? "") === (atual.section ?? ""))
     : [];
 
-  return { itens, rodape, todas, atual, titulo, abasDaArea, pathname };
+  return {
+    itens,
+    rodape,
+    todas,
+    atual,
+    titulo,
+    abasDaArea,
+    pathname,
+    areas: areasDoMenu(visiveis),
+    area,
+    gruposDaIA: gruposDaIA(visiveis),
+  };
 }

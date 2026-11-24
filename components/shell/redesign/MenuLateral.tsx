@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { CartaoDaEmpresa, MarcaDoMenu } from "./MarcaECartaoDaEmpresa";
 import { MenuDoUsuarioNovo } from "./MenuDoUsuarioNovo";
-import { caminhoNoCatalogo, estaEm, useNavegacaoDaMoldura } from "./navegacao";
+import { useNavegacaoDaMoldura } from "./navegacao";
 import { TodasAsSecoes } from "./TodasAsSecoes";
 
 /** Item do trilho: ícone com rótulo curto embaixo (recolhido) ou em linha (aberto). */
@@ -79,15 +79,16 @@ export function MenuLateral({ collapsed }: { collapsed: boolean }) {
 
       <nav aria-label={t("Navegação principal")} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         <ul className="flex flex-col gap-0.5">
-          {nav.itens.map((item) => {
+          {nav.areas.map((area) => {
+            const item = area.primeira;
             const Icone = item.icon;
-            const ativo = estaEm(caminhoNoCatalogo(nav.pathname), item.href);
+            const ativo = nav.area?.id === area.id;
             return (
-              <li key={item.href}>
+              <li key={area.id}>
                 <Link
-                  href={item.href}
-                  {...intencao(item.href)}
-                  title={aberto ? undefined : t(item.label)}
+                  href={area.href}
+                  {...intencao(area.href)}
+                  title={aberto ? undefined : t(area.rotulo)}
                   aria-current={ativo ? "page" : undefined}
                   className={classeDoItem(aberto, ativo)}
                 >
@@ -97,7 +98,7 @@ export function MenuLateral({ collapsed }: { collapsed: boolean }) {
                       <ConnectionHealthDot className="absolute -top-1 -right-1.5" />
                     )}
                   </span>
-                  <span className={cn("max-w-full truncate", aberto && "flex-1")}>{t(item.label)}</span>
+                  <span className={cn("max-w-full truncate", aberto && "flex-1")}>{t(area.rotulo)}</span>
                   {aberto ? (
                     <Contador item={item} compacto={false} />
                   ) : (

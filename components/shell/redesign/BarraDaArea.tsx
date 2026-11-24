@@ -47,7 +47,9 @@ export function BarraDaArea({ ajudaBase = null }: { ajudaBase?: string | null })
   const t = useT();
   const nav = useNavegacaoDaMoldura();
   const intencao = usePrefetchPorIntencao();
-  const abas = nav.abasDaArea.length >= 2 ? nav.abasDaArea : [];
+  // Na IA, no desktop, quem navega é a coluna lateral (Montar/Ensinar/Acompanhar).
+  const daIA = nav.area?.id === "ia";
+  const abas = !daIA && nav.abasDaArea.length >= 2 ? nav.abasDaArea : [];
   const faixa = useRef<HTMLElement>(null);
   const [mascara, setMascara] = useState<string | undefined>(undefined);
   // Uma aba só: a de caminho mais longo que contém a tela atual. Sem isto,
