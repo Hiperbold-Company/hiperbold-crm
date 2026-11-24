@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { usePrefetchPorIntencao } from "@/hooks/navigation/prefetchPorIntencao";
-import { ArrowRight, MagnifyingGlass } from "@/lib/ui/icons";
+import { ArrowRight, CaretRight, MagnifyingGlass } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 import { estaEm, type NavegacaoDaMoldura } from "./navegacao";
@@ -20,12 +20,19 @@ function semAcento(s: string): string {
  * `searchable()` (a projeção do ⌘K: todo destino que este papel vê) e do hub
  * de cada grupo — nenhuma porta que o produto mostra fica de fora, e nenhuma
  * que ele esconde aparece.
+ *
+ * `celular` muda só o desenho (o "Mais" do celular no v49): cada grupo vira um
+ * cartão com linhas de 48px, divisória fina e chevron. A lista rola numa região
+ * própria (teto de 55% da tela), para a conta, o tema, o idioma e o "Sair", que
+ * vêm depois na gaveta, continuarem a um gesto. Destinos, ordem e busca são os
+ * mesmos.
  */
 export function TodasAsSecoes({
   todas,
   pathname,
   onNavigate,
-}: Pick<NavegacaoDaMoldura, "todas" | "pathname"> & { onNavigate?: () => void }) {
+  celular = false,
+}: Pick<NavegacaoDaMoldura, "todas" | "pathname"> & { onNavigate?: () => void; celular?: boolean }) {
   const t = useT();
   const intencao = usePrefetchPorIntencao();
   const [busca, setBusca] = useState("");
@@ -41,6 +48,79 @@ export function TodasAsSecoes({
       };
     })
     .filter((g) => g.items.length > 0 || g.hub);
+
+  if (celular) {
+    return (
+      <div className="flex shrink-0 flex-col gap-3">
+        <div className="relative">
+          <MagnifyingGlass
+            size={16}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            aria-label={t("Buscar seção")}
+            placeholder={t("Buscar seção…")}
+            className="h-11 w-full rounded-xl border border-border-strong bg-surface pr-3 pl-9 text-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        <div className="flex max-h-[55dvh] flex-col gap-4 overflow-y-auto overscroll-contain">
+        {grupos.length === 0 && (
+          <p className="px-1 py-2 text-sm text-muted-foreground">{t("Nenhuma seção com esse nome.")}</p>
+        )}
+        {grupos.map(({ group, items, hub }) => (
+          <section key={group.id} className="flex shrink-0 flex-col gap-1.5" aria-labelledby={`todas-${group.id}`}>
+            <h3
+              id={`todas-${group.id}`}
+              className="block px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+            >
+              {t(group.label)}
+            </h3>
+            <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+              {items.map((d) => {
+                const Icone = d.icon;
+                const aqui = estaEm(pathname, d.href);
+                return (
+                  <Link
+                    key={d.href}
+                    href={d.href}
+                    {...intencao(d.href)}
+                    onClick={onNavigate}
+                    aria-current={aqui ? "page" : undefined}
+                    className={cn(
+                      "flex min-h-12 items-center gap-3 border-b border-border px-4 py-2 text-base last:border-b-0",
+                      aqui ? "bg-accent-soft font-semibold text-accent" : "text-foreground active:bg-surface-elevated",
+                    )}
+                  >
+                    <Icone size={20} aria-hidden className={aqui ? undefined : "text-muted-foreground"} />
+                    <span className="min-w-0 flex-1 truncate">{t(d.label)}</span>
+                    <CaretRight size={16} aria-hidden className="shrink-0 text-muted-foreground" />
+                  </Link>
+                );
+              })}
+              {hub && (
+                <Link
+                  href={hub.href}
+                  {...intencao(hub.href)}
+                  onClick={onNavigate}
+                  aria-current={pathname === hub.href ? "page" : undefined}
+                  className="flex min-h-12 items-center gap-3 border-b border-border px-4 py-2 text-base text-muted-foreground last:border-b-0 active:bg-surface-elevated"
+                >
+                  <ArrowRight size={20} aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{t(hub.label)}</span>
+                  <CaretRight size={16} aria-hidden className="shrink-0" />
+                </Link>
+              )}
+            </div>
+          </section>
+        ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

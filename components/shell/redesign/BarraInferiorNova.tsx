@@ -18,7 +18,7 @@ import { useBaseDaCentralDeAjuda } from "@/lib/ajuda/contexto";
 import { IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import type { NavDestination } from "@/lib/navigation/registry";
 import { usePecaDoRodape, type PecaDoRodape } from "@/lib/ui/rodape-ocupado";
-import { DotsThree, Question, ShieldCheck, SignOut } from "@/lib/ui/icons";
+import { CaretRight, DotsThree, Question, ShieldCheck, SignOut } from "@/lib/ui/icons";
 import { iniciaisDoNome } from "@/lib/ui/iniciais";
 import { cn } from "@/lib/utils";
 
@@ -160,7 +160,7 @@ function PainelMaisCelular() {
           <Link
             href="/app/settings/profile"
             onClick={fechar}
-            className="flex min-h-18 items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-2.5"
+            className="flex min-h-18 shrink-0 items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-2.5"
           >
             <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-foreground">
               {iniciais}
@@ -171,13 +171,12 @@ function PainelMaisCelular() {
                 {[t("Meu perfil"), activeOrg?.name].filter(Boolean).join(" · ")}
               </span>
             </span>
+            <CaretRight size={16} className="ml-auto shrink-0 text-muted-foreground" aria-hidden />
           </Link>
 
-          <div className="flex min-h-80 flex-col overflow-hidden rounded-2xl border border-border bg-surface pt-3">
-            <TodasAsSecoes todas={nav.todas} pathname={nav.pathname} onNavigate={fechar} />
-          </div>
+          <TodasAsSecoes todas={nav.todas} pathname={nav.pathname} onNavigate={fechar} celular />
 
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+          <div className="shrink-0 overflow-hidden rounded-2xl border border-border bg-surface">
             {centralDeAjuda && (
               <a href={centralDeAjuda} target="_blank" rel="noopener noreferrer" className={linha}>
                 <Question size={22} className="text-muted-foreground" aria-hidden />
@@ -194,6 +193,7 @@ function PainelMaisCelular() {
               >
                 <ShieldCheck size={22} className="text-muted-foreground" aria-hidden />
                 <span className="flex-1">{t("Modo administrador")}</span>
+                <CaretRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
               </Link>
             )}
             {(user.organizations.length > 1 || user.is_platform_admin) && (
@@ -206,8 +206,8 @@ function PainelMaisCelular() {
             )}
           </div>
 
-          <section className="flex flex-col gap-2">
-            <h3 className="block text-sm font-semibold text-muted-foreground">{t("Tema")}</h3>
+          <section className="flex shrink-0 flex-col gap-2">
+            <h3 className="block px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t("Tema")}</h3>
             <div role="radiogroup" aria-label={t("Tema")} className="flex gap-1 rounded-xl bg-surface-elevated p-1">
               {TEMAS.map((tema) => (
                 <button
@@ -218,7 +218,7 @@ function PainelMaisCelular() {
                   onClick={() => setTheme(tema.valor)}
                   suppressHydrationWarning
                   className={cn(
-                    "min-h-10 flex-1 rounded-lg text-sm",
+                    "min-h-11 flex-1 rounded-lg text-sm",
                     theme === tema.valor ? "bg-surface font-semibold text-foreground shadow-sm" : "text-muted-foreground",
                   )}
                 >
@@ -228,8 +228,8 @@ function PainelMaisCelular() {
             </div>
           </section>
 
-          <section className="flex flex-col gap-2">
-            <h3 id="mais-idioma" className="block text-sm font-semibold text-muted-foreground">
+          <section className="flex shrink-0 flex-col gap-2">
+            <h3 id="mais-idioma" className="block px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               {t("Idioma")}
             </h3>
             <div
@@ -247,7 +247,7 @@ function PainelMaisCelular() {
                   data-testid={`idioma-${codigo}`}
                   aria-current={codigo === idioma}
                   className={cn(
-                    "min-h-10 flex-1 rounded-lg px-3 text-sm",
+                    "min-h-11 flex-1 rounded-lg px-3 text-sm",
                     codigo === idioma ? "bg-surface font-semibold text-foreground shadow-sm" : "text-muted-foreground",
                   )}
                 >
@@ -265,7 +265,7 @@ function PainelMaisCelular() {
                 await signOut();
               })
             }
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface text-base font-semibold text-error"
+            className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-base font-semibold text-error"
           >
             <SignOut size={18} aria-hidden />
             {t("Sair")}

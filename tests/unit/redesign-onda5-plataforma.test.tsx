@@ -387,11 +387,15 @@ describe("redesign: onda5 plataforma, CSS escopado pela chave", () => {
     return { regras, erros: out };
   }
 
-  it("o bloco existe, vem no fim do arquivo e todo seletor começa por [data-redesign=\"ligado\"]", () => {
+  it("o bloco existe, só a passada do celular vem depois dele, e todo seletor começa por [data-redesign=\"ligado\"]", () => {
     const r = erros(bloco(CSS));
     expect(r.regras).toBeGreaterThan(15);
     expect(r.erros).toEqual([]);
-    expect(CSS.slice(CSS.indexOf(FIM)).split("\n").filter((l) => l.trim()).length).toBe(1);
+    // Depois dele, só o bloco da passada do celular (parte 3 da onda 5), que se
+    // declara o último do arquivo no próprio teste.
+    const depois = CSS.slice(CSS.indexOf(FIM)).split("\n").filter((l) => l.trim());
+    expect(depois[0]).toContain(FIM);
+    expect(depois[1]).toContain("/* redesign: onda5 celular ───");
   });
 
   it("controle negativo: a régua reprova seletor sem escopo, !important e cor literal", () => {

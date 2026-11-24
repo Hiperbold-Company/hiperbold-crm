@@ -7536,3 +7536,124 @@
   }
 }
 /* redesign: onda5 plataforma — fim ─────────────────────── */
+
+/* redesign: onda5 celular ───────────────────────────────
+   A passada no celular (390px) do protótipo v49. Só o corte do celular
+   (`max-width: 767px`, o mesmo do `md:hidden` da barra de abas): nada aqui
+   muda o computador. TODA regra começa por `[data-redesign="ligado"]` e mora
+   dentro do `@media` — `tests/unit/redesign-onda5-celular.test.tsx` cobra.
+
+   A barra de abas e o "Mais" (componentes que só existem com a chave ligada)
+   foram desenhados no próprio JSX; aqui ficam as telas que a chave desligada
+   também usa, pelas marcas `data-rd-*` que elas já têm.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Índice de Configurações: as seções viram a lista agrupada do "Mais" —
+     título da seção em versalete cinza, um cartão por seção, linhas de 52px
+     com ícone, rótulo, a frase de apoio numa linha só e o chevron. */
+  [data-redesign="ligado"] [data-rd-configuracoes="indice"] {
+    gap: 20px;
+    padding: 0;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="secao-do-indice"] > h2 {
+    margin-block-end: 8px;
+    padding-inline: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="grade-de-atalhos"] {
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-surface);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] {
+    border-radius: 0;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] + [data-rd-configuracoes="atalho"] {
+    border-top: 1px solid var(--color-border);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"]:focus-visible {
+    box-shadow: inset 0 0 0 3px var(--color-accent-soft);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] [data-slot="card"] {
+    align-items: center;
+    min-height: 52px;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] [data-slot="card"] > svg {
+    margin-top: 0;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] [data-slot="card"] > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* O chevron é desenho (borda girada), não texto: o leitor de tela não o lê. */
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] [data-slot="card"]::after {
+    content: "";
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-inline: 4px 2px;
+    border-top: 1.5px solid var(--color-text-muted);
+    border-right: 1.5px solid var(--color-text-muted);
+    transform: rotate(45deg);
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] h3 {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="atalho"] p {
+    margin-top: 1px;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Cabeçalho das telas no celular: título de 20px em 600, frase de apoio
+     menor. O nome da tela já está na barra de cima; o título da página fica
+     (é o h1), só que não grita. */
+  [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] h1,
+  [data-redesign="ligado"] [data-rd-contatos="titulo"],
+  [data-redesign="ligado"] [data-rd-inicio="tarefas-cabecalho"] h1,
+  [data-redesign="ligado"] [data-rd-agenda="cabecalho"] h1,
+  [data-redesign="ligado"] [data-rd-metricas="cabecalho"] > h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.25;
+  }
+  [data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > h1,
+  [data-redesign="ligado"] [data-rd-pipeline="cabecalho"] > [data-slot="select-trigger"] {
+    font-weight: 600;
+  }
+  [data-redesign="ligado"] [data-rd-configuracoes="cabecalho"] > p,
+  [data-redesign="ligado"] [data-rd-contatos="subtitulo"],
+  [data-redesign="ligado"] [data-rd-inicio="tarefas-cabecalho"] p {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  /* Pílulas segmentadas: rolam na horizontal sem quebrar linha e sem barra de
+     rolagem à vista. A altura de toque já é do gatilho (`min-h-11` do primitivo
+     `Tabs`), não de pseudo-elemento: `overflow-x: auto` corta o eixo vertical e
+     cortaria a área estendida (caso 4 de `celular-toque-nos-controles.spec.ts`). */
+  [data-redesign="ligado"] [data-rd-ia="pilulas"][data-slot="tabs-list"],
+  [data-redesign="ligado"] [data-rd-ia="abas"][data-slot="tabs-list"] {
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  [data-redesign="ligado"] [data-rd-ia="pilulas"][data-slot="tabs-list"]::-webkit-scrollbar,
+  [data-redesign="ligado"] [data-rd-ia="abas"][data-slot="tabs-list"]::-webkit-scrollbar {
+    display: none;
+  }
+}
+/* redesign: onda5 celular — fim ─────────────────────── */
