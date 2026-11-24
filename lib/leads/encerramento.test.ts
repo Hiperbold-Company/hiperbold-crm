@@ -9,6 +9,10 @@ vi.mock("@/lib/leads/activity-write-failure", () => ({
   registraFalhaDeAtividade: vi.fn(async () => undefined),
 }));
 
+import { audit } from "@/lib/audit";
+import { emitLeadActivity } from "@/lib/leads/activity-emitter";
+import { loseLeadSchema } from "@/lib/schemas/leads";
+
 import { encerraDemanda } from "./encerramento";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -269,6 +273,72 @@ describe("encerraDemanda", () => {
         motivo: "Lead optou em outra solução",
       }),
     ).rejects.toMatchObject({ code: "lost_reason_invalid", status: 422 });
+  });
+
+  // ── "OUTRO MOTIVO" COM DETALHE (CBEXS) ─────────────────────────────────────
+  it("'Outro' + detalhe: lost_reason fica `other`, o detalhe vai à timeline (reason + payload) e ao audit — sem passar pelo vocabulário", async () => {
+    // Funil com lista própria: o texto livre NÃO pode ser o `lost_reason`.
+    const db = makeDb({
+      leads: [baseLead()],
+      stages: baseStages(),
+      pipelines: [{ id: PIPELINE, organization_id: ORG, settings: { lost_reasons: ["Sem orçamento"] } }],
+    });
+
+    await encerraDemanda(db.client as never, ctx, {
+      leadId: LEAD,
+      desfecho: "lost",
+      motivo: "other",
+      detalheDoMotivo: "  Cliente mudou de ideia  ",
+    });
+
+    expect(db.updates[0]).toMatchObject({ lost_reason: "other" });
+    expect(JSON.stringify(db.updates)).not.toContain("Cliente mudou de ideia");
+    expect(vi.mocked(emitLeadActivity).mock.calls[0]![1]).toMatchObject({
+      type: "demand_closed",
+      reason: "Perdido — Outro motivo: Cliente mudou de ideia",
+      payload: { desfecho: "lost", lost_reason_detail: "Cliente mudou de ideia" },
+    });
+    expect(vi.mocked(audit).mock.calls[0]![0].metadata).toMatchObject({
+      lost_reason: "other",
+      lost_reason_detail: "Cliente mudou de ideia",
+    });
+  });
+
+  it("'Outro' SEM detalhe segue como antes: `other`, linha 'Perdido — other', sem chave de detalhe", async () => {
+    const db = makeDb({ leads: [baseLead()], stages: baseStages() });
+    await encerraDemanda(db.client as never, ctx, { leadId: LEAD, desfecho: "lost", motivo: "other" });
+
+    expect(db.updates[0]).toMatchObject({ lost_reason: "other" });
+    const chamada = vi.mocked(emitLeadActivity).mock.calls[0]![1];
+    expect(chamada.reason).toBe("Perdido — other");
+    expect(chamada.payload).not.toHaveProperty("lost_reason_detail");
+  });
+
+  it("motivo da lista continua igual — e um detalhe mandado junto é ignorado", async () => {
+    const db = makeDb({ leads: [baseLead()], stages: baseStages() });
+    await encerraDemanda(db.client as never, ctx, {
+      leadId: LEAD,
+      desfecho: "lost",
+      motivo: "price",
+      detalheDoMotivo: "texto que o motivo não pediu",
+    });
+
+    expect(db.updates[0]).toMatchObject({ lost_reason: "price" });
+    const chamada = vi.mocked(emitLeadActivity).mock.calls[0]![1];
+    expect(chamada.reason).toBe("Perdido — price");
+    expect(chamada.payload).not.toHaveProperty("lost_reason_detail");
+  });
+
+  it("o servidor (Zod) recusa detalhe com mais de 500 caracteres e apara o resto", () => {
+    expect(
+      loseLeadSchema.safeParse({ lost_reason: "other", lost_reason_detail: "x".repeat(501) }).success,
+    ).toBe(false);
+    expect(
+      loseLeadSchema.safeParse({ lost_reason: "other", lost_reason_detail: "x".repeat(500) }).success,
+    ).toBe(true);
+    expect(
+      loseLeadSchema.parse({ lost_reason: "other", lost_reason_detail: "  oi  " }).lost_reason_detail,
+    ).toBe("oi");
   });
 
   // ── CAMPOS OBRIGATÓRIOS E MOTIVO DE GANHO (issue #1536) ────────────────────

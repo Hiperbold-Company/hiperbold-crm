@@ -13287,6 +13287,9 @@ export const DICIONARIO: Traducoes = {
   "Para usar um motivo que não está aqui, cadastre em CRM › Ver tudo em CRM › Etapas do funil.": {
     es: "Para usar un motivo que no está aquí, agrégalo en CRM › Ver todo en CRM › Etapas del embudo.",
   },
+  "O detalhe fica na linha do tempo do negócio. Nos relatórios, a perda conta como “Outro motivo”.": {
+    es: "El detalle queda en la línea de tiempo del negocio. En los informes, la pérdida cuenta como “Otro motivo”.",
+  },
   "Ex: Cliente desistiu por X motivo": { es: "Ej: El cliente desistió por X motivo" },
   Confirmar: { es: "Confirmar" },
   "Lead criado": { es: "Lead creado" },
