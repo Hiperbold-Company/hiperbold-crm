@@ -19,6 +19,12 @@ Toda pendência do fork da Hiperbold (técnica, conta, custo, terceiro) fica aqu
   - **Casos e Execuções da IA:**
     - números do topo (casos no mês, % que terminaram em venda, % que passaram para humano; execuções no mês, % que deram certo, falharam hoje);
     - as tabelas com Assunto, Desfecho, Duração e Resultado (hoje Casos é lista com detalhe ao lado e Execuções é lista explicada).
+    - busca por texto nas duas telas.
+  - **Em várias telas:**
+    - interruptor liga/desliga também no cartão do roteador e do follow-up;
+    - "N agentes" / "N réguas na lista" ao lado dos filtros;
+    - faixas informativas azuis com a explicação da tela ("Uma régua é…", "Cada conexão usa um roteador…");
+    - rótulos do v49 ("Novo agente", "Nova régua", "Ligado/Desligado" em vez de "Criar novo", "Novo fluxo", "Ativo/Desativado"): troca de texto do produto, decidir junto com a central de ajuda.
 - [ ] **D-244 · Redesign onda 3 (Conversas, Pipeline, Contatos): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 3 foi só visual.
   - **Pipeline:** resumo "N em aberto · R$ total" no cabeçalho do funil; filtro pronto "Parados há mais de 7 dias" (o CRM tem "Apenas atrasados", que é outra regra); "Mais filtros" recolhendo os filtros raros (hoje viram uma linha que rola de lado); "Novo negócio" e as visões como no v49, mas sem o resumo.
   - **Contatos:** filtros prontos "Só clientes" e "Com mensagem sem ler"; rodapé paginado "Página 1 de 12 · 284 contatos" (o CRM carrega rolando); na ficha, os cartões "Negócios" (com etapa e valor) e "Memória do contato" na coluna da direita.
