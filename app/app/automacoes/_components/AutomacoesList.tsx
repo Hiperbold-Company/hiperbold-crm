@@ -27,6 +27,8 @@ import {
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
+import { dataDaUltimaExecucao } from "@/lib/automacoes/data-da-lista";
+import { useFusoDaOrganizacao } from "@/hooks/auth/AuthProvider";
 import { ErroComRetry } from "@/components/empty/ErroComRetry";
 import { FlowArrow, Plus } from "@/lib/ui/icons";
 import { AcoesNoCelular } from "@/components/shell/AcoesNoCelular";
@@ -75,6 +77,7 @@ export function AutomacoesList({
   const t = useT();
   const rd = useMarcaDasAutomacoes();
   const idioma = useTagDeIdioma();
+  const fuso = useFusoDaOrganizacao();
   const { data, isError, refetch, isFetching } = useFollowupFlows({ initialData, surface: "automacao" });
   const [servidorFalhou, setServidorFalhou] = useState(falhouNoServidor);
   const [aberto, setAberto] = useState(false);
@@ -93,8 +96,7 @@ export function AutomacoesList({
     [data, followups, regras, ultimasExecucoes],
   );
   const lista = filtrarLista(todas, tipo, busca);
-  const data_ = (iso: string) =>
-    new Date(iso).toLocaleDateString(idioma, { day: "2-digit", month: "2-digit", year: "numeric" });
+  const data_ = (iso: string) => dataDaUltimaExecucao(iso, idioma, fuso);
 
   const botaoNova = (
     <div className="flex w-full items-start gap-2 sm:w-auto">
