@@ -69,7 +69,7 @@ vi.mock("@/components/contacts/TimelineView", () => ({ TimelineView: () => null 
 vi.mock("@/components/contacts/AnonymizeDialog", () => ({ AnonymizeDialog: () => null }));
 vi.mock("@/components/contacts/PropostasDeDado", () => ({ PropostasDeDado: () => null }));
 vi.mock("@/components/kanban/ConversaNoDossie", () => ({
-  ConversaNoDossie: () => <a href="/app/inbox?id=x" data-stub="conversa">Abrir conversa no Chat do CRM</a>,
+  ConversaNoDossie: () => <span data-stub="conversa">Abrir conversa no Chat do CRM</span>,
 }));
 vi.mock("@/components/voice/DialButton", () => ({ DialButton: () => null }));
 
@@ -154,7 +154,7 @@ describe("onda 3 — Contatos, chave DESLIGADA", () => {
   });
 });
 
-describe.skip("onda 3 — Contatos, chave LIGADA", () => {
+describe("onda 3 — Contatos, chave LIGADA", () => {
   it("lista: ações raras no 'Mais ações', as do dia a dia à vista, e o mesmo conjunto de ações", async () => {
     const user = userEvent.setup();
     const desligada = montar(<ContactsListClient />, false);

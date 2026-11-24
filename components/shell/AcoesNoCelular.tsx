@@ -35,10 +35,21 @@ interface Props {
  * (ex.: Exportar) que não se aninha dentro de outro menu sem virar duas linhas.
  */
 export function AcoesNoCelular({ children, acoes }: Props) {
-  const t = useT();
   const celular = useAbaixoDeMd();
 
   if (!celular) return <>{children}</>;
+  if (acoes.length === 0) return null;
+
+  return <MenuDeAcoes acoes={acoes} />;
+}
+
+/**
+ * O menu "⋯" sozinho. É o mesmo do celular; o redesign o usa também no
+ * computador, para as ações raras de uma tela (onda 3). As ações abrem o que
+ * a tela já abria (`onSelect`/`href`), então nada muda além de onde ficam.
+ */
+export function MenuDeAcoes({ acoes }: { acoes: AcaoDoMenu[] }) {
+  const t = useT();
   if (acoes.length === 0) return null;
 
   return (

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
-import { AcoesNoCelular } from "@/components/shell/AcoesNoCelular";
+import { AcoesNoCelular, MenuDeAcoes } from "@/components/shell/AcoesNoCelular";
 import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
 import { ArrowsClockwise, Columns, DownloadSimple, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ import { useBulkDeleteContacts } from "@/hooks/contacts/useBulkDeleteContacts";
 import { useBuscaNaUrl } from "@/hooks/contacts/useBuscaNaUrl";
 import { useBulkContacts, type AcaoEmLoteDeContatos } from "@/hooks/contacts/useBulkContacts";
 import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
+import { useRedesign } from "@/lib/redesign/contexto";
 import { ContactsTable } from "@/components/contacts/ContactsTable";
 import { BarraDeContatosEmLote } from "@/components/contacts/BarraDeContatosEmLote";
 import { PontoDaEtiqueta } from "@/components/tags/PontoDaEtiqueta";
@@ -71,6 +72,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export function ContactsListClient() {
   const t = useT();
   const rd = useMarcaDoRedesign();
+  const ligado = useRedesign();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
   const router = useRouter();
   const pathname = usePathname();
@@ -336,6 +338,36 @@ export function ContactsListClient() {
     [search, tags, tagMode, source, soPessoais, orderBy, orderDir],
   );
 
+  const menuExportar = (
+    <>
+            {/*
+              A porta de VOLTA do mesmo dado: importar sem exportar deixava o CRM
+              como saída única (SSH + psql), e o celular nem importa CSV — importa
+              vCard. Os dois formatos moram num menu porque são dois arquivos
+              diferentes para dois destinos diferentes, e um botão por formato
+              dobraria a largura do header numa tela de 390px.
+            */}
+            {podeExportar && !filtrosAvancadosLigados && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <DownloadSimple size={16} weight="bold" aria-hidden />
+                    <span>{t("Exportar")}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportarArquivo("csv")}>
+                    {t("Exportar CSV")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportarArquivo("vcf")}>
+                    {t("Exportar vCard")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+    </>
+  );
+
   return (
     <div className="space-y-4 md:p-6" data-rd-contatos={rd("lista")}>
       <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4" data-rd-contatos={rd("cabecalho")}>
@@ -380,55 +412,54 @@ export function ContactsListClient() {
                 : []),
             ]}
           >
-          <Button variant="outline" onClick={() => setColunasOpen(true)} data-acao="personalizar-colunas">
-            <Columns size={16} weight="bold" aria-hidden />
-            <span>{t("Personalizar colunas")}</span>
-          </Button>
-          <Button variant="outline" onClick={() => setDuplicadosOpen(true)}>
-            <UsersThree size={16} weight="bold" aria-hidden />
-            <span>{t("Duplicados")}</span>
-          </Button>
-          {podeImportar ? (
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <UploadSimple size={16} weight="bold" aria-hidden />
-              <span>{t("Importar CSV")}</span>
+          {ligado ? (
+            <>
+              {/* Onda 3: as ações raras vão para o "⋯"; as do dia a dia ficam à vista.
+                  As mesmas ações, que abrem os mesmos diálogos. */}
+              <MenuDeAcoes
+                acoes={[
+                  { rotulo: t("Personalizar colunas"), icone: Columns, onSelect: () => setColunasOpen(true) },
+                  { rotulo: t("Duplicados"), icone: UsersThree, onSelect: () => setDuplicadosOpen(true) },
+                  { rotulo: t("Sincronizar agenda"), icone: ArrowsClockwise, onSelect: () => setSyncOpen(true) },
+                ]}
+              />
+            {podeImportar ? (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadSimple size={16} weight="bold" aria-hidden />
+                <span>{t("Importar CSV")}</span>
+              </Button>
+            ) : null}
+              {menuExportar}
+            </>
+          ) : (
+            <>
+            <Button variant="outline" onClick={() => setColunasOpen(true)} data-acao="personalizar-colunas">
+              <Columns size={16} weight="bold" aria-hidden />
+              <span>{t("Personalizar colunas")}</span>
             </Button>
-          ) : null}
-          {/*
-            O lado de cá do mesmo gesto (#2736): a base que a equipe já tem
-            mora na agenda do celular pareado, e ela não passa por CSV nenhum.
-            Colado ao "Importar CSV" de propósito — os dois são "trazer base de
-            fora", e separá-los em cantos diferentes da tela faria cada um
-            parecer um recurso que o outro não é.
-          */}
-          <Button variant="outline" onClick={() => setSyncOpen(true)}>
-            <ArrowsClockwise size={16} weight="bold" aria-hidden />
-            <span>{t("Sincronizar agenda")}</span>
-          </Button>
-          {/*
-            A porta de VOLTA do mesmo dado: importar sem exportar deixava o CRM
-            como saída única (SSH + psql), e o celular nem importa CSV — importa
-            vCard. Os dois formatos moram num menu porque são dois arquivos
-            diferentes para dois destinos diferentes, e um botão por formato
-            dobraria a largura do header numa tela de 390px.
-          */}
-          {podeExportar && !filtrosAvancadosLigados && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <DownloadSimple size={16} weight="bold" aria-hidden />
-                  <span>{t("Exportar")}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => exportarArquivo("csv")}>
-                  {t("Exportar CSV")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportarArquivo("vcf")}>
-                  {t("Exportar vCard")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button variant="outline" onClick={() => setDuplicadosOpen(true)}>
+              <UsersThree size={16} weight="bold" aria-hidden />
+              <span>{t("Duplicados")}</span>
+            </Button>
+            {podeImportar ? (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadSimple size={16} weight="bold" aria-hidden />
+                <span>{t("Importar CSV")}</span>
+              </Button>
+            ) : null}
+            {/*
+              O lado de cá do mesmo gesto (#2736): a base que a equipe já tem
+              mora na agenda do celular pareado, e ela não passa por CSV nenhum.
+              Colado ao "Importar CSV" de propósito — os dois são "trazer base de
+              fora", e separá-los em cantos diferentes da tela faria cada um
+              parecer um recurso que o outro não é.
+            */}
+            <Button variant="outline" onClick={() => setSyncOpen(true)}>
+              <ArrowsClockwise size={16} weight="bold" aria-hidden />
+              <span>{t("Sincronizar agenda")}</span>
+            </Button>
+              {menuExportar}
+            </>
           )}
           </AcoesNoCelular>
           <Button onClick={() => setCreateOpen(true)}>

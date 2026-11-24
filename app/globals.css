@@ -3383,6 +3383,124 @@
   border-radius: 12px;
   padding: 16px 18px;
 }
+/* ---- Onda 3: avatar com as iniciais (34px na lista, 64px na ficha) ----- */
+[data-redesign="ligado"] [data-rd-contatos="nome"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+[data-redesign="ligado"] [data-rd-contatos="avatar"] {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--rd-chat-avatar, var(--color-accent));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+[data-redesign="ligado"] [data-rd-contatos="ficha-identidade"] [data-rd-contatos="avatar"] {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+  grid-row: span 3;
+}
+
+/* ---- Onda 3: cabeçalho da ficha (volta, avatar ao lado do nome) -------- */
+[data-redesign="ligado"] [data-rd-contatos="ficha-identidade"] {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 4px;
+  align-items: center;
+}
+[data-redesign="ligado"] [data-rd-contatos="ficha-identidade"] > :not([data-rd-contatos="voltar"]):not([data-rd-contatos="avatar"]) {
+  grid-column: 2;
+  margin-top: 0;
+}
+[data-redesign="ligado"] [data-rd-contatos="voltar"] {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  min-height: 28px;
+  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+[data-redesign="ligado"] [data-rd-contatos="voltar"]:hover {
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-contatos="voltar"]:focus-visible {
+  outline: none;
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] [data-rd-contatos="ficha-conversa"] {
+  flex-basis: 100%;
+}
+
+/* ---- Onda 3: "Mais ações" da ficha (só esconde; diálogos montados) ---- */
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes"] {
+  position: relative;
+}
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes"] > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes"] > summary::-webkit-details-marker {
+  display: none;
+}
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes"] > summary:hover {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes"] > summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--redesign-foco);
+}
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes-lista"] {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 240px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+[data-redesign="ligado"] [data-rd-contatos="mais-acoes-lista"] > button {
+  justify-content: flex-start;
+  width: 100%;
+  border-color: transparent;
+}
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-contatos="mais-acoes"] > summary {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 /* redesign: contatos — fim */
 
 /* redesign: automacoes ───────────────────────────────────────────────────

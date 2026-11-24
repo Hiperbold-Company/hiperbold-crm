@@ -7,6 +7,8 @@ import type { Locale } from "date-fns";
 
 import { useT } from "@/hooks/i18n/useT";
 import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
+import { corDoAvatar } from "@/components/inbox/redesign/marca";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -390,7 +392,13 @@ export function ContactsTable({
                       <Link
                         href={`/app/contacts/${c.id}`}
                         className="hover:underline max-md:flex max-md:min-h-11 max-md:items-center"
+                        data-rd-contatos={rd("nome")}
                       >
+                        {rd("avatar") ? (
+                          <span data-rd-contatos={rd("avatar")} data-rd-cor={corDoAvatar(c.id)} aria-hidden>
+                            {iniciaisDoNome(displayName(c)) ?? "?"}
+                          </span>
+                        ) : null}
                         {displayName(c)}
                       </Link>
                     </TableCell>
