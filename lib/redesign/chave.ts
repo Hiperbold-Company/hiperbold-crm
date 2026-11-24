@@ -1,7 +1,9 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { cache } from "react";
 
+import { isPublicPath } from "@/lib/auth/public-paths";
 import { loadAuthUser, orgAtivaSemPortao } from "@/lib/auth/server";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -22,6 +24,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const redesignNaRequisicao = cache(async (): Promise<boolean> => {
   try {
     if (valorLiga(env.REDESIGN_HIPERBOLD)) return true;
+
+    // Só onde o proxy JÁ renovou a sessão. Nas telas públicas (`isPublicPath`)
+    // o proxy segue direto, e ler a sessão aqui — num Server Component, que não
+    // consegue gravar cookie — poderia girar o refresh token sem salvar o novo e
+    // deslogar a pessoa depois. Nelas vale só a chave geral. Sem o cabeçalho do
+    // proxy (`x-pathname`, sempre gravado por ele), não dá para saber: desligado.
+    const caminho = (await headers()).get("x-pathname");
+    if (!caminho || isPublicPath(caminho)) return false;
 
     const user = await loadAuthUser();
     if (!user) return false;
