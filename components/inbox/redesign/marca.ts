@@ -27,6 +27,7 @@ export type PecaDoChat =
   | "contato-acoes"
   | "item-corpo"
   | "fila"
+  | "buscar"
   | "titulo-da-lista"
   | "filtros"
   | "busca"

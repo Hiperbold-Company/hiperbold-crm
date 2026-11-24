@@ -388,6 +388,7 @@ export function ConversationHeader({
             {onBuscar && (
               <Button
                 ref={botaoBuscaRef}
+                data-rd-chat={rd("buscar")}
                 size="sm"
                 variant="ghost"
                 className="w-11 px-0 lg:w-8"

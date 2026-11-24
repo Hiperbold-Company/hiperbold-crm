@@ -2862,6 +2862,32 @@
   }
 }
 
+/* Computador: busca e "⋯" no canto de cima, na linha de quem é o contato
+   (protótipo). Soltos na barra, o "⋯" descia sozinho para uma linha nova
+   quando o painel do contato aperta o cabeçalho. Com a faixa da carteira
+   em cima, ficam na barra: o canto seria dela. */
+@media (min-width: 64rem) {
+  [data-redesign="ligado"] [data-rd-chat="cabecalho"]:not(:has([data-testid="faixa-da-carteira"])) {
+    position: relative;
+  }
+  [data-redesign="ligado"] [data-rd-chat="cabecalho"]:not(:has([data-testid="faixa-da-carteira"])) > [data-rd-chat="identidade"] {
+    padding-right: 80px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="cabecalho"]:not(:has([data-testid="faixa-da-carteira"])) [data-rd-chat="mais-acoes"] {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="cabecalho"]:not(:has([data-testid="faixa-da-carteira"])) [data-rd-chat="buscar"] {
+    position: absolute;
+    top: 16px;
+    right: 54px;
+  }
+  [data-redesign="ligado"] [data-rd-chat="cabecalho"]:not(:has([data-testid="faixa-da-carteira"])):not(:has([data-rd-chat="mais-acoes-lista"] > *)) [data-rd-chat="buscar"] {
+    right: 16px;
+  }
+}
+
 /* redesign: chat — fim ─────────────────────────────────────────────────── */
 
 /* redesign: pipeline */
