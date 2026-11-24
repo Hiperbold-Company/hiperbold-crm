@@ -5002,6 +5002,125 @@
     max-width: 48px;
   }
 }
+/* ── Onda 2: o primeiro acesso no v49 (app/onboarding/layout.tsx) ──
+   Cabeçalho branco com logo, empresa e "Passo N de M"; barra de progresso
+   fina; trilho "Seu primeiro acesso" à esquerda; conteúdo do passo centrado
+   num cartão. No celular o trilho some (o "Passo N de M" fica). */
+[data-redesign="ligado"] [data-rd-entrar="primeiro-acesso"] {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="topo"] {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-entrar="empresa"] {
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border);
+  font-size: 15px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-entrar="passo"] {
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="progresso"] {
+  height: 3px;
+  background: var(--color-border);
+}
+[data-redesign="ligado"] [data-rd-entrar="progresso"] > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.3s ease;
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho"] {
+  display: none;
+}
+[data-redesign="ligado"] [data-rd-entrar="primeiro-acesso"] [data-rd-entrar="conteudo"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+@media (min-width: 900px) {
+  [data-redesign="ligado"] [data-rd-entrar="trilho"] {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 240px;
+    padding: 20px 12px;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  [data-redesign="ligado"] [data-rd-entrar="primeiro-acesso"] [data-rd-entrar="conteudo"] {
+    padding: 40px 32px 56px;
+  }
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho-titulo"] {
+  margin: 0 0 10px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho"] ol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho"] li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho"] li[aria-current="step"] {
+  background: var(--color-accent-soft);
+  font-weight: 600;
+  color: var(--color-text);
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho-marca"] {
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho"] li[data-cumprido="true"] [data-rd-entrar="trilho-marca"] {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: var(--color-surface);
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho"] li[aria-current="step"] [data-rd-entrar="trilho-marca"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+[data-redesign="ligado"] [data-rd-entrar="trilho-dica"] {
+  margin-top: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--color-bg);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
 /* redesign: entrar — fim ─────────────────────── */
 
 /* redesign: sistema ───────────────────────────────

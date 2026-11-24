@@ -24,7 +24,15 @@ export type PecaDeEntrar =
   | "cabecalho"
   | "conteudo"
   | "painel"
-  | "digito";
+  | "digito"
+  /* onda 2: a casca do primeiro acesso no v49 (app/onboarding/layout.tsx) */
+  | "primeiro-acesso"
+  | "topo"
+  | "empresa"
+  | "passo"
+  | "progresso"
+  | "corpo"
+  | "trilho";
 
 export type MarcaDeEntrar = (peca: PecaDeEntrar) => PecaDeEntrar | undefined;
 

@@ -4,6 +4,12 @@ import { redirect } from "next/navigation";
 import { exigirProvaDeMfa, requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { Stepper } from "./_components/Stepper";
+import {
+  BarraDoPrimeiroAcesso,
+  PassoAtualDoPrimeiroAcesso,
+  TrilhoDoPrimeiroAcesso,
+} from "./_components/TrilhoDoPrimeiroAcesso";
+import { LogoDaMarca } from "@/components/redesign/LogoDaMarca";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
 import { SairDoOnboarding } from "./_components/SairDoOnboarding";
 import { SkipToEnd } from "./_components/SkipToEnd";
@@ -70,7 +76,43 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // de reforço do upstream.
   const logoDaInstalacao = marcaDoIcone.logoUrl;
 
-  const rd = marcaDeEntrar(await redesignNaRequisicao());
+  const ligado = await redesignNaRequisicao();
+  const rd = marcaDeEntrar(ligado);
+  const outras = user.organizations
+    .filter((o) => o.organization_id !== activeOrg.orgId)
+    .map((o) => ({ id: o.organization_id, nome: o.organization_name }));
+
+  // Onda 2 do redesign (v49): cabeçalho com "Passo N de M", barra de
+  // progresso e o trilho "Seu primeiro acesso" à esquerda. Desligada, a casca
+  // de sempre, abaixo, intocada.
+  if (ligado) {
+    return (
+      <IdiomaProvider locale={idiomaDaTela(user.idioma)}>
+        <div className="flex min-h-screen flex-col" data-rd-entrar="primeiro-acesso">
+          <header className="flex items-center justify-between gap-4" data-rd-entrar="topo">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex items-center" data-rd-entrar="logo">
+                <LogoDaMarca marca={marcaDoIcone} />
+              </span>
+              {/* Dado, não interface: o nome da empresa que está sendo configurada. */}
+              <span className="truncate" data-rd-entrar="empresa">{activeOrg.name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {passos.length > 1 ? <PassoAtualDoPrimeiroAcesso passos={passos} /> : null}
+              <OutrasOrganizacoes outras={outras} />
+              {isDev ? <SkipToEnd /> : null}
+              <SairDoOnboarding />
+            </div>
+          </header>
+          {passos.length > 1 ? <BarraDoPrimeiroAcesso passos={passos} /> : null}
+          <div className="flex flex-1" data-rd-entrar="corpo">
+            {passos.length > 1 ? <TrilhoDoPrimeiroAcesso passos={passos} /> : null}
+            <main className="min-w-0 flex-1" data-rd-entrar="conteudo">{children}</main>
+          </div>
+        </div>
+      </IdiomaProvider>
+    );
+  }
 
   return (
     <IdiomaProvider locale={idiomaDaTela(user.idioma)}>

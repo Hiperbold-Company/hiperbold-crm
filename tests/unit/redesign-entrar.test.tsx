@@ -66,7 +66,11 @@ describe("redesign: entrar, DOM", () => {
 
   it("o layout do primeiro acesso marca página, cabeçalho e conteúdo pela mesma regra", () => {
     const fonte = readFileSync(join(process.cwd(), "app/onboarding/layout.tsx"), "utf8");
-    expect(fonte).toContain("marcaDeEntrar(await redesignNaRequisicao())");
+    // A chave é lida uma vez (`const ligado = await redesignNaRequisicao()`) e
+    // decide também a casca do v49 (onda 2); o render das duas cascas é medido
+    // em `tests/unit/redesign-onda2-primeiro-acesso.test.tsx`.
+    expect(fonte).toContain("const ligado = await redesignNaRequisicao();");
+    expect(fonte).toContain("marcaDeEntrar(ligado)");
     for (const p of ["pagina", "cabecalho", "conteudo"]) expect(fonte).toContain(`rd("${p}")`);
   });
 
