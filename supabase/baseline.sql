@@ -104939,11 +104939,12 @@ create trigger trg_contacts_tipo_segue_o_documento
   before insert or update on public.contacts
   for each row execute function public.fn_contacts_tipo_segue_o_documento();
 
--- A coluna nova segue a régua de grant por coluna da 0967/0998: tudo menos cpf_hash/cpf_encrypted é
--- legível e gravável por anon/authenticated (a RLS decide a linha). O tipo sozinho não é segredo; o
--- número continua só do servidor.
-grant select (document_type), insert (document_type), update (document_type)
-  on table public.contacts to anon, authenticated;
+-- O tipo segue o padrão do PAR do CPF (0967/0998), não o das outras colunas: só o servidor lê e grava.
+-- O tipo tem a visibilidade do número (só gerente+ vê, e quem vê é o servidor, com o cliente de serviço);
+-- com grant, qualquer membro o leria pela REST. Revoke explícito: quem atualizou de uma versão desta
+-- migration que concedia o grant não fica com ele. O bloco da 0998 no fim do baseline também o exclui.
+revoke select (document_type), insert (document_type), update (document_type)
+  on table public.contacts from public, anon, authenticated;
 
 reset lock_timeout;
 
@@ -110533,7 +110534,8 @@ begin
    where a.attrelid = 'public.contacts'::regclass
      and a.attnum > 0
      and not a.attisdropped
-     and a.attname not in ('cpf_hash', 'cpf_encrypted');
+     -- `document_type` (1020) fica fechado como o par do CPF: só o servidor lê e grava o tipo.
+     and a.attname not in ('cpf_hash', 'cpf_encrypted', 'document_type');
   revoke select, insert, update on table public.contacts from anon, authenticated;
   execute format('grant select (%s) on table public.contacts to anon, authenticated', v_colunas);
   execute format('grant insert (%s) on table public.contacts to anon, authenticated', v_colunas);

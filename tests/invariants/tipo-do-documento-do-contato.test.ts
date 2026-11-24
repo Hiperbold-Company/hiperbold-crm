@@ -104,6 +104,26 @@ describe("contacts.document_type (migration 1020)", () => {
     expect(tipoDe(C4)).toBe("us_passport");
   });
 
+  it("authenticated (mesmo gerente) não lê o tipo pela REST: sem grant de coluna, como o par do CPF", () => {
+    const erro = recusa(comoGestor(`select document_type from public.contacts where id = '${C4}';`));
+    expect(erro).toMatch(/42501/);
+    expect(erro).toMatch(/permission denied/);
+    // Controle: a mesma sessão lê outra coluna do mesmo contato (a recusa é da coluna, não da linha).
+    expect(recusa(comoGestor(`select display_name from public.contacts where id = '${C4}';`))).toBe("");
+  });
+
+  it("a catraca segura mesmo se alguém reabrir o grant de UPDATE no tipo (defesa em profundidade)", () => {
+    const erro = recusa(`
+      begin;
+      grant update (document_type) on public.contacts to authenticated;
+      ${comoGestor(`update public.contacts set document_type = 'br_cpf' where id = '${C4}';`)}
+      rollback;
+    `);
+    expect(erro).toMatch(/42501/);
+    expect(erro).toMatch(/só muda junto com o documento/);
+    expect(tipoDe(C4)).toBe("us_passport");
+  });
+
   it("authenticated pode mexer em outra coluna do mesmo contato (a catraca só olha o tipo)", () => {
     expect(recusa(comoGestor(`update public.contacts set display_name = 'Renomeado' where id = '${C4}';`))).toBe("");
     expect(tipoDe(C4)).toBe("us_passport");

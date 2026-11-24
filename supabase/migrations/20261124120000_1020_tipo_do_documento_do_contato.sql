@@ -1,4 +1,4 @@
--- manifest: **Tipo do documento do contato (fork Hiperbold, decisão do dono do produto em 24/11/2026: país Estados Unidos).** Coluna `contacts.document_type text` nullable com CHECK `contacts_document_type_check` (`us_drivers_license`, `us_state_id`, `us_passport`, `us_green_card`, `us_itin`, `foreign_passport`, `br_cpf`; sem SSN de propósito). Coluna nova sem legado em clone nenhum, por isso o CHECK pode entrar; vocabulário em `lib/legal/tipos-de-documento.ts` (`TIPOS_DE_DOCUMENTO_DO_CONTATO`), par em `tests/invariants/vocabulario-banco-x-typescript.test.ts`. O número continua no par `cpf_hash`/`cpf_encrypted` (só servidor); o tipo é gravado junto pelo servidor. Gatilho `trg_contacts_tipo_segue_o_documento` (BEFORE INSERT OR UPDATE, função `fn_contacts_tipo_segue_o_documento`, EXECUTE revogado de public/anon/authenticated) zera o tipo quando `cpf_hash` fica nulo, então a anonimização LGPD apaga o tipo sem reemitir `fn_lgpd_cascade_redact_contact`. O mesmo gatilho é catraca (padrão da 0967): UPDATE que troca `document_type` sem trocar `cpf_hash` é recusado com 42501 para quem não é `service_role`/`postgres`. CHECK criado só quando falta (bloco `do`, padrão da 1012). Grant por coluna (select/insert/update) a anon/authenticated, na régua da 0967/0998. Brasil e Portugal gravam `null` (tipo implícito), comportamento inalterado. Idempotente; espelho no apêndice do `supabase/baseline.sql`.
+-- manifest: **Tipo do documento do contato (fork Hiperbold, decisão do dono do produto em 24/11/2026: país Estados Unidos).** Coluna `contacts.document_type text` nullable com CHECK `contacts_document_type_check` (`us_drivers_license`, `us_state_id`, `us_passport`, `us_green_card`, `us_itin`, `foreign_passport`, `br_cpf`; sem SSN de propósito). Coluna nova sem legado em clone nenhum, por isso o CHECK pode entrar; vocabulário em `lib/legal/tipos-de-documento.ts` (`TIPOS_DE_DOCUMENTO_DO_CONTATO`), par em `tests/invariants/vocabulario-banco-x-typescript.test.ts`. O número continua no par `cpf_hash`/`cpf_encrypted` (só servidor); o tipo é gravado junto pelo servidor. Gatilho `trg_contacts_tipo_segue_o_documento` (BEFORE INSERT OR UPDATE, função `fn_contacts_tipo_segue_o_documento`, EXECUTE revogado de public/anon/authenticated) zera o tipo quando `cpf_hash` fica nulo, então a anonimização LGPD apaga o tipo sem reemitir `fn_lgpd_cascade_redact_contact`. O mesmo gatilho é catraca (padrão da 0967): UPDATE que troca `document_type` sem trocar `cpf_hash` é recusado com 42501 para quem não é `service_role`/`postgres`. CHECK criado só quando falta (bloco `do`, padrão da 1012). Sem grant de coluna a anon/authenticated (revoke explícito de select/insert/update), como o par do CPF: o tipo tem a visibilidade do número e só o servidor o lê e grava; o bloco da 0998 no baseline também o exclui. Brasil e Portugal gravam `null` (tipo implícito), comportamento inalterado. Idempotente; espelho no apêndice do `supabase/baseline.sql`.
 --
 -- 1020, tipo do documento do contato (fork Hiperbold, 24/11/2026).
 --
@@ -70,8 +70,9 @@ create trigger trg_contacts_tipo_segue_o_documento
   before insert or update on public.contacts
   for each row execute function public.fn_contacts_tipo_segue_o_documento();
 
--- A coluna nova segue a régua de grant por coluna da 0967/0998: tudo menos cpf_hash/cpf_encrypted é
--- legível e gravável por anon/authenticated (a RLS decide a linha). O tipo sozinho não é segredo; o
--- número continua só do servidor.
-grant select (document_type), insert (document_type), update (document_type)
-  on table public.contacts to anon, authenticated;
+-- O tipo segue o padrão do PAR do CPF (0967/0998), não o das outras colunas: só o servidor lê e grava.
+-- O tipo tem a visibilidade do número (só gerente+ vê, e quem vê é o servidor, com o cliente de serviço);
+-- com grant, qualquer membro o leria pela REST. Revoke explícito: quem atualizou de uma versão desta
+-- migration que concedia o grant não fica com ele. O bloco da 0998 no fim do baseline também o exclui.
+revoke select (document_type), insert (document_type), update (document_type)
+  on table public.contacts from public, anon, authenticated;

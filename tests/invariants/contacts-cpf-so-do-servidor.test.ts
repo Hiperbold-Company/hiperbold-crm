@@ -74,7 +74,7 @@ const SONDA_CPF = `
    where has_column_privilege(p.papel, 'public.contacts', p.coluna, p.priv);`;
 
 /**
- * A VARREDURA: colunas de `contacts` (fora as duas do CPF) em que `authenticated` ou `anon` perdeu algum dos três
+ * A VARREDURA: colunas de `contacts` (fora as duas do CPF e o tipo do documento, 1020) em que `authenticated` ou `anon` perdeu algum dos três
  * privilégios. O resultado esperado é vazio.
  */
 function colunasSemGrant(): string {
@@ -87,7 +87,7 @@ function colunasSemGrant(): string {
              where a.attrelid = 'public.contacts'::regclass
                and a.attnum > 0
                and not a.attisdropped
-               and a.attname not in ('cpf_hash', 'cpf_encrypted')
+               and a.attname not in ('cpf_hash', 'cpf_encrypted', 'document_type')
                and not has_column_privilege(r.papel, 'public.contacts', a.attname, v.priv)) x;
   `);
   return linha ?? "";
