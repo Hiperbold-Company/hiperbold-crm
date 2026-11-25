@@ -60,8 +60,9 @@ export const ESCOPO_DAS_ESCRITAS: Readonly<Record<string, Readonly<Record<string
 
   // ---- contato e conversa ----
   crm_propose_contact_field: { contact_id: "contato" },
-  // Sem id de alvo: o contato É o do turno (`ctx.contatoDoTurno`), lido pelo handler.
-  crm_set_contact_custom_field: {},
+  // Sem id de alvo: o contato É o do turno (`ctx.contatoDoTurno`), e o negócio é
+  // o único aberto dele — os dois lidos pelo handler, nunca do argumento.
+  crm_set_custom_field: {},
   crm_create_conversation_draft: { conversation_id: "conversa" },
   crm_assign_conversation: { conversation_id: "conversa", to_user_id: "configuracao" },
   crm_manage_tags: { target_id: "alvo_de_tag" },

@@ -9,7 +9,7 @@
 import type { Tool } from "ai";
 
 import { separarFerramentas } from "@/lib/ai/mcp-externo/ids";
-import { descricaoComOsCamposDoContato, lerCamposDaOrganizacao } from "@/lib/campos/campo-do-contato-pelo-agente";
+import { descricaoComOsCampos, lerCamposDaOrganizacao } from "@/lib/campos/campo-pelo-agente";
 
 import type { Logger } from "../../obs/logger";
 import type { PublishedAgentConfig } from "../../agent/agent-config";
@@ -20,8 +20,8 @@ import { buildExternalMcpTools, type MotivoDaPulada } from "./mcp-externo-tools"
 /** `MotivoDaPulada` (de `mcp-externo-tools.ts`) + os motivos que só existem NESTE montador. */
 export type MotivoDaPuladaNoTurno = MotivoDaPulada | "entregue_ao_operador";
 
-/** A ferramenta cuja descrição leva os campos do contato da organização. */
-const FERRAMENTA_DE_CAMPO_DO_CONTATO = "crm_set_contact_custom_field";
+/** A ferramenta cuja descrição leva os campos personalizados da organização. */
+const FERRAMENTA_DE_CAMPO = "crm_set_custom_field";
 
 export async function montarFerramentasDoTurno(
   cfg: CrmEdgeConfig,
@@ -57,21 +57,21 @@ export async function montarFerramentasDoTurno(
     ? await interno(cfg, ids, { ...agentConfig, toolIds: catalogo }, log, options)
     : null;
 
-  // Os campos do contato são POR ORGANIZAÇÃO, e a descrição de uma ferramenta
-  // do catálogo é fixa: aqui, no montador único (Conversador e Operador), a
-  // descrição de `crm_set_contact_custom_field` ganha a lista de chaves, tipos e
-  // opções desta organização. Leitura que falha deixa a descrição base — a
+  // Os campos personalizados são POR ORGANIZAÇÃO, e a descrição de uma
+  // ferramenta do catálogo é fixa: aqui, no montador único (Conversador e
+  // Operador), a descrição de `crm_set_custom_field` ganha a lista de chaves,
+  // tipos, opções e onde cada uma é gravada (contato ou negócio). Leitura que falha deixa a descrição base — a
   // ferramenta recusa chave inexistente listando as disponíveis.
-  const campoDoContato = doCatalogo?.tools[FERRAMENTA_DE_CAMPO_DO_CONTATO];
-  if (doCatalogo && campoDoContato) {
+  const ferramentaDeCampo = doCatalogo?.tools[FERRAMENTA_DE_CAMPO];
+  if (doCatalogo && ferramentaDeCampo) {
     const campos = await lerCamposDaOrganizacao(cfg.supabase, ids.organizationId);
     if (campos === null) {
-      log.warn("campos do contato não lidos; a ferramenta segue com a descrição base", {});
+      log.warn("campos personalizados não lidos; a ferramenta segue com a descrição base", {});
     } else {
-      const base = typeof campoDoContato.description === "string" ? campoDoContato.description : "";
-      doCatalogo.tools[FERRAMENTA_DE_CAMPO_DO_CONTATO] = {
-        ...campoDoContato,
-        description: descricaoComOsCamposDoContato(base, campos),
+      const base = typeof ferramentaDeCampo.description === "string" ? ferramentaDeCampo.description : "";
+      doCatalogo.tools[FERRAMENTA_DE_CAMPO] = {
+        ...ferramentaDeCampo,
+        description: descricaoComOsCampos(base, campos),
       } as Tool;
     }
   }

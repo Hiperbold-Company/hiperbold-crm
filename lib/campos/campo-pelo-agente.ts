@@ -1,27 +1,33 @@
 /**
- * O CAMPO PERSONALIZADO DO CONTATO GRAVADO PELO AGENTE (`crm_set_contact_custom_field`).
+ * O CAMPO PERSONALIZADO GRAVADO PELO AGENTE (`crm_set_custom_field`).
  *
- * Três peças, todas sobre `custom_field_definitions` com `entidade = 'contato'`:
+ * Três peças, todas sobre `custom_field_definitions`, nas DUAS entidades: quem
+ * decide onde o valor mora é a definição do campo, não a ferramenta. Campo do
+ * CONTATO vai para `contacts.custom_fields`; campo do NEGÓCIO vai para
+ * `crm_leads.custom_fields` do negócio aberto do contato da conversa.
  *
- *  1. QUAIS campos o agente pode gravar (`camposGravaveisPeloAgente`): os do
- *     contato, públicos e de tipo que dá para escrever em texto. Campo NÃO
- *     público fica de fora — só administrador o vê na ficha, e o agente não lê
- *     o que grava (`leitorVeCamposRestritos("ia") === false`). Arquivo fica de
- *     fora porque o valor é um upload, não uma resposta da conversa.
- *  2. O VALOR convertido pelo tipo (`converterValorDoCampoDoContato`). Nenhuma
+ *  1. QUAIS campos o agente pode gravar (`camposGravaveisPeloAgente`): os
+ *     públicos e de tipo que dá para escrever em texto, das duas entidades.
+ *     Campo NÃO público fica de fora — só administrador o vê na ficha, e o
+ *     agente não lê o que grava (`leitorVeCamposRestritos("ia") === false`).
+ *     Arquivo fica de fora porque o valor é um upload, não uma resposta da
+ *     conversa.
+ *  2. O VALOR convertido pelo tipo (`converterValorDoCampo`). Nenhuma
  *     régua nova: lista (`select`, `multiselect`, `searchable_select`) passa por
  *     `canonizarValorDoCampo` — a régua de opção das escritas do servidor, que
  *     aceita o rótulo, o valor ou um apelido sem diferenciar maiúsculas e
  *     acentos —, e número, data, sim/não, e-mail e telefone por
  *     `coagirPeloTipo`, a mesma conversão do bloco de campo das automações.
  *     Moeda é número na unidade da moeda, como a ficha grava.
- *  3. A DESCRIÇÃO que o modelo lê (`descricaoComOsCamposDoContato`): a frase da
- *     ferramenta mais a lista das chaves, com tipo e opções. A lista é por
- *     organização, então ela entra no MONTADOR do turno
+ *  3. A DESCRIÇÃO que o modelo lê (`descricaoComOsCampos`): a frase da
+ *     ferramenta mais a lista das chaves, com tipo, opções e ONDE cada uma é
+ *     gravada. A lista é por organização, então ela entra no MONTADOR do turno
  *     (`lib/agent-engine/edge/crm/ferramentas-do-turno.ts`), não no handler.
  *
- * Arquivo puro (sem I/O): a leitura do banco fica em `lerCamposDoContato`, que
- * recebe o cliente.
+ * Arquivo puro (sem I/O): a leitura do banco fica em `lerCamposDaOrganizacao`,
+ * que recebe o cliente. A chave é única por organização (índice
+ * `(organization_id, lower(key))` no baseline), então uma chave aponta para uma
+ * definição só, de uma entidade só.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -43,7 +49,7 @@ const OPCOES_NA_DESCRICAO = 25;
 const TIPOS_FORA_DO_AGENTE: ReadonlySet<TipoDoCampo> = new Set(["file"]);
 
 /** Uma definição como o agente precisa dela — o recorte das colunas que a leitura pede. */
-export interface CampoDoContato {
+export interface CampoPersonalizado {
   key: string;
   label: string;
   type: TipoDoCampo;
@@ -56,15 +62,14 @@ export interface CampoDoContato {
 const COLUNAS = "key, label, type, entidade, publico, descricao, config, position";
 
 /**
- * As definições da organização, das DUAS entidades (a do negócio serve para a
- * recusa dizer "este campo é do negócio" em vez de "não existe"). Ordem da tela.
+ * As definições da organização, das DUAS entidades, na ordem da tela.
  * Falha de leitura devolve `null`: quem chama recusa como indisponível, nunca
  * como "campo inexistente".
  */
 export async function lerCamposDaOrganizacao(
   supabase: SupabaseClient,
   organizationId: string,
-): Promise<CampoDoContato[] | null> {
+): Promise<CampoPersonalizado[] | null> {
   try {
     const { data, error } = await supabase
       .from("custom_field_definitions")
@@ -72,7 +77,7 @@ export async function lerCamposDaOrganizacao(
       .eq("organization_id", organizationId)
       .order("position", { ascending: true });
     if (error || !Array.isArray(data)) return null;
-    return (data as Array<CampoDoContato & { config: unknown }>).map((d) => ({
+    return (data as Array<CampoPersonalizado & { config: unknown }>).map((d) => ({
       key: d.key,
       label: d.label,
       type: d.type,
@@ -86,13 +91,13 @@ export async function lerCamposDaOrganizacao(
   }
 }
 
-/** Os campos do CONTATO que o agente pode gravar, na ordem da tela. */
-export function camposGravaveisPeloAgente(campos: readonly CampoDoContato[]): CampoDoContato[] {
-  return campos.filter((c) => c.entidade === "contato" && c.publico && !TIPOS_FORA_DO_AGENTE.has(c.type));
+/** Os campos (das duas entidades) que o agente pode gravar, na ordem da tela. */
+export function camposGravaveisPeloAgente(campos: readonly CampoPersonalizado[]): CampoPersonalizado[] {
+  return campos.filter((c) => c.publico && !TIPOS_FORA_DO_AGENTE.has(c.type));
 }
 
 /** A definição no formato que as réguas de opção leem (`CustomFieldDef`). */
-function comoDefDoFunil(campo: CampoDoContato): Pick<CustomFieldDef, "type" | "options" | "allow_new" | "multiple"> {
+function comoDefDoFunil(campo: CampoPersonalizado): Pick<CustomFieldDef, "type" | "options" | "allow_new" | "multiple"> {
   const c = campo.config;
   return {
     type: campo.type,
@@ -102,7 +107,7 @@ function comoDefDoFunil(campo: CampoDoContato): Pick<CustomFieldDef, "type" | "o
   };
 }
 
-function opcoesDe(campo: CampoDoContato): Array<{ value: string; label: string }> {
+function opcoesDe(campo: CampoPersonalizado): Array<{ value: string; label: string }> {
   const bruto = campo.config.options;
   if (!Array.isArray(bruto)) return [];
   return bruto.filter(
@@ -123,7 +128,7 @@ function comoTexto(bruto: unknown): string {
 }
 
 /** As opções de um campo numa linha, para o erro de ensino. */
-function listaDeOpcoes(campo: CampoDoContato): string {
+function listaDeOpcoes(campo: CampoPersonalizado): string {
   return opcoesDe(campo)
     .slice(0, OPCOES_NA_DESCRICAO)
     .map((o) => `«${o.label}»`)
@@ -134,7 +139,7 @@ function listaDeOpcoes(campo: CampoDoContato): string {
  * Converte o valor que o modelo mandou para o que a ficha guarda. Recusa com a
  * frase para o MODELO (pergunte de novo, escolha uma opção), nunca grava torto.
  */
-export function converterValorDoCampoDoContato(campo: CampoDoContato, bruto: unknown): ValorConvertido {
+export function converterValorDoCampoPersonalizado(campo: CampoPersonalizado, bruto: unknown): ValorConvertido {
   if (TIPOS_FORA_DO_AGENTE.has(campo.type)) {
     return {
       ok: false,
@@ -208,7 +213,7 @@ const NOME_DO_TIPO: Record<TipoDoCampo, string> = {
 };
 
 /** Uma linha da lista de campos: `- chave (tipo) «Rótulo»: opções «A», «B»`. */
-function linhaDoCampo(campo: CampoDoContato): string {
+function linhaDoCampo(campo: CampoPersonalizado): string {
   const tipo =
     campo.type === "searchable_select" && campo.config.multiple === true ? "uma ou mais opções da lista" : NOME_DO_TIPO[campo.type];
   const opcoes = opcoesDe(campo);
@@ -218,20 +223,33 @@ function linhaDoCampo(campo: CampoDoContato): string {
   return `- ${campo.key} (${tipo}) «${campo.label}»${sufixo}`;
 }
 
+/** Onde o valor de cada entidade é gravado, como o modelo lê. */
+const ONDE_GRAVA: Record<EntidadeDoCampo, string> = {
+  contato: "Campos do CONTATO (gravados na ficha do cliente)",
+  negocio: "Campos do NEGÓCIO (gravados no negócio aberto do cliente)",
+};
+
 /**
- * A frase da ferramenta seguida dos campos que ESTA organização tem. Sem campo
- * nenhum, a frase diz isso — o modelo não tenta gravar o que não existe.
+ * A frase da ferramenta seguida dos campos que ESTA organização tem, separados
+ * por onde cada um é gravado. Sem campo nenhum, a frase diz isso — o modelo não
+ * tenta gravar o que não existe.
  */
-export function descricaoComOsCamposDoContato(base: string, campos: readonly CampoDoContato[]): string {
-  const gravaveis = camposGravaveisPeloAgente(campos).slice(0, CAMPOS_NA_DESCRICAO);
+export function descricaoComOsCampos(base: string, campos: readonly CampoPersonalizado[]): string {
+  const gravaveis = camposGravaveisPeloAgente(campos);
   if (gravaveis.length === 0) {
-    return `${base} Esta empresa ainda não criou nenhum campo do contato que você possa preencher: não use esta ferramenta.`;
+    return `${base} Esta empresa ainda não criou nenhum campo personalizado que você possa preencher: não use esta ferramenta.`;
   }
-  return [base, "Campos do contato desta empresa (chave, tipo, rótulo e opções):", ...gravaveis.map(linhaDoCampo)].join("\n");
+  const linhas: string[] = [base];
+  for (const entidade of ["contato", "negocio"] as const) {
+    const daEntidade = gravaveis.filter((c) => c.entidade === entidade).slice(0, CAMPOS_NA_DESCRICAO);
+    if (daEntidade.length === 0) continue;
+    linhas.push(`${ONDE_GRAVA[entidade]} — chave, tipo, rótulo e opções:`, ...daEntidade.map(linhaDoCampo));
+  }
+  return linhas.join("\n");
 }
 
 /** A lista curta das chaves, para o erro de ensino de chave inexistente. */
-export function chavesDisponiveis(campos: readonly CampoDoContato[]): string {
-  const gravaveis = camposGravaveisPeloAgente(campos).slice(0, CAMPOS_NA_DESCRICAO);
+export function chavesDisponiveis(campos: readonly CampoPersonalizado[]): string {
+  const gravaveis = camposGravaveisPeloAgente(campos).slice(0, CAMPOS_NA_DESCRICAO * 2);
   return gravaveis.length === 0 ? "nenhum" : gravaveis.map((c) => `${c.key} («${c.label}»)`).join(", ");
 }

@@ -1,18 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * O AGENTE GRAVA CAMPO PERSONALIZADO DO CONTATO (`crm_set_contact_custom_field`).
+ * O AGENTE GRAVA CAMPO PERSONALIZADO NO ESCOPO DA DEFINIÇÃO (`crm_set_custom_field`).
  *
  * A cadeia de verdade: a ferramenta montada como o turno monta
  * (`pickToolsFromMcp`) e o `patchContactHandler` real, sobre um banco falso
  * que APLICA os filtros (`eq`) e guarda o UPDATE. Dublês só nas bordas: o
- * gravador da auditoria (`@/lib/audit`, para conferir o que foi gravado) e a
- * consulta de CPF, que usa o cliente de serviço.
+ * gravador da auditoria (`@/lib/audit`, para conferir o que foi gravado), a
+ * consulta de CPF, que usa o cliente de serviço, e — no campo do NEGÓCIO — a
+ * escrita do negócio (`crmUpdateLead.handler`), que usa o cliente de serviço
+ * por dentro e tem a própria suíte. Aqui se prova o ROTEAMENTO: qual negócio,
+ * quais chaves, o escopo de funil e a ausência de gravação em dobro.
  *
  * ─── SABOTAGEM (o que deixa este arquivo vermelho) ─────────────────────────
  * - Mesclar trocado por substituir (`{ ...validos }` no PATCH): "preserva as
  *   outras chaves" cai.
- * - Tirar o filtro `entidade === "contato"`: o campo do negócio é gravado.
+ * - Gravar o campo do negócio no contato: "vai para o negócio aberto" cai.
+ * - Escolher o primeiro negócio quando há dois abertos: "ambíguo" cai.
+ * - Tirar o `podeOperarNoFunil`: "funil fora do escopo" cai.
  * - Ler o contato do argumento em vez de `ctx.contatoDoTurno`: sem contato do
  *   turno a ferramenta grava em vez de recusar.
  * - Tirar o `.eq("organization_id", …)` da leitura da ficha: o contato de outra
@@ -30,21 +35,26 @@ vi.mock("@/lib/contacts/cpf-do-contato", async (original) => ({
 }));
 
 const { pickToolsFromMcp } = await import("@/lib/ai/runtime/tools");
-const { crmSetContactCustomField } = await import("@/lib/mcp/tools/contacts");
+const { crmSetCustomField } = await import("@/lib/mcp/tools/campo-personalizado");
+const { crmUpdateLead } = await import("@/lib/mcp/tools/leads");
 const { catalogEntry } = await import("@/lib/mcp/tools/catalog");
 const { MODULOS_OPCIONAIS } = await import("@/lib/instalacao/modulos");
 const { CAPACIDADES_DA_ORGANIZACAO } = await import("@/lib/organizacao/capacidades");
 const {
-  converterValorDoCampoDoContato,
-  descricaoComOsCamposDoContato,
+  converterValorDoCampo,
+  descricaoComOsCampos,
   camposGravaveisPeloAgente,
-} = await import("@/lib/campos/campo-do-contato-pelo-agente");
+} = await import("@/lib/campos/campo-pelo-agente");
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const ORG_B = "55555555-5555-4555-8555-555555555555";
 const CONTATO = "22222222-2222-4222-8222-222222222222";
 const CONTATO_B = "66666666-6666-4666-8666-666666666666";
-const NOME = "crm_set_contact_custom_field";
+const NOME = "crm_set_custom_field";
+const NEGOCIO = "33333333-3333-4333-8333-333333333333";
+const NEGOCIO_2 = "44444444-4444-4444-8444-444444444444";
+const FUNIL = "77777777-7777-4777-8777-777777777777";
+const OUTRO_FUNIL = "88888888-8888-4888-8888-888888888888";
 
 type Linha = Record<string, unknown>;
 
@@ -75,13 +85,32 @@ beforeEach(() => {
   tabelas = {
     custom_field_definitions: [...DEFINICOES(ORG), ...DEFINICOES(ORG_B)],
     crm_pipelines: [],
+    crm_leads: [
+      { id: NEGOCIO, organization_id: ORG, contact_id: CONTATO, pipeline_id: FUNIL, status: "open", custom_fields: { origem: "site" } },
+      { id: "99999999-9999-4999-8999-999999999999", organization_id: ORG, contact_id: CONTATO, pipeline_id: FUNIL, status: "won", custom_fields: {} },
+      // Mesmo contato, OUTRA organização: a leitura do negócio não pode achá-lo.
+      { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", organization_id: ORG_B, contact_id: CONTATO, pipeline_id: FUNIL, status: "open", custom_fields: {} },
+    ],
     contacts: [
       { id: CONTATO, organization_id: ORG, custom_fields: { cidade: "Recife" }, is_personal: false, is_anonymized: false, tags: [] },
       { id: CONTATO_B, organization_id: ORG_B, custom_fields: {}, is_personal: false, is_anonymized: false, tags: [] },
     ],
   };
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => vi.restoreAllMocks());
+
+/** A escrita do negócio, na borda: registra a chamada e aplica o merge na linha. */
+function espiarEscritaDoNegocio() {
+  const chamadas: Array<{ lead_id: string; custom_fields: Linha; org: string }> = [];
+  vi.spyOn(crmUpdateLead, "handler").mockImplementation(async (input, ctx) => {
+    const i = input as { lead_id: string; custom_fields: Linha };
+    chamadas.push({ lead_id: i.lead_id, custom_fields: i.custom_fields, org: ctx.organizationId });
+    const linha = tabelas.crm_leads!.find((l) => l.id === i.lead_id && l.organization_id === ctx.organizationId)!;
+    linha.custom_fields = { ...(linha.custom_fields as Linha), ...i.custom_fields };
+    return { lead: { id: i.lead_id } };
+  });
+  return chamadas;
+}
 
 /** Banco falso: `eq` filtra de verdade, `update` grava na linha que os filtros alcançam. */
 function bancoFalso() {
@@ -118,7 +147,7 @@ function bancoFalso() {
   return { from, rpc: () => Promise.resolve({ data: null, error: null }) };
 }
 
-function montar(toolIds: string[], contatoDoTurno?: string) {
+function montar(toolIds: string[], contatoDoTurno?: string, pipelineIds: string[] = [FUNIL]) {
   const supabase = bancoFalso();
   const ator = { type: "ai_agent", id: "run-1", agent_id: "ag-1", role: "ai_operator" };
   return pickToolsFromMcp({
@@ -130,18 +159,19 @@ function montar(toolIds: string[], contatoDoTurno?: string) {
     capacidadesLigadas: CAPACIDADES_DA_ORGANIZACAO,
     handoffToolEnabled: true,
     handoffSignal: { triggered: false },
+    pipelineIds,
     ...(contatoDoTurno ? { contatoDoTurno } : {}),
   } as never);
 }
 
-async function gravar(campos: Linha, contatoDoTurno: string | null = CONTATO) {
-  const ferramentas = montar([NOME], contatoDoTurno ?? undefined);
+async function gravar(campos: Linha, contatoDoTurno: string | null = CONTATO, pipelineIds?: string[]) {
+  const ferramentas = montar([NOME], contatoDoTurno ?? undefined, pipelineIds);
   return (await ferramentas[NOME]!.execute!({ campos }, { toolCallId: "c1", messages: [] } as never)) as Linha;
 }
 
 const fichaDe = (id: string) => tabelas.contacts!.find((c) => c.id === id)!;
 
-describe("crm_set_contact_custom_field — a escrita", () => {
+describe("crm_set_custom_field — a escrita", () => {
   it("grava a opção pelo RÓTULO, sem diferenciar maiúsculas, e mescla com as outras chaves", async () => {
     const r = await gravar({ interesse: "moradia", renda: "4.500,00", visitou: "sim" });
     expect(r.gravado).toBe(true);
@@ -171,11 +201,10 @@ describe("crm_set_contact_custom_field — a escrita", () => {
     expect(updates).toHaveLength(0);
   });
 
-  it("recusa campo do NEGÓCIO e campo restrito", async () => {
-    const r = await gravar({ orcamento: 1000, nota_interna: "vip" });
+  it("recusa campo restrito e não grava", async () => {
+    const r = await gravar({ nota_interna: "vip" });
     expect(r.gravado).toBe(false);
-    const motivos = (r.campos_nao_gravados as Linha[]).map((x) => x.motivo);
-    expect(motivos).toEqual(["campo_do_negocio", "campo_restrito"]);
+    expect((r.campos_nao_gravados as Linha[]).map((x) => x.motivo)).toEqual(["campo_restrito"]);
     expect(updates).toHaveLength(0);
   });
 
@@ -201,7 +230,7 @@ describe("crm_set_contact_custom_field — a escrita", () => {
   });
 
   it("não tem argumento de contato: o modelo não escolhe em quem grava", () => {
-    expect(Object.keys(crmSetContactCustomField.inputSchema)).toEqual(["campos"]);
+    expect(Object.keys(crmSetCustomField.inputSchema)).toEqual(["campos"]);
   });
 
   it("contato pessoal recusa", async () => {
@@ -230,7 +259,69 @@ describe("crm_set_contact_custom_field — a escrita", () => {
   });
 });
 
-describe("crm_set_contact_custom_field — ligar e desligar", () => {
+describe("crm_set_custom_field — campo do NEGÓCIO vai para o negócio aberto", () => {
+  it("grava no único negócio ABERTO do contato, e não na ficha do contato", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    const r = await gravar({ orcamento: "250000", interesse: "Moradia" });
+    expect(r.gravado).toBe(true);
+    expect(chamadas).toEqual([{ lead_id: NEGOCIO, custom_fields: { orcamento: 250000 }, org: ORG }]);
+    expect(fichaDe(CONTATO).custom_fields).toEqual({ cidade: "Recife", interesse: "moradia" });
+    expect(tabelas.crm_leads!.find((l) => l.id === NEGOCIO)!.custom_fields).toEqual({ origem: "site", orcamento: 250000 });
+  });
+
+  it("sem negócio aberto, recusa o campo do negócio e grava o do contato", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    tabelas.crm_leads = tabelas.crm_leads!.filter((l) => l.id !== NEGOCIO);
+    const r = await gravar({ orcamento: 1, interesse: "Moradia" });
+    expect(r.gravado).toBe(true);
+    expect(chamadas).toHaveLength(0);
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ campo: "orcamento", motivo: "sem_negocio_aberto" });
+  });
+
+  it("com dois negócios abertos, não escolhe por palpite", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    tabelas.crm_leads!.push({ id: NEGOCIO_2, organization_id: ORG, contact_id: CONTATO, pipeline_id: FUNIL, status: "open", custom_fields: {} });
+    const r = await gravar({ orcamento: 1 });
+    expect(r).toMatchObject({ gravado: false });
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ motivo: "negocio_ambiguo" });
+    expect(chamadas).toHaveLength(0);
+  });
+
+  it("negócio num funil fora do escopo do agente: recusa e não grava", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    const r = await gravar({ orcamento: 1 }, CONTATO, [OUTRO_FUNIL]);
+    expect(r.gravado).toBe(false);
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ motivo: "funil_fora_do_escopo" });
+    expect(chamadas).toHaveLength(0);
+  });
+
+  it("agente sem funil nenhum liberado: recusa o campo do negócio, mas grava o do contato", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    const r = await gravar({ orcamento: 1, visitou: "sim" }, CONTATO, []);
+    expect(r.gravado).toBe(true);
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ campo: "orcamento", motivo: "escopo_vazio" });
+    expect(chamadas).toHaveLength(0);
+    expect(fichaDe(CONTATO).custom_fields).toMatchObject({ visitou: true });
+  });
+
+  it("valor igual ao gravado no negócio não regrava (sem gravação em dobro)", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    await gravar({ orcamento: 300 });
+    const r = await gravar({ orcamento: "300" });
+    expect(r).toMatchObject({ gravado: true, sem_mudanca: true });
+    expect(chamadas).toHaveLength(1);
+  });
+
+  it("não alcança o negócio de OUTRA organização com o mesmo contato", async () => {
+    const chamadas = espiarEscritaDoNegocio();
+    tabelas.crm_leads = tabelas.crm_leads!.filter((l) => l.id !== NEGOCIO);
+    const r = await gravar({ orcamento: 1 });
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ motivo: "sem_negocio_aberto" });
+    expect(chamadas).toHaveLength(0);
+  });
+});
+
+describe("crm_set_custom_field — ligar e desligar", () => {
   it("está no catálogo, como escrita, num pacote", () => {
     const entrada = catalogEntry(NOME);
     expect(entrada?.category).toBe("write");
@@ -256,28 +347,33 @@ describe("conversão e descrição (puras)", () => {
   const campo = (k: string) => campos.find((c) => c.key === k)!;
 
   it("converte número, data e sim/não; recusa formato errado e arquivo", () => {
-    expect(converterValorDoCampoDoContato({ ...campo("renda"), type: "number" }, "12")).toEqual({ ok: true, valor: 12 });
-    expect(converterValorDoCampoDoContato({ ...campo("renda"), type: "date" }, "05/03/2026")).toEqual({ ok: true, valor: "2026-03-05" });
-    expect(converterValorDoCampoDoContato(campo("visitou"), "talvez").ok).toBe(false);
-    expect(converterValorDoCampoDoContato({ ...campo("renda"), type: "file" }, "x")).toMatchObject({ ok: false, motivo: "tipo_nao_suportado" });
+    expect(converterValorDoCampo({ ...campo("renda"), type: "number" }, "12")).toEqual({ ok: true, valor: 12 });
+    expect(converterValorDoCampo({ ...campo("renda"), type: "date" }, "05/03/2026")).toEqual({ ok: true, valor: "2026-03-05" });
+    expect(converterValorDoCampo(campo("visitou"), "talvez").ok).toBe(false);
+    expect(converterValorDoCampo({ ...campo("renda"), type: "file" }, "x")).toMatchObject({ ok: false, motivo: "tipo_nao_suportado" });
   });
 
   it("texto tem teto", () => {
     const texto = { ...campo("renda"), type: "text" as never };
-    expect(converterValorDoCampoDoContato(texto, "a".repeat(501)).ok).toBe(false);
-    expect(converterValorDoCampoDoContato(texto, "  ok  ")).toEqual({ ok: true, valor: "ok" });
+    expect(converterValorDoCampo(texto, "a".repeat(501)).ok).toBe(false);
+    expect(converterValorDoCampo(texto, "  ok  ")).toEqual({ ok: true, valor: "ok" });
   });
 
-  it("a descrição lista só os campos do contato que o agente grava, com tipo e opções", () => {
-    const d = descricaoComOsCamposDoContato("Base.", campos);
+  it("a descrição lista os campos das duas entidades, cada um sob onde é gravado", () => {
+    const d = descricaoComOsCampos("Base.", campos);
     expect(d).toContain("- interesse (uma opção) «Interesse»: opções «Moradia», «Investimento»");
     expect(d).toContain("- renda (");
-    expect(d).not.toContain("orcamento");
+    const contato = d.indexOf("Campos do CONTATO");
+    const negocio = d.indexOf("Campos do NEGÓCIO");
+    expect(contato).toBeGreaterThan(-1);
+    expect(negocio).toBeGreaterThan(contato);
+    expect(d.indexOf("- orcamento (")).toBeGreaterThan(negocio);
+    expect(d.indexOf("- interesse (")).toBeLessThan(negocio);
     expect(d).not.toContain("nota_interna");
-    expect(camposGravaveisPeloAgente(campos).map((c) => c.key)).toEqual(["interesse", "renda", "visitou"]);
+    expect(camposGravaveisPeloAgente(campos).map((c) => c.key)).toEqual(["interesse", "renda", "visitou", "orcamento"]);
   });
 
-  it("sem campos do contato, a descrição diz para não usar", () => {
-    expect(descricaoComOsCamposDoContato("Base.", [])).toContain("não use esta ferramenta");
+  it("sem campos, a descrição diz para não usar", () => {
+    expect(descricaoComOsCampos("Base.", [])).toContain("não use esta ferramenta");
   });
 });

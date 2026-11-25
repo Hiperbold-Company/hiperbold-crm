@@ -105,14 +105,15 @@ export const TOOLS_ATENDIMENTO = declararTools([
     pacotes: ["vender"],
   },
   {
-    name: "crm_set_contact_custom_field",
+    name: "crm_set_custom_field",
     category: "write",
-    rotulo: "Preencher campo personalizado do contato",
+    rotulo: "Preencher campo personalizado",
     explicacao:
-      "Grava na ficha do cliente desta conversa a resposta que ele deu, nos campos personalizados do contato " +
-      "criados pela empresa (por exemplo, a opção escolhida numa pergunta com botões). Só os campos do contato " +
-      "visíveis à equipe; o valor é conferido pelo tipo do campo e as outras informações da ficha não mudam.",
-    oQueToca: "Cadastro de clientes",
+      "Grava a resposta que o cliente desta conversa deu nos campos personalizados criados pela empresa (por " +
+      "exemplo, a opção escolhida numa pergunta com botões). Campo do contato vai para a ficha do cliente; campo " +
+      "do negócio vai para o negócio aberto dele, só nos funis liberados para o agente. Só os campos visíveis à " +
+      "equipe; o valor é conferido pelo tipo do campo e as outras informações não mudam.",
+    oQueToca: "Cadastro de clientes e negócios",
     // `atencao`: muda a ficha (dado que a equipe vê e que pode disparar
     // automação de "contato atualizado"), mas só do cliente da conversa, com
     // auditoria e sem sobrescrever nada além da chave pedida.
