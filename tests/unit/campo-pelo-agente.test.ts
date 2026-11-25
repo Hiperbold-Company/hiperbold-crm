@@ -201,10 +201,11 @@ describe("crm_set_custom_field — a escrita", () => {
     expect(updates).toHaveLength(0);
   });
 
-  it("recusa campo restrito e não grava", async () => {
+  it("campo restrito responde como inexistente, sem revelar o rótulo, e não grava", async () => {
     const r = await gravar({ nota_interna: "vip" });
     expect(r.gravado).toBe(false);
-    expect((r.campos_nao_gravados as Linha[]).map((x) => x.motivo)).toEqual(["campo_restrito"]);
+    expect((r.campos_nao_gravados as Linha[]).map((x) => x.motivo)).toEqual(["campo_inexistente"]);
+    expect(JSON.stringify(r)).not.toContain("Nota interna");
     expect(updates).toHaveLength(0);
   });
 

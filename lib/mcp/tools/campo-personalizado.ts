@@ -289,19 +289,14 @@ export const crmSetCustomField: McpToolDefinition<typeof setCampoShape> = {
     for (const [chaveDoModelo, bruto] of entradas) {
       const alvo = chaveDoModelo.trim().toLowerCase();
       const campo = definicoes.find((d) => d.key.toLowerCase() === alvo);
-      if (!campo) {
+      // Campo NÃO público responde como inexistente, sem o rótulo: o agente não
+      // lê esses campos, e confirmar que a chave existe (e como se chama) já é
+      // revelar o que só o administrador vê.
+      if (!campo || !campo.publico) {
         recusados.push({
           campo: chaveDoModelo,
           motivo: "campo_inexistente",
           mensagem: `«${chaveDoModelo}» não é um campo desta empresa. Campos disponíveis: ${chavesDisponiveis(definicoes)}.`,
-        });
-        continue;
-      }
-      if (!campo.publico) {
-        recusados.push({
-          campo: campo.key,
-          motivo: "campo_restrito",
-          mensagem: `«${campo.label}» é restrito a administradores e não é preenchido pelo assistente.`,
         });
         continue;
       }
