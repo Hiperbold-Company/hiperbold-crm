@@ -235,7 +235,7 @@ import { esperarComoHumano, manterDigitando } from './atraso-humano';
 import { instrucaoDeBolhas, sendInBubbles, splitForSend } from './split-message';
 import { semConteudoVisivel } from './conteudo-visivel';
 import { formatarParaWhatsApp } from './formato-whatsapp';
-import { interactiveDasOpcoesDoAgente } from './opcoes-da-mensagem';
+import { interactiveDasOpcoesDoAgente, sufixoDasOpcoesParaACadeia } from './opcoes-da-mensagem';
 import { MAX_CORPO_COM_OPCOES, textoComOpcoesNumeradas } from '@/lib/channels/opcoes-numeradas';
 import type { OutboundInteractive } from '@/lib/channels/types';
 import type { DisclosureMode } from '../guardrails/disclosure/template';
@@ -4459,8 +4459,7 @@ async function executarTurnoDoAgente(
         // que a cadeia de guardrails avalia: os títulos também são texto do
         // modelo e chegam ao cliente. No `send`, o sufixo é tirado de volta e as
         // opções seguem estruturadas para o handler decidir a entrega.
-        const sufixoDasOpcoes =
-          interactive === undefined ? null : `\n\n${textoComOpcoesNumeradas('', interactive)}`;
+        const sufixoDasOpcoes = interactive === undefined ? null : sufixoDasOpcoesParaACadeia(interactive);
         const corpoParaACadeia = sufixoDasOpcoes === null ? body : `${body.trim()}${sufixoDasOpcoes}`;
         const corpoRepetido = dupTrava.checar(body);
         if (corpoRepetido !== null) {

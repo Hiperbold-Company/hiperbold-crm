@@ -18,6 +18,7 @@ import { z } from "zod";
 import {
   casarRespostaComOpcao,
   interactiveSchema,
+  textoComOpcoesNumeradas,
   MAX_BOTOES,
   MAX_DESCRICAO_DA_LISTA,
   MAX_ITENS_DA_LISTA,
@@ -131,4 +132,17 @@ export function opcaoEscolhida(
 ): string | null {
   const id = casarRespostaComOpcao({ texto: resposta.body, replyId: idDaResposta(resposta.metadata) }, oferecidas.items);
   return id === null ? null : (oferecidas.items.find((i) => i.id === id)?.label ?? null);
+}
+
+/**
+ * O SUFIXO que a cadeia de guardrails avalia junto do corpo: as opções
+ * numeradas e, na lista, o texto do botão que a abre (`button_label`). Os dois
+ * são texto escrito pelo modelo que chega à tela do cliente — o rótulo do botão
+ * fora da avaliação era uma porta para vocabulário interno ou promessa passar
+ * sem gate. O `send` com opções tira exatamente este sufixo antes de entregar
+ * as opções estruturadas; quando a cadeia mexe no fim, o texto sai como está.
+ */
+export function sufixoDasOpcoesParaACadeia(interactive: OutboundInteractive): string {
+  const cabeca = interactive.kind === "list" ? `${interactive.button_label}:\n` : "";
+  return `\n\n${cabeca}${textoComOpcoesNumeradas("", interactive)}`;
 }

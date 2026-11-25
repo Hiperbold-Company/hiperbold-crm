@@ -27,7 +27,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
 import type { HandlerCtx } from "@/lib/api/handlers/types";
 import { buildOpeningMessage } from "@/lib/agent-engine/agent/inbound-turn";
-import { interactiveDasOpcoesDoAgente } from "@/lib/agent-engine/agent/opcoes-da-mensagem";
+import { interactiveDasOpcoesDoAgente, sufixoDasOpcoesParaACadeia } from "@/lib/agent-engine/agent/opcoes-da-mensagem";
 import { corpoDoEnvio } from "@/lib/agent-engine/edge/crm/send-message";
 import { __test_fitToBudget, type LeadContext } from "@/lib/agent-engine/edge/crm/get-lead-context";
 import { internalVocabularyGate, type GateContext } from "@/lib/agent-engine/guardrails/before-send";
@@ -194,6 +194,42 @@ describe("3. a cadeia de guardrails continua no caminho", () => {
       internalVocabularyEnforced: true,
     };
     expect(internalVocabularyGate.evaluate(ctx).pass).toBe(false);
+  });
+});
+
+describe("3b. o texto do botão da lista também passa pela cadeia", () => {
+  const ctxCom = (body: string): GateContext => ({
+    now: new Date("2026-08-04T12:00:00Z"),
+    body,
+    optedOut: false,
+    provider: "waha",
+    pacing: { knobs: PACING_DEFAULTS, state: { lastSentAt: null, sentToday: 0, numberActivatedAt: null }, crmDailyLimit: null },
+    spinning: { knobs: SPINNING_DEFAULTS, window: [] },
+    promise: { table: null },
+    semanticPromise: null,
+    disclosure: { template: null, isFirstOutbound: false, mode: "inject" },
+    lgpd: null,
+    casesEnabled: false,
+    hasOpenCase: false,
+    openedCaseThisTurn: false,
+    internalVocabularyEnforced: true,
+  });
+  const lista = (botao: string) =>
+    converter({ formato: "lista", texto_do_botao: botao, itens: [{ titulo: "Centro" }, { titulo: "Praia" }] });
+
+  it("um texto de botão com vocabulário interno é vetado, mesmo com títulos limpos", () => {
+    const corpo = `Onde prefere?${sufixoDasOpcoesParaACadeia(lista("crm_list_leads"))}`;
+    expect(corpo).toContain("crm_list_leads");
+    expect(internalVocabularyGate.evaluate(ctxCom(corpo)).pass).toBe(false);
+  });
+
+  it("o mesmo texto com um botão limpo passa", () => {
+    expect(internalVocabularyGate.evaluate(ctxCom(`Onde prefere?${sufixoDasOpcoesParaACadeia(lista("Ver bairros"))}`)).pass).toBe(true);
+  });
+
+  it("o turno monta o texto da cadeia com este sufixo", () => {
+    const turno = readFileSync("lib/agent-engine/agent/inbound-turn.ts", "utf8");
+    expect(turno).toContain("sufixoDasOpcoesParaACadeia(interactive)");
   });
 });
 
