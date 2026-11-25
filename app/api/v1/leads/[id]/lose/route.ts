@@ -58,7 +58,7 @@ export async function POST(
         requestId,
         idioma: authz.idioma,
       },
-      { leadId, desfecho: "lost", motivo: input.lost_reason },
+      { leadId, desfecho: "lost", motivo: input.lost_reason, detalheDoMotivo: input.lost_reason_detail },
     );
     // 1015: a resposta segue o recorte do GET (campo não público só para administrador).
     const recortado = await recortarLinhaDaResposta(

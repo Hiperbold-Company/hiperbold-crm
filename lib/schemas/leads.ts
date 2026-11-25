@@ -34,6 +34,8 @@ export const moveLeadSchema = z.object({
    * diferente da que o /lose devolve para o mesmo caso).
    */
   lost_reason: z.string().max(500).optional(),
+  /** O texto do "Outro motivo": guardado à parte, nunca passa pelo vocabulário. */
+  lost_reason_detail: z.string().trim().max(500).optional(),
   /**
    * O motivo do ganho, quando a etapa de destino fecha o negócio como ganho
    * (issue #1536). Espelho do `lost_reason`: quem decide se é obrigatório é o
@@ -178,6 +180,11 @@ export function categoriaPadraoDoMotivo(valor: string): CategoriaDePerda | undef
  */
 export const loseLeadSchema = z.object({
   lost_reason: z.string().min(1, "lost_reason é obrigatório").max(500),
+  /**
+   * O texto de "Outro motivo" (`lost_reason = 'other'`). Vai à timeline da
+   * perda, não ao vocabulário — ver `detalheDoMotivoOutro`.
+   */
+  lost_reason_detail: z.string().trim().max(500).optional(),
 });
 export type LoseLeadInput = z.infer<typeof loseLeadSchema>;
 
@@ -317,6 +324,8 @@ export const bulkLeadActionSchema = z.discriminatedUnion("action", [
        * `lib/leads/motivo-da-perda.ts`.
        */
       lost_reason: z.string().max(500).optional(),
+      /** O texto de "Outro motivo": à parte do vocabulário (timeline da perda). */
+      lost_reason_detail: z.string().trim().max(500).optional(),
     }),
   }),
   z.object({

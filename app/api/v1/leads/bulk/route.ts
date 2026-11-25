@@ -32,6 +32,7 @@ import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { bulkLeadActionSchema, validateRequest } from "@/lib/schemas";
 import {
   decideMotivoDaPerda,
+  detalheDoMotivoOutro,
   etapaDePerda,
   razaoDaPerdaNaTimeline,
   recusaDeMotivoDaPerdaPeloBanco,
@@ -221,6 +222,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
 
       const motivoDoLote = input.params.lost_reason ?? null;
+      // O texto de "Outro motivo": à parte do vocabulário, só vale com `other`.
+      const detalheDoLote = detalheDoMotivoOutro(motivoDoLote, input.params.lost_reason_detail);
       let recusaDoMotivo: { codigo: string; mensagem: string } | null = null;
       const leadsSemMotivo: string[] = [];
       for (const linha of visible) {
@@ -492,7 +495,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             actor: { type: "user", id: user.id },
             reason:
               perdaNova && motivo.length > 0
-                ? razaoDaPerdaNaTimeline(motivo)
+                ? razaoDaPerdaNaTimeline(motivo, motivoDoLote ? detalheDoLote : null)
                 : stageChangeReason(
                     nomesEstagio.get(row.from_stage_id) ?? null,
                     nomesEstagio.get(input.params.stage_id) ?? null,
@@ -502,6 +505,7 @@ export async function POST(req: NextRequest): Promise<Response> {
               // `desfecho` que a `/lose` põe no payload da linha dela, e é o
               // que separa, para quem lê depois, "movido" de "perdido".
               ...(perdaNova ? { desfecho: "lost" } : {}),
+              ...(perdaNova && detalheDoLote ? { lost_reason_detail: detalheDoLote } : {}),
               from_stage_id: row.from_stage_id,
               to_stage_id: input.params.stage_id,
               pipeline_id: row.pipeline_id,
@@ -552,9 +556,10 @@ export async function POST(req: NextRequest): Promise<Response> {
               sourceModule: "crm",
               sourceId: row.lead_id,
               actor: { type: "user", id: user.id },
-              reason: `Perdido — ${motivo}`,
+              reason: razaoDaPerdaNaTimeline(motivo, motivoInformado ? detalheDoLote : null),
               payload: {
                 desfecho: "lost",
+                ...(motivoInformado && detalheDoLote ? { lost_reason_detail: detalheDoLote } : {}),
                 from_stage_id: row.from_stage_id,
                 to_stage_id: input.params.stage_id,
                 bulk: true,
@@ -582,6 +587,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                 from_stage_id: row.from_stage_id,
                 to_stage_id: input.params.stage_id,
                 lost_reason: motivo,
+                ...(motivoInformado && detalheDoLote ? { lost_reason_detail: detalheDoLote } : {}),
                 bulk: true,
               },
             });
