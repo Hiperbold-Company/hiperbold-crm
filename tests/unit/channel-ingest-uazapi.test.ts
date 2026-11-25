@@ -105,6 +105,7 @@ const base: UazapiMensagemLida = {
   mime: null,
   sentAt: "2026-09-15T12:00:00.000Z",
   quotedExternalId: null,
+  anuncio: null,
 };
 
 const entrada = { organizationId: "org-1", channelSessionId: "sess-1" };
@@ -157,6 +158,43 @@ describe("mensagem que entra", () => {
     expect(efeitosPosEntrada).toHaveBeenCalledTimes(1);
     expect(efeitosPosEntrada.mock.calls[0]![1]).toMatchObject({ origem: "uazapi_webhook", texto: "oi" });
     expect(pausarIa).not.toHaveBeenCalled();
+  });
+});
+
+describe("entrada que veio de anúncio", () => {
+  it("estampa o contato ANTES dos efeitos de entrada e grava o anúncio na mensagem", async () => {
+    let rpcsAteOsEfeitos: string[] = [];
+    efeitosPosEntrada.mockImplementationOnce(async () => {
+      rpcsAteOsEfeitos = rpcs.map((c) => c.nome);
+      return undefined;
+    });
+    const msg: UazapiMensagemLida = {
+      ...base,
+      anuncio: {
+        plataforma: "meta_ads",
+        sourceId: "CLIQUE-INVENTADO-1",
+        adId: "120250000000000001",
+        titulo: "Casa nova com renda garantida",
+        corpo: "Texto do anúncio",
+        sourceUrl: "https://www.instagram.com/p/AbCdEf123/",
+        miniatura: null,
+        bruto: { sourceID: "120250000000000001" },
+      },
+    };
+    await ingestUazapiMensagem(admin(), { ...entrada, msg });
+
+    const estampa = rpcs.find((c) => c.nome === "fn_estampar_atribuicao_de_anuncio");
+    expect(estampa).toBeDefined();
+    expect(estampa!.args).toMatchObject({ p_org: "org-1", p_contact: "contact-1" });
+    expect(estampa!.args.p_metadata).toMatchObject({
+      ad_source_id: "CLIQUE-INVENTADO-1",
+      ad_id: "120250000000000001",
+    });
+    // A estampa acontece antes do passo que faz nascer o negócio (ele copia o source_metadata do contato).
+    expect(efeitosPosEntrada).toHaveBeenCalledTimes(1);
+    expect(rpcsAteOsEfeitos).toContain("fn_estampar_atribuicao_de_anuncio");
+    expect(mensagemInserida!.metadata).toHaveProperty("anuncio");
+    expect(mensagemInserida!.metadata).toHaveProperty("meta_ctwa_message_v1");
   });
 });
 

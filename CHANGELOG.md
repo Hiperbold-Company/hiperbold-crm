@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.5.1] — 2026-11-25
+
+### Corrigido
+
+- **Conversa que vem de anúncio pela conexão UAZAPI passa a registrar a origem** Quando alguém clica num anúncio "Clique para o WhatsApp" e a empresa usa a conexão UAZAPI, o CRM agora grava de qual anúncio a pessoa veio (clique, anúncio, título, texto, link e miniatura), como já fazia na API oficial e no WAHA. As automações passam a receber esses dados em `{{contact.anuncio.*}}`.
+
 ## [2.5.0] — 2026-11-24
 
 ### Adicionado
@@ -14871,7 +14877,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.1...HEAD
+[2.5.1]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.2.0...v2.3.0
