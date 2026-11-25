@@ -587,7 +587,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                 from_stage_id: row.from_stage_id,
                 to_stage_id: input.params.stage_id,
                 lost_reason: motivo,
-                ...(motivoInformado && detalheDoLote ? { lost_reason_detail: detalheDoLote } : {}),
+                ...(motivoInformado && detalheDoLote ? { tem_detalhe: true } : {}),
                 bulk: true,
               },
             });

@@ -358,7 +358,7 @@ export async function encerraDemanda(
       from_stage_id: (lead as { stage_id: string }).stage_id,
       to_stage_id: (stage as { id: string }).id,
       ...(input.desfecho === "lost" ? { lost_reason: input.motivo } : {}),
-      ...(detalheOutro ? { lost_reason_detail: detalheOutro } : {}),
+      ...(detalheOutro ? { tem_detalhe: true } : {}),
       ...(input.desfecho === "won" && input.motivo?.trim()
         ? { won_reason: input.motivo.trim() }
         : {}),

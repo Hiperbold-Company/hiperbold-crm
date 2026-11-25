@@ -300,8 +300,10 @@ describe("encerraDemanda", () => {
     });
     expect(vi.mocked(audit).mock.calls[0]![0].metadata).toMatchObject({
       lost_reason: "other",
-      lost_reason_detail: "Cliente mudou de ideia",
+      tem_detalhe: true,
     });
+    // LGPD: o texto livre não vai para o api_audit_log (append-only, a anonimização não o alcança).
+    expect(JSON.stringify(vi.mocked(audit).mock.calls[0]![0].metadata)).not.toContain("Cliente mudou de ideia");
   });
 
   it("'Outro' SEM detalhe segue como antes: `other`, linha 'Perdido — other', sem chave de detalhe", async () => {
