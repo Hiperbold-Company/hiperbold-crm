@@ -38,6 +38,8 @@ const ORG_FUSAO = "10210000-0000-4000-8000-00000000000a";
 const ORG_TETO = "10210000-0000-4000-8000-00000000000b";
 const ORG_GATILHO = "10210000-0000-4000-8000-00000000000c";
 const ORG_ACRESCENTA = "10210000-0000-4000-8000-00000000000d";
+const ORG_ISOLA_A = "10210000-0000-4000-8000-00000000000e";
+const ORG_ISOLA_B = "10210000-0000-4000-8000-00000000000f";
 
 async function org(id: string, slug: string) {
   await pool.query(
@@ -76,10 +78,12 @@ beforeAll(async () => {
   await org(ORG_TETO, "org-1021-teto");
   await org(ORG_GATILHO, "org-1021-gatilho");
   await org(ORG_ACRESCENTA, "org-1021-acrescenta");
+  await org(ORG_ISOLA_A, "org-1021-isola-a");
+  await org(ORG_ISOLA_B, "org-1021-isola-b");
 });
 
 afterAll(async () => {
-  await pool.query("delete from organizations where id = any($1::uuid[])", [[ORG_FUSAO, ORG_TETO, ORG_GATILHO, ORG_ACRESCENTA]]);
+  await pool.query("delete from organizations where id = any($1::uuid[])", [[ORG_FUSAO, ORG_TETO, ORG_GATILHO, ORG_ACRESCENTA, ORG_ISOLA_A, ORG_ISOLA_B]]);
   await pool.end();
 });
 
@@ -214,6 +218,50 @@ describe("o gatilho do motivo da perda", () => {
       `select prosecdef from pg_proc where oid = 'public.fn_validate_lost_reason_required()'::regprocedure`,
     );
     expect(rows[0]!.prosecdef).toBe(true);
+  });
+});
+
+describe("isolamento entre duas empresas", () => {
+  it("o motivo da empresa A é recusado num negócio da empresa B", async () => {
+    await pool.query(`update organizations set settings = settings || '{"lost_reasons": ["Exclusivo da A"]}'::jsonb where id = $1`, [
+      ORG_ISOLA_A,
+    ]);
+    await pool.query(`update organizations set settings = settings || '{"lost_reasons": ["Da B"]}'::jsonb where id = $1`, [ORG_ISOLA_B]);
+    const funilB = await funil(ORG_ISOLA_B, "f1021-isola-b-gatilho", [], 1);
+    const etapa = async (slug: string, pos: number, perda: boolean) => {
+      const { rows } = await pool.query<{ id: string }>(
+        `insert into crm_stages (organization_id, pipeline_id, name, slug, position, is_lost)
+         values ($1::uuid, $2::uuid, $3::text, $3::text, $4, $5) returning id`,
+        [ORG_ISOLA_B, funilB, slug, pos, perda],
+      );
+      return rows[0]!.id;
+    };
+    const aberta = await etapa("e1021-isola-aberta", 1, false);
+    const perdido = await etapa("e1021-isola-perdido", 2, true);
+    const novoNegocio = async () =>
+      (
+        await pool.query<{ id: string }>(
+          `insert into crm_leads (organization_id, pipeline_id, stage_id, title, status)
+           values ($1, $2, $3, 'Negócio B', 'open') returning id`,
+          [ORG_ISOLA_B, funilB, aberta],
+        )
+      ).rows[0]!.id;
+    const perder = (id: string, motivo: string) =>
+      pool.query(`update crm_leads set stage_id = $2, lost_reason = $3 where id = $1`, [id, perdido, motivo]);
+
+    await expect(perder(await novoNegocio(), "Exclusivo da A")).rejects.toMatchObject({ code: "22023" });
+    // controle: o motivo da própria B passa no mesmo funil
+    await expect(perder(await novoNegocio(), "Da B")).resolves.toBeDefined();
+  });
+
+  it("a fusão da empresa A não lê funil da empresa B", async () => {
+    await pool.query(`update organizations set settings = settings - 'lost_reasons' where id = $1`, [ORG_ISOLA_A]);
+    await pool.query(`update organizations set settings = settings || '{"lost_reasons": ["Da B"]}'::jsonb where id = $1`, [ORG_ISOLA_B]);
+    await funil(ORG_ISOLA_A, "f1021-isola-a-fusao", ["Só da A"], 2);
+    await funil(ORG_ISOLA_B, "f1021-isola-b-fusao", ["Só da B"], 3);
+    await fundir(ORG_ISOLA_A);
+    expect((await settingsDa(ORG_ISOLA_A)).lost_reasons).toEqual(["Só da A"]);
+    expect((await settingsDa(ORG_ISOLA_B)).lost_reasons).toEqual(["Da B"]);
   });
 });
 
