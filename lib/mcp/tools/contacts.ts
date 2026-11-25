@@ -13,7 +13,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   listContactsHandler,
   getContactHandler,
+  patchContactHandler,
 } from "@/app/api/v1/contacts/_handler";
+import { ApiError } from "@/lib/api/types";
+import {
+  chavesDisponiveis,
+  converterValorDoCampoDoContato,
+  lerCamposDaOrganizacao,
+  TETO_DO_TEXTO_DO_CAMPO,
+} from "@/lib/campos/campo-do-contato-pelo-agente";
 import type { McpToolDefinition } from "../types";
 import { CAMPOS_PROPONIVEIS, proporDadoDoContato } from "@/lib/contacts/proposta-de-dado";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
@@ -414,5 +422,221 @@ export const crmProposeContactField: McpToolDefinition<typeof propostaShape> = {
       campo: input.campo,
       aguardando: "confirmação de uma pessoa",
     };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// crm_set_contact_custom_field — a resposta do cliente num campo DO CONTATO
+// ---------------------------------------------------------------------------
+
+/** Quantos campos numa chamada só: uma rodada de qualificação, não uma importação. */
+const MAX_CAMPOS_POR_CHAMADA = 10;
+
+const valorDoCampoShape = z.union([
+  z.string().max(TETO_DO_TEXTO_DO_CAMPO * 2),
+  z.number().finite(),
+  z.boolean(),
+  z.array(z.string().max(200)).max(30),
+]);
+
+const setCampoShape = {
+  campos: z
+    .record(z.string().min(1).max(40), valorDoCampoShape)
+    .describe(
+      "Mapa { chave: valor } com as respostas da pessoa. A chave é uma das listadas abaixo; em campo de " +
+        "opção, mande o NOME da opção escolhida (ex.: { \"interesse\": \"Moradia\" }).",
+    ),
+};
+
+/**
+ * Uma fila por contato, neste processo: o handler LÊ o mapa, mescla e regrava
+ * (o PATCH substitui `custom_fields`), e duas chamadas paralelas do mesmo turno
+ * leriam o mesmo estado e a segunda apagaria a primeira. Escritas do mesmo
+ * contato em sequência; contatos diferentes seguem em paralelo.
+ */
+const filaPorContato = new Map<string, Promise<unknown>>();
+function emSequencia<T>(chave: string, operacao: () => Promise<T>): Promise<T> {
+  const anterior = filaPorContato.get(chave) ?? Promise.resolve();
+  const atual = anterior.then(operacao, operacao);
+  const fim = atual.then(
+    () => undefined,
+    () => undefined,
+  );
+  filaPorContato.set(chave, fim);
+  void fim.then(() => {
+    if (filaPorContato.get(chave) === fim) filaPorContato.delete(chave);
+  });
+  return atual;
+}
+
+/** Iguais para gravar? Escalares por `===`, listas item a item. */
+function mesmoValor(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => x === b[i]);
+  return a === b;
+}
+
+interface RecusaDeCampo {
+  campo: string;
+  motivo: string;
+  mensagem: string;
+}
+
+/**
+ * Grava campos personalizados do CONTATO desta conversa — o que uma automação
+ * de qualificação fazia com "pergunta com botões → campo".
+ *
+ * O CONTATO NÃO É ARGUMENTO. Vem de `ctx.contatoDoTurno`, que só o runtime
+ * injeta (`lib/ai/runtime/tools.ts`); sem ele (rota HTTP, MCP externo) a
+ * ferramenta recusa. A organização vem do token, como em toda ferramenta. Não
+ * há id para o modelo errar nem para um cliente mal-intencionado apontar.
+ *
+ * A ESCRITA É A DA FICHA: `patchContactHandler`, com o mapa INTEIRO mesclado
+ * (as outras chaves ficam como estão). Por ele passam o bloqueio de contato
+ * anonimizado, o padrão do campo (`padrao`), o evento `contact.updated` e a
+ * auditoria `contact.updated` com o ator `ai_agent` — a mesma trilha de quem
+ * edita na tela.
+ */
+export const crmSetContactCustomField: McpToolDefinition<typeof setCampoShape> = {
+  name: "crm_set_contact_custom_field",
+  description:
+    "Grava, na ficha do CONTATO desta conversa, campos personalizados com o que a pessoa respondeu " +
+    "(ex.: a opção que ela escolheu numa pergunta com botões). Só grave o que a pessoa disse ou escolheu, " +
+    "nunca um palpite. Em campo de opção, use o nome de uma das opções listadas; o valor é conferido pelo " +
+    "tipo do campo e o que não servir volta recusado, com o motivo. Campo do NEGÓCIO não é gravado aqui " +
+    "(use crm_update_lead). O retorno `gravado: true` é o que permite dizer que ficou anotado.",
+  inputSchema: setCampoShape,
+  category: "write",
+  requiresRole: "agent",
+  requiresScope: "mcp:write",
+  handler: async (input, ctx) => {
+    const contato = ctx.contatoDoTurno;
+    if (!contato) {
+      return {
+        gravado: false,
+        motivo: "sem_conversa",
+        mensagem: "esta ferramenta só grava no contato de uma conversa em atendimento.",
+      };
+    }
+    const entradas = Object.entries(input.campos ?? {});
+    if (entradas.length === 0 || entradas.length > MAX_CAMPOS_POR_CHAMADA) {
+      return {
+        gravado: false,
+        motivo: "quantidade_invalida",
+        mensagem: `mande de 1 a ${MAX_CAMPOS_POR_CHAMADA} campos por chamada.`,
+      };
+    }
+
+    const definicoes = await lerCamposDaOrganizacao(ctx.supabase, ctx.organizationId);
+    if (definicoes === null) {
+      return { gravado: false, motivo: "indisponivel", mensagem: "não consegui ler os campos agora; tente de novo." };
+    }
+
+    const validos: Record<string, unknown> = {};
+    const recusados: RecusaDeCampo[] = [];
+    for (const [chaveDoModelo, bruto] of entradas) {
+      const alvo = chaveDoModelo.trim().toLowerCase();
+      const campo = definicoes.find((d) => d.key.toLowerCase() === alvo);
+      if (!campo) {
+        recusados.push({
+          campo: chaveDoModelo,
+          motivo: "campo_inexistente",
+          mensagem: `«${chaveDoModelo}» não é um campo do contato. Campos disponíveis: ${chavesDisponiveis(definicoes)}.`,
+        });
+        continue;
+      }
+      if (campo.entidade !== "contato") {
+        recusados.push({
+          campo: campo.key,
+          motivo: "campo_do_negocio",
+          mensagem: `«${campo.label}» é um campo do NEGÓCIO, não do contato: grave-o com crm_update_lead.`,
+        });
+        continue;
+      }
+      if (!campo.publico) {
+        recusados.push({
+          campo: campo.key,
+          motivo: "campo_restrito",
+          mensagem: `«${campo.label}» é restrito a administradores e não é preenchido pelo assistente.`,
+        });
+        continue;
+      }
+      const convertido = converterValorDoCampoDoContato(campo, bruto);
+      if (!convertido.ok) {
+        recusados.push({ campo: campo.key, motivo: convertido.motivo, mensagem: convertido.mensagem });
+        continue;
+      }
+      validos[campo.key] = convertido.valor;
+    }
+
+    const comRecusas = (r: Record<string, unknown>) =>
+      recusados.length > 0
+        ? { ...r, campos_nao_gravados: recusados, erro_de_ensino: recusados.map((x) => x.mensagem).join(" ") }
+        : r;
+
+    if (Object.keys(validos).length === 0) {
+      return comRecusas({ gravado: false, motivo: "nada_gravado" });
+    }
+
+    return emSequencia(JSON.stringify([ctx.organizationId, contato]), async () => {
+      const { data: linha, error } = await ctx.supabase
+        .from("contacts")
+        .select("id, custom_fields, is_personal, is_anonymized")
+        .eq("organization_id", ctx.organizationId)
+        .eq("id", contato)
+        .maybeSingle();
+      if (error) {
+        return comRecusas({ gravado: false, motivo: "indisponivel", mensagem: "não consegui ler a ficha agora." });
+      }
+      const ficha = linha as
+        | { custom_fields: unknown; is_personal: boolean | null; is_anonymized: boolean | null }
+        | null;
+      if (!ficha) {
+        return comRecusas({ gravado: false, motivo: "contato_nao_encontrado", mensagem: "não encontrei a ficha desta conversa." });
+      }
+      if (ficha.is_personal === true) {
+        return comRecusas({
+          gravado: false,
+          motivo: "contato_pessoal",
+          mensagem: "este contato foi marcado como pessoal — nada se escreve para ele; siga a conversa.",
+        });
+      }
+      if (ficha.is_anonymized === true) {
+        return comRecusas({
+          gravado: false,
+          motivo: "contato_anonimizado",
+          mensagem: "esse contato exerceu o direito de exclusão de dados; não é possível registrar informações dele.",
+        });
+      }
+      const atual =
+        ficha.custom_fields && typeof ficha.custom_fields === "object" && !Array.isArray(ficha.custom_fields)
+          ? (ficha.custom_fields as Record<string, unknown>)
+          : {};
+      const mudam = Object.entries(validos).filter(([k, v]) => !mesmoValor(atual[k], v));
+      if (mudam.length === 0) {
+        return comRecusas({ gravado: true, campos: validos, sem_mudanca: true });
+      }
+      try {
+        await patchContactHandler(
+          ctx.supabase,
+          { organization_id: ctx.organizationId, actor: ctx.actor, requestId: ctx.requestId },
+          contato,
+          { custom_fields: { ...atual, ...validos } },
+        );
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 422) {
+          // O padrão do campo (`padrao`) recusou: a frase é a que o dono escreveu.
+          return comRecusas({
+            gravado: false,
+            motivo: "fora_do_padrao",
+            mensagem: `${err.message} Não grave assim: pergunte de novo à pessoa.`,
+          });
+        }
+        if (err instanceof ApiError && err.status === 403) {
+          return comRecusas({ gravado: false, motivo: "contato_anonimizado", mensagem: err.message });
+        }
+        throw err;
+      }
+      return comRecusas({ gravado: true, campos: validos });
+    });
   },
 };

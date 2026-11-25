@@ -146,6 +146,8 @@ export const ALVO_DE_FUNIL: Record<string, AlvoDeFunil> = {
   crm_resume_ai_attendance: "sem_funil",
   crm_save_org_memory: "sem_funil",
   crm_propose_contact_field: "sem_funil",
+  // Campo do CONTATO, não do negócio: não há funil a conferir. O alvo é o contato do turno.
+  crm_set_contact_custom_field: "sem_funil",
   // Rascunho sugerido por integração (#1611): opera por `conversation_id`,
   // nunca `lead_id`, e não mexe em estado de funil nenhum. A barreira é OUTRA,
   // e é dela que a segurança depende: o RBAC da rota (agent+), o escopo

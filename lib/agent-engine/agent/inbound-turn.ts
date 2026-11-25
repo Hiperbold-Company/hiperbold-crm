@@ -235,6 +235,9 @@ import { esperarComoHumano, manterDigitando } from './atraso-humano';
 import { instrucaoDeBolhas, sendInBubbles, splitForSend } from './split-message';
 import { semConteudoVisivel } from './conteudo-visivel';
 import { formatarParaWhatsApp } from './formato-whatsapp';
+import { interactiveDasOpcoesDoAgente } from './opcoes-da-mensagem';
+import { MAX_CORPO_COM_OPCOES, textoComOpcoesNumeradas } from '@/lib/channels/opcoes-numeradas';
+import type { OutboundInteractive } from '@/lib/channels/types';
 import type { DisclosureMode } from '../guardrails/disclosure/template';
 import { decidePromise } from '../guardrails/promise/engine';
 import { loadPromiseTable } from '../guardrails/promise/table';
@@ -387,6 +390,29 @@ export const AGENT_TOOL_DEFS = {
         .describe(
           'código de um produto do catálogo (o `codigo` de crm_search_products) que tem `fotos`: ' +
             'as fotos dele vão junto, e o texto vira a legenda da primeira',
+        ),
+      // Schema LARGO para o SDK (o modelo vê os campos); a validação REAL é
+      // `interactiveDasOpcoesDoAgente` dentro do execute — limite estourado
+      // vira erro de ENSINO ao modelo, nunca exceção do SDK.
+      opcoes: z
+        .object({
+          formato: z.string().describe('"botoes" (até 3 opções, título até 20 caracteres) ou "lista" (até 10 itens, título até 24, descrição até 72)'),
+          itens: z
+            .array(
+              z.object({
+                titulo: z.string().describe('o texto da opção, como o cliente vai tocar/ler'),
+                descricao: z.string().optional().describe('só na lista: detalhe curto do item'),
+              }).passthrough(),
+            )
+            .describe('as opções, na ordem em que aparecem'),
+          texto_do_botao: z.string().optional().describe('só na lista (obrigatório nela): o texto do botão que abre a lista, até 20 caracteres'),
+        })
+        .passthrough()
+        .optional()
+        .describe(
+          'opções para o cliente responder tocando (pergunta de múltipla escolha). Onde o canal não desenha ' +
+            'botões, elas saem numeradas no texto e o cliente responde com o número. A resposta dele chega no ' +
+            'turno seguinte com `opcao_escolhida` = o título escolhido. Não combine com produto_codigo.',
         ),
     }),
   },
@@ -4373,7 +4399,7 @@ async function executarTurnoDoAgente(
     }),
     send_message: tool({
       ...AGENT_TOOL_DEFS.send_message,
-      execute: async ({ body: corpoDoModelo, produto_codigo }) => {
+      execute: async ({ body: corpoDoModelo, produto_codigo, opcoes }) => {
         tentativasDeEnvio += 1;
         // O texto sai no formato do WhatsApp — sem `\n` literal nem
         // `**negrito**` de Markdown na tela do cliente. Antes de qualquer gate,
@@ -4410,6 +4436,32 @@ async function executarTurnoDoAgente(
         // correção re-entra por aqui, na janela em memória. Bolhas de UM
         // send_message não se comparam entre si (só candidato contra candidato),
         // então fatiamento legítimo não se autossuprime.
+        // OPÇÕES (botões ou lista): conferidas ANTES de qualquer reserva, como o
+        // corpo vazio — erro de ENSINO ao modelo, nada sai. Uma mensagem com
+        // opções é UMA mensagem física: sem fotos (o handler recusa anexo), sem
+        // voz e sem bolhas (ver o `send` abaixo).
+        let interactive: OutboundInteractive | undefined;
+        if (opcoes !== undefined) {
+          const convertidas = interactiveDasOpcoesDoAgente(opcoes);
+          const recusa = !convertidas.ok
+            ? convertidas.mensagem
+            : produto_codigo !== undefined && produto_codigo.trim() !== ''
+              ? 'opcoes não combinam com produto_codigo: mande a foto numa mensagem e a pergunta com opções em outra.'
+              : body.length > MAX_CORPO_COM_OPCOES
+                ? `o texto de uma mensagem com opções tem no máximo ${MAX_CORPO_COM_OPCOES} caracteres; encurte.`
+                : null;
+          if (recusa !== null || !convertidas.ok) {
+            return { ok: false, error: { code: 'opcoes_invalidas', message: recusa ?? 'opcoes inválidas.' } };
+          }
+          interactive = convertidas.interactive;
+        }
+        // As opções numeradas, como um canal sem botões as mostra. É ESTE texto
+        // que a cadeia de guardrails avalia: os títulos também são texto do
+        // modelo e chegam ao cliente. No `send`, o sufixo é tirado de volta e as
+        // opções seguem estruturadas para o handler decidir a entrega.
+        const sufixoDasOpcoes =
+          interactive === undefined ? null : `\n\n${textoComOpcoesNumeradas('', interactive)}`;
+        const corpoParaACadeia = sufixoDasOpcoes === null ? body : `${body.trim()}${sufixoDasOpcoes}`;
         const corpoRepetido = dupTrava.checar(body);
         if (corpoRepetido !== null) {
           runLog.info('duplicate_suppressed — candidato quase idêntico ao já aceito no turno', {
@@ -4660,7 +4712,7 @@ async function executarTurnoDoAgente(
             leadId,
             jobId: liveJob().id,
             channelSessionId: input.channelSessionId,
-            body,
+            body: corpoParaACadeia,
             optedOutThisTurn,
             // `inbound_turn`/`case_reply_turn` respondem a quem escreveu e leem a
             // janela de RESPOSTA (0495). `followup_turn` retoma conversa parada e
@@ -4840,6 +4892,42 @@ async function executarTurnoDoAgente(
               });
             },
           };
+          // COM OPÇÕES: a cadeia avaliou o texto com as opções numeradas no fim
+          // (`corpoParaACadeia`). Se o fim chega intacto ao `send`, tira-se o
+          // sufixo e a mensagem sai UMA só (sem bolhas, sem voz, sem fotos), com
+          // as opções estruturadas — o handler as desenha ou numera conforme o
+          // canal. Se a cadeia mexeu no fim, o texto já traz as opções numeradas
+          // e segue pelo `send` comum. O envio continua DENTRO da cadeia: é ela
+          // que chama este `send`, com o lock e os gates de sempre.
+          if (interactive !== undefined && sufixoDasOpcoes !== null) {
+            const opcoesDaMensagem = interactive;
+            const sufixo = sufixoDasOpcoes;
+            const enviarSemOpcoes = beforeSendArgs.send;
+            beforeSendArgs.send = (finalBody: string) => {
+              if (!finalBody.endsWith(sufixo)) return enviarSemOpcoes(finalBody);
+              pararDigitando();
+              const texto = finalBody.slice(0, finalBody.length - sufixo.length);
+              const saida = { db: pool, organizationId: tenantId, conversationId: preview ? null : input.conversationId, via: 'inbound_turn' as const, mensagem: { jobId: preview ? '' : liveJob().id, seq: seq + 1 }, avisar: (m: string, c: Record<string, unknown>) => runLog.warn(m, c) };
+              return enviarComSaidaConfiguravel(saida, texto, (corpo) => {
+                corposEnviados.push(corpo);
+                seq += 1;
+                // Rodapé de saída ou aviso de IA podem passar do teto do corpo com
+                // opções nativas: aí as opções vão numeradas no próprio texto.
+                const comOpcoes = corpo.length <= MAX_CORPO_COM_OPCOES;
+                return liveChannel().send({
+                  tenantId,
+                  leadId,
+                  jobId: liveJob().id,
+                  jobClaim: claimOfJob(liveJob()),
+                  agentOperation,
+                  seq,
+                  conversationId: input.conversationId,
+                  body: comOpcoes ? corpo : textoComOpcoesNumeradas(corpo, opcoesDaMensagem),
+                  ...(comOpcoes ? { interactive: opcoesDaMensagem } : {}),
+                });
+              });
+            };
+          }
           let chain = await runBeforeSend(beforeSendArgs);
           if (
             chain.status === 'vetoed' &&

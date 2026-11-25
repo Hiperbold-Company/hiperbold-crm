@@ -12047,6 +12047,7 @@ export const DICIONARIO: Traducoes = {
   "Ver as compras do cliente": { es: "Ver las compras del cliente" },
   "Procurar produto na loja": { es: "Buscar producto en la tienda" },
   "Anotar dado que o cliente informou": { es: "Anotar dato que informó el cliente" },
+  "Preencher campo personalizado do contato": { es: "Completar campo personalizado del contacto" },
   "Procurar cliente": { es: "Buscar cliente" },
   "Ver ficha do cliente": { es: "Ver ficha del cliente" },
   "Ver as etapas de um funil": { es: "Ver las etapas de un embudo" },

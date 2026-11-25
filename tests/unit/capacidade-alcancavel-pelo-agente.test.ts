@@ -97,6 +97,11 @@ const ESCRITA_QUE_E_TRABALHO_DE_ATENDENTE: ReadonlyArray<string> = [
   // esse custo é limitado pelo índice único parcial da 0123: no máximo uma
   // proposta viva por contato e campo, ou seja três por contato.
   "crm_propose_contact_field",
+  // `app/api/v1/contacts/[id]/` — o PATCH exige `agent`, e esta tool grava pelo
+  // MESMO `patchContactHandler`, só em `custom_fields` do contato DA CONVERSA
+  // (sem argumento de alvo) e só nas chaves públicas do contato. É o que uma
+  // automação de qualificação fazia: gravar a resposta do cliente na ficha.
+  "crm_set_contact_custom_field",
   // `app/api/v1/ai/cases/[id]/` — exige `agent`.
   "crm_close_human_case",
   // `app/api/v1/conversations/[id]/reactivate-bot/` — POST exige `agent`.

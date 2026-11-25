@@ -105,6 +105,28 @@ export const TOOLS_ATENDIMENTO = declararTools([
     pacotes: ["vender"],
   },
   {
+    name: "crm_set_contact_custom_field",
+    category: "write",
+    rotulo: "Preencher campo personalizado do contato",
+    explicacao:
+      "Grava na ficha do cliente desta conversa a resposta que ele deu, nos campos personalizados do contato " +
+      "criados pela empresa (por exemplo, a opção escolhida numa pergunta com botões). Só os campos do contato " +
+      "visíveis à equipe; o valor é conferido pelo tipo do campo e as outras informações da ficha não mudam.",
+    oQueToca: "Cadastro de clientes",
+    // `atencao`: muda a ficha (dado que a equipe vê e que pode disparar
+    // automação de "contato atualizado"), mas só do cliente da conversa, com
+    // auditoria e sem sobrescrever nada além da chave pedida.
+    //
+    // Em "organizar", e não em "vender"/"atender": "vender" é o pacote que todo
+    // agente novo ganha no onboarding (`PACOTE_PADRAO_DO_ONBOARDING`), e uma vaga
+    // a mais ali deixa o agente recém-nascido sem NENHUMA segunda jornada que
+    // caiba no teto (`tests/unit/pacote-reserva-vaga-da-critica.test.ts`, defeito
+    // D3). "atender" já encosta no teto. Ligar é escolha do dono: pacote
+    // "Organizar a operação" ou modo avançado.
+    risco: "atencao",
+    pacotes: ["organizar"],
+  },
+  {
     name: "crm_list_conversations",
     category: "read",
     rotulo: "Listar conversas",

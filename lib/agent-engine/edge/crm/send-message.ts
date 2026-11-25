@@ -42,6 +42,7 @@ import { cancelJob, rescheduleJob, type JobRow } from '../../queue/queue';
 import { cancelPendingCronsForLead } from '../../cron/scheduler';
 import { CrmTransportError, type CrmEdgeConfig } from './mcp-client';
 import type { TipoDeMidiaComLegenda } from '@/lib/messaging/media/midia-com-legenda';
+import type { OutboundInteractive } from '@/lib/channels/types';
 
 /** Erro de negócio não classificado do handler (ex.: conversa inexistente) — ledger fica 'requested'. */
 export class SendToolError extends Error {
@@ -111,6 +112,12 @@ export interface SendMessageInput {
   media?:
     | { storagePath: string; mime: string }
     | { url: string; mime: string; type: TipoDeMidiaComLegenda };
+  /**
+   * Opções (botões ou lista) desta mensagem de TEXTO. Vão ao handler de envio,
+   * que as desenha no canal que sabe e as converte em texto numerado nos outros.
+   * Só valem para texto: com voz, template ou mídia, são ignoradas.
+   */
+  interactive?: OutboundInteractive;
 }
 
 /**
@@ -153,6 +160,7 @@ export function corpoDoEnvio(
         : { type: 'text' as const }),
     // Foto sem legenda vai sem `body`: o schema do envio pede corpo não vazio.
     ...(input.body !== '' || !input.media ? { body: input.body } : {}),
+    ...(input.interactive && !voz && !input.template && !input.media ? { interactive: input.interactive } : {}),
     metadata: { idempotency_key: idempotencyKey },
   };
 }
