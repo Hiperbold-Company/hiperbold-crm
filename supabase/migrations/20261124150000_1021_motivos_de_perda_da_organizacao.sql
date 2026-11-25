@@ -338,3 +338,5 @@ begin
   end loop;
 end
 $fusao$;
+
+reset lock_timeout;
