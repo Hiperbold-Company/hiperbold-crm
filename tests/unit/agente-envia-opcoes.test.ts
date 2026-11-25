@@ -147,11 +147,12 @@ describe("2. do turno ao canal", () => {
   });
 
   it("canal sem botões: a linha grava o texto numerado", async () => {
-    vi.stubEnv("WAHA_API_BASE_URL", undefined);
-    vi.stubEnv("WAHA_API_KEY", undefined);
-    const { supabase, capturas } = criarDubleDoHandler({ conversation: conversa("waha") });
+    // O canal por QR passou a desenhar opções (enquete); o canal intermediado
+    // segue sem elas (`interactive: "none"`). O que se afirma é a forma do
+    // corpo, decidida antes do transporte — o envio em si pode falhar aqui.
+    const { supabase, capturas } = criarDubleDoHandler({ conversation: conversa("zernio") });
 
-    await sendMessageHandler(supabase, ctxDoAgente, corpoDoEnvio({ ...base, body: "Qual o objetivo?", interactive: converter(BOTOES) }, "k"));
+    await sendMessageHandler(supabase, ctxDoAgente, corpoDoEnvio({ ...base, body: "Qual o objetivo?", interactive: converter(BOTOES) }, "k")).catch(() => undefined);
 
     const linha = capturas.inserts.messages![0]!;
     expect(linha.body).toBe("Qual o objetivo?\n\n1) Moradia\n2) Investimento");

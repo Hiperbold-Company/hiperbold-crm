@@ -224,7 +224,8 @@ describe("crm_set_custom_field — a escrita", () => {
 
   it("não alcança contato de OUTRA organização, mesmo que seja o 'contato do turno'", async () => {
     const r = await gravar({ interesse: "Moradia" }, CONTATO_B);
-    expect(r).toMatchObject({ gravado: false, motivo: "contato_nao_encontrado" });
+    expect(r).toMatchObject({ gravado: false });
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ motivo: "contato_nao_encontrado" });
     expect(fichaDe(CONTATO_B).custom_fields).toEqual({});
     expect(updates).toHaveLength(0);
   });
@@ -236,7 +237,8 @@ describe("crm_set_custom_field — a escrita", () => {
   it("contato pessoal recusa", async () => {
     fichaDe(CONTATO).is_personal = true;
     const r = await gravar({ interesse: "Moradia" });
-    expect(r).toMatchObject({ gravado: false, motivo: "contato_pessoal" });
+    expect(r).toMatchObject({ gravado: false });
+    expect((r.campos_nao_gravados as Linha[])[0]).toMatchObject({ motivo: "contato_pessoal" });
     expect(updates).toHaveLength(0);
   });
 

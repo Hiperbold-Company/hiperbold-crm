@@ -205,7 +205,7 @@ export function parseUazapiMensagem(env: UazapiEnvelope): LeituraDaMensagem {
       sentAt: carimbo(m.messageTimestamp),
       quotedExternalId: str(m.quoted),
       anuncio: saida ? null : extrairAtribuicaoUazapi(conteudo),
-      reply,
+      ...(reply ? { reply } : {}),
     },
   };
 }

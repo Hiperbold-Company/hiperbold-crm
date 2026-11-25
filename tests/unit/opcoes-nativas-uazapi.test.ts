@@ -153,7 +153,7 @@ describe("UAZAPI — o clique volta como a resposta de texto", () => {
   it("mensagem comum não ganha reply", () => {
     expect(respostaDeOpcaoUazapi({ messageType: "Conversation", text: "oi" })).toBeNull();
     const r = parseUazapiMensagem(env({ messageType: "Conversation", text: "1" }));
-    expect(r.ok && r.msg.reply).toBeNull();
+    expect(r.ok && r.msg.reply).toBeUndefined();
   });
 
   it("resposta numerada digitada casa pelo número", () => {

@@ -319,11 +319,11 @@ export const crmSetCustomField: McpToolDefinition<typeof setCampoShape> = {
     for (const entidade of ["contato", "negocio"] as const) {
       const validos = porEntidade[entidade];
       if (Object.keys(validos).length === 0) continue;
-      const desfecho =
+      const desfecho: Desfecho & { recusados?: RecusaDeCampo[] } =
         entidade === "contato"
           ? await gravarNoContato(ctx, contato, validos)
           : await gravarNoNegocio(ctx, contato, validos);
-      if ("recusados" in desfecho && desfecho.recusados) recusados.push(...desfecho.recusados);
+      if (desfecho.recusados) recusados.push(...desfecho.recusados);
       if (desfecho.gravado) {
         algumGravado = true;
         if (!desfecho.sem_mudanca) semMudanca = false;

@@ -36,8 +36,9 @@ describe("capabilities da instância em servidor próprio", () => {
       costPerMessage: false,
       alteraMensagemEnviada: false,
       anexosDeSaida: { imagem: true, video: true, audio: true, documento: true, contato: true },
-      // Opções (botões/lista) saem como texto numerado: o adapter não as monta.
-      interactive: "none",
+      // Opções (botões/lista) saem pelo `/send/menu`; o adapter cai para texto
+      // numerado quando o servidor recusa (tests/unit/opcoes-nativas-uazapi.test.ts).
+      interactive: "native",
       // Agenda do aparelho (capability nova do upstream): o adapter da UAZAPI não lê.
       phonebook: false,
     });

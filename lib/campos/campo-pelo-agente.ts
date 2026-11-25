@@ -139,7 +139,7 @@ function listaDeOpcoes(campo: CampoPersonalizado): string {
  * Converte o valor que o modelo mandou para o que a ficha guarda. Recusa com a
  * frase para o MODELO (pergunte de novo, escolha uma opção), nunca grava torto.
  */
-export function converterValorDoCampoPersonalizado(campo: CampoPersonalizado, bruto: unknown): ValorConvertido {
+export function converterValorDoCampo(campo: CampoPersonalizado, bruto: unknown): ValorConvertido {
   if (TIPOS_FORA_DO_AGENTE.has(campo.type)) {
     return {
       ok: false,
