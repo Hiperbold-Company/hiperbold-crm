@@ -107,6 +107,21 @@ describe("UAZAPI — envio e reserva", () => {
     expect(corpo(1).text).toBe("Qual o objetivo?\n\n1) Moradia\n2) Investimento");
   });
 
+  it("menu com 500, 408 ou 429: sobe o erro e NÃO reenvia como texto", async () => {
+    for (const status of [500, 408, 429]) {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValueOnce(resposta(status, { error: "ocupado" }));
+      await expect(uazapiAdapter.send(envelope(BOTOES))).rejects.toThrow(`uazapi_send_failed: ${status}`);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("menu com 422: reserva em texto numerado", async () => {
+    fetchMock.mockResolvedValueOnce(resposta(422, { error: "invalid choices" }));
+    fetchMock.mockResolvedValueOnce(resposta(200, { messageid: "3EB0TXT" }));
+    expect(await uazapiAdapter.send(envelope(BOTOES))).toEqual({ externalId: "3EB0TXT", opcoesComoTexto: true });
+  });
+
   it("opções que não cabem no menu: vai direto o texto numerado", async () => {
     fetchMock.mockResolvedValueOnce(resposta(200, { messageid: "3EB0TXT" }));
     const r = await uazapiAdapter.send(envelope({ kind: "buttons", items: [{ id: "opcao_1", label: "A|B" }] }));

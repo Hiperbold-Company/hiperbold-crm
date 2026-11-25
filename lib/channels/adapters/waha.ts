@@ -5,7 +5,7 @@
  *
  * Nenhuma regra de negócio mora neste arquivo (ver `ChannelAdapter` em ../types).
  */
-import { textoComOpcoesNumeradas } from "../opcoes-numeradas";
+import { RECUSA_DEFINITIVA_DAS_OPCOES, textoComOpcoesNumeradas } from "../opcoes-numeradas";
 import { corpoDaEnqueteWaha } from "@/lib/waha/enquete";
 import { wahaContactPayload } from "@/lib/waha/contact-card";
 import { fetchWahaMedia } from "@/lib/messaging/media/waha-source";
@@ -331,14 +331,19 @@ export const wahaAdapter: ChannelAdapter = {
     let opcoesComoTexto = false;
     if (envelope.kind === "text" && envelope.interactive && !envelope.media) {
       // OPÇÕES NATIVAS = ENQUETE (`sendPoll`). Reserva em texto numerado só
-      // quando o servidor RESPONDEU que não enviou, ou quando as opções não
-      // cabem numa enquete. Rede/timeout sobe: a enquete pode ter saído.
+      // quando o servidor RECUSOU de forma definitiva (400, 404, 405, 422), ou
+      // quando as opções não cabem numa enquete. Rede, timeout, 5xx, 408 e 429
+      // sobem: a enquete pode ter saído.
       const citacao = envelope.replyToExternalId ? idCompletoDaMensagem(envelope.replyToExternalId, to) : null;
       const enquete = corpoDaEnqueteWaha(envelope.sessionRef, to, envelope.body ?? "", envelope.interactive, citacao);
       await envelope.beforeSend?.();
       const r = enquete ? await client.sendPoll({ ...enquete }) : null;
       if (r?.ok) {
         res = r.json;
+      } else if (r && !RECUSA_DEFINITIVA_DAS_OPCOES.has(r.status)) {
+        // 5xx, 408, 429: transitório ou ambíguo — pode ter saído. Sobe como o
+        // `sendText` sobe, sem reenviar como texto.
+        throw new Error(`waha_${r.status}`);
       } else {
         opcoesComoTexto = true;
         res = await client.sendMessage(

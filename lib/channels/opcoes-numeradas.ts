@@ -65,6 +65,14 @@ export const interactiveSchema = z.discriminatedUnion("kind", [
   }),
 ]) satisfies z.ZodType<OutboundInteractive>;
 
+/**
+ * Respostas HTTP em que o canal DISSE que não enviou as opções nativas e
+ * repetir o mesmo pedido não muda nada: só nelas a reserva em texto numerado
+ * dispara. 5xx, 408 e 429 são transitórios ou ambíguos (pode ter saído) e
+ * sobem como erro, sem reenvio.
+ */
+export const RECUSA_DEFINITIVA_DAS_OPCOES: ReadonlySet<number> = new Set([400, 404, 405, 422]);
+
 /** Como as opções chegaram ao contato — gravado em `messages.metadata.interactive.entrega`. */
 export type EntregaDasOpcoes = "nativa" | "texto_numerado";
 

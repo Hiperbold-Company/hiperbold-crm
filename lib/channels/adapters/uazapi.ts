@@ -28,7 +28,7 @@ import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-interno
 import { lerComTeto } from "@/lib/messaging/media/ler-com-teto";
 import { MAX_MEDIA_BYTES, MediaTooLargeError, type FetchedMedia } from "@/lib/messaging/media/types";
 
-import { textoComOpcoesNumeradas } from "../opcoes-numeradas";
+import { RECUSA_DEFINITIVA_DAS_OPCOES, textoComOpcoesNumeradas } from "../opcoes-numeradas";
 import { corpoDoMenuUazapi } from "../uazapi/menu";
 import { resolveUazapiCreds, type UazapiCredentials } from "../uazapi/credentials";
 import { saudeDoEstadoUazapi } from "../uazapi/saude";
@@ -213,8 +213,9 @@ export const uazapiAdapter: ChannelAdapter = {
 
     // ── OPÇÕES NATIVAS: `/send/menu`, com reserva em texto numerado ─────────
     //
-    // A reserva só entra quando o servidor RESPONDEU com erro (a mensagem não
-    // saiu) ou quando as opções não cabem no formato do menu. Exceção de rede
+    // A reserva só entra quando o servidor RECUSOU de forma definitiva (400,
+    // 404, 405, 422: a mensagem não saiu) ou quando as opções não cabem no
+    // formato do menu. 5xx, 408 e 429 sobem como erro, sem reenvio. Exceção de rede
     // ou timeout sobe como sempre: o menu pode ter saído, e mandar o texto
     // depois entregaria a pergunta duas vezes.
     if (envelope.kind === "text" && envelope.interactive && !envelope.media) {
@@ -224,6 +225,7 @@ export const uazapiAdapter: ChannelAdapter = {
       if (menu) {
         const { res, json } = await chamar(creds, "/send/menu", { ...menu });
         if (res.ok) return { externalId: idDaMensagem(json) };
+        if (!RECUSA_DEFINITIVA_DAS_OPCOES.has(res.status)) throw new Error(`uazapi_send_failed: ${motivo(json, res)}`);
       }
       const { res, json } = await chamar(creds, "/send/text", {
         number: envelope.to,

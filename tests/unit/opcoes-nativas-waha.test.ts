@@ -105,6 +105,15 @@ describe("WAHA — envio e reserva", () => {
     expect(chamadasPara(f, "/api/sendText")[0]!.text).toBe("Qual o objetivo?\n\n1) Moradia\n2) Investimento");
   });
 
+  it("enquete com 500 ou 429: sobe o erro e NÃO reenvia como texto", async () => {
+    for (const status of [500, 429]) {
+      const f = stubWaha(() => Promise.resolve(new Response("{}", { status })));
+      await expect(getAdapter("waha").send(envelope(BOTOES))).rejects.toThrow(`waha_${status}`);
+      expect(chamadasPara(f, "/api/sendText")).toHaveLength(0);
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("pergunta maior que a enquete aceita: texto numerado sem tentar a enquete", async () => {
     const f = stubWaha(() => Promise.resolve(Response.json({ id: "x" })));
     const r = await getAdapter("waha").send(envelope(BOTOES, "y".repeat(300)));
