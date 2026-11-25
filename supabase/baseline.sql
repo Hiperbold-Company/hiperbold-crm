@@ -4449,7 +4449,6 @@ GRANT ALL ON FUNCTION "public"."fn_validate_activity_lead_org"() TO "service_rol
 
 
 REVOKE ALL ON FUNCTION "public"."fn_validate_lost_reason_required"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_validate_lost_reason_required"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_validate_lost_reason_required"() TO "service_role";
 
 
@@ -66671,7 +66670,8 @@ revoke execute on function public.fn_crm_lead_close_on_stage() from public, anon
 grant  execute on function public.fn_crm_lead_close_on_stage() to authenticated, service_role;
 
 revoke execute on function public.fn_validate_lost_reason_required() from public, anon;
-grant  execute on function public.fn_validate_lost_reason_required() to authenticated, service_role;
+-- 1021: o gatilho virou security definer e o EXECUTE ficou só com service_role (ver o bloco da 1021).
+grant  execute on function public.fn_validate_lost_reason_required() to service_role;
 
 -- ---- papel único nos helpers de visibilidade (migration 9090) ----
 -- manifest: Reutiliza o papel uma vez por chamada de visibilidade, preservando curto-circuito master e regras por linha (#3882).

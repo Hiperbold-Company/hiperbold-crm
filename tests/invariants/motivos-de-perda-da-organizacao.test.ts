@@ -41,7 +41,7 @@ const ORG_ACRESCENTA = "10210000-0000-4000-8000-00000000000d";
 
 async function org(id: string, slug: string) {
   await pool.query(
-    `insert into organizations (id, slug, legal_name, display_name) values ($1, $2, $2, $2)
+    `insert into organizations (id, slug, legal_name, display_name) values ($1::uuid, $2::text, $2::text, $2::text)
      on conflict (id) do nothing`,
     [id, slug],
   );
@@ -52,7 +52,7 @@ async function org(id: string, slug: string) {
 async function funil(orgId: string, slug: string, motivos: unknown[], diasAtras: number): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(
     `insert into crm_pipelines (organization_id, name, slug, position, settings, created_at)
-     values ($1, $2, $2, 100, jsonb_build_object('lost_reasons', $3::jsonb), now() - make_interval(days => $4))
+     values ($1::uuid, $2::text, $2::text, 100, jsonb_build_object('lost_reasons', $3::jsonb), now() - make_interval(days => $4::int))
      returning id`,
     [orgId, slug, JSON.stringify(motivos), diasAtras],
   );
@@ -170,7 +170,7 @@ describe("o gatilho do motivo da perda", () => {
     const etapa = async (slug: string, pos: number, perda: boolean) => {
       const { rows } = await pool.query<{ id: string }>(
         `insert into crm_stages (organization_id, pipeline_id, name, slug, position, is_lost)
-         values ($1, $2, $3, $3, $4, $5) returning id`,
+         values ($1::uuid, $2::uuid, $3::text, $3::text, $4, $5) returning id`,
         [ORG_GATILHO, funilGatilho, slug, pos, perda],
       );
       return rows[0]!.id;

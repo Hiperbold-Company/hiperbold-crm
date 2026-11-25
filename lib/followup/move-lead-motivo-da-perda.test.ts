@@ -131,7 +131,9 @@ describe("carregaEtapasCitadas — lê is_lost e os motivos do funil", () => {
           error: null,
         }),
     };
-    const cliente = { from: (t: string) => ((pedido.tabela = t), consulta) } as never;
+    // `??=`: a PRIMEIRA tabela é a das etapas; depois vem a leitura da lista de motivos da
+    // organização (1021), que este dublê não serve (cai no legado do funil, como deve).
+    const cliente = { from: (t: string) => ((pedido.tabela ??= t), consulta) } as never;
     const r = await carregaEtapasCitadas(cliente, "org-1", [mover(PERDA, "no_response")]);
     expect(pedido.tabela).toBe("crm_stages");
     expect(pedido.filtros).toContainEqual(["organization_id", "org-1"]);
