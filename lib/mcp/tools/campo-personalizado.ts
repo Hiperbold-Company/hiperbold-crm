@@ -41,6 +41,7 @@ import {
 } from "@/lib/campos/campo-pelo-agente";
 import type { EntidadeDoCampo } from "@/lib/campos/definicoes";
 import { podeOperarNoFunil, recusaParaOModelo } from "@/lib/leads/escopo-de-funil";
+import { conferirCamposPersonalizados } from "@/lib/mcp/conferencia-de-campos";
 
 import type { McpContext, McpToolDefinition } from "../types";
 import { crmUpdateLead } from "./leads";
@@ -106,8 +107,32 @@ type Desfecho =
   | { gravado: true; campos: Record<string, unknown>; sem_mudanca?: true }
   | { gravado: false; motivo: string; mensagem: string };
 
-/** Grava os campos do CONTATO na ficha do contato da conversa. */
+/**
+ * Grava os campos do CONTATO na ficha do contato da conversa, depois da MESMA
+ * conferência do negócio (`conferirCamposPersonalizados`: padrão do campo e o
+ * Jev, "o cliente disse isto?"). O que ela recusa volta como ensino e não é
+ * gravado.
+ */
 async function gravarNoContato(
+  ctx: McpContext,
+  contato: string,
+  pedidos: Record<string, unknown>,
+): Promise<Desfecho & { recusados?: RecusaDeCampo[] }> {
+  const conferencia = await conferirCamposPersonalizados(ctx, { contatoId: contato }, pedidos);
+  const recusados: RecusaDeCampo[] = conferencia.recusados.map((r) => ({
+    campo: r.campo,
+    motivo: String(r.motivo),
+    mensagem: r.mensagem,
+  }));
+  const validos = conferencia.custom_fields ?? pedidos;
+  if (Object.keys(validos).length === 0) {
+    return { gravado: false, motivo: "nada_gravado", mensagem: "nenhum campo do contato foi gravado.", recusados };
+  }
+  const desfecho = await gravarNoContatoConferido(ctx, contato, validos);
+  return { ...desfecho, recusados };
+}
+
+async function gravarNoContatoConferido(
   ctx: McpContext,
   contato: string,
   validos: Record<string, unknown>,
