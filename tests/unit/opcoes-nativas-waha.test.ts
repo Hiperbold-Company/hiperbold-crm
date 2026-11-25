@@ -31,11 +31,24 @@ const BOTOES: OutboundInteractive = {
   ],
 };
 
-function stubWaha(sendPoll: () => Promise<Response>) {
+/** A config da sessão como o GET do WAHA devolve: a entrada do CRM assinando `poll.vote`. */
+const SESSAO_QUE_ENTREGA_VOTO = () =>
+  Response.json({
+    name: "default",
+    status: "WORKING",
+    config: {
+      webhooks: [
+        { url: "https://crm.exemplo.com.br/api/v1/webhooks/waha/abc", events: ["message.any", "poll.vote"] },
+      ],
+    },
+  });
+
+function stubWaha(sendPoll: () => Promise<Response>, sessao: () => Promise<Response> = () => Promise.resolve(SESSAO_QUE_ENTREGA_VOTO())) {
   vi.stubEnv("WAHA_API_BASE_URL", "http://localhost:3030");
   vi.stubEnv("WAHA_API_KEY", "hash123");
   const fetchMock = vi.fn().mockImplementation((u: string) => {
     const href = String(u);
+    if (href.endsWith("/api/sessions/default")) return sessao();
     if (href.includes("/api/contacts/check-exists")) {
       return Promise.resolve(Response.json({ numberExists: true, chatId: "5531999998888@c.us" }));
     }
@@ -119,6 +132,29 @@ describe("WAHA — envio e reserva", () => {
     const r = await getAdapter("waha").send(envelope(BOTOES, "y".repeat(300)));
     expect(r.opcoesComoTexto).toBe(true);
     expect(chamadasPara(f, "/api/sendPoll")).toHaveLength(0);
+  });
+
+  it("sessão que NÃO entrega o voto ao CRM: texto numerado, sem tentar a enquete", async () => {
+    // O que se mede: o toque do contato numa enquete que ninguém recebe se
+    // perde. Sessão conectada antes do poll.vote, webhook só global (o GET
+    // não mostra), entrada sem poll.vote, GET com erro ou o dublê que responde
+    // `200 {}` a tudo (o do e2e): todos saem como texto numerado.
+    const semVoto = [
+      () => Promise.resolve(Response.json({ name: "default", config: { webhooks: [{ url: "https://crm.exemplo.com.br/api/v1/webhooks/waha/abc", events: ["message.any"] }] } })),
+      () => Promise.resolve(Response.json({ name: "default", config: { webhooks: [{ url: "https://outro.exemplo.com/hook", events: ["poll.vote"] }] } })),
+      () => Promise.resolve(Response.json({})),
+      () => Promise.resolve(new Response("{}", { status: 500 })),
+      () => Promise.reject(new TypeError("fetch failed")),
+    ];
+    for (const sessao of semVoto) {
+      const f = stubWaha(() => Promise.resolve(Response.json({ id: "x" })), sessao);
+      const r = await getAdapter("waha").send(envelope(BOTOES));
+      expect(r.opcoesComoTexto).toBe(true);
+      expect(chamadasPara(f, "/api/sendPoll")).toHaveLength(0);
+      expect(chamadasPara(f, "/api/sendText")[0]!.text).toBe("Qual o objetivo?\n\n1) Moradia\n2) Investimento");
+      vi.unstubAllGlobals();
+      limparMemoCheckExists();
+    }
   });
 
   it("erro de REDE na enquete não reenvia como texto", async () => {

@@ -331,13 +331,17 @@ export const wahaAdapter: ChannelAdapter = {
     let opcoesComoTexto = false;
     if (envelope.kind === "text" && envelope.interactive && !envelope.media) {
       // OPÇÕES NATIVAS = ENQUETE (`sendPoll`). Reserva em texto numerado só
-      // quando o servidor RECUSOU de forma definitiva (400, 404, 405, 422), ou
-      // quando as opções não cabem numa enquete. Rede, timeout, 5xx, 408 e 429
+      // quando o servidor RECUSOU de forma definitiva (400, 404, 405, 422),
+      // quando as opções não cabem numa enquete, ou quando a sessão não
+      // entrega o voto ao CRM. Rede, timeout, 5xx, 408 e 429
       // sobem: a enquete pode ter saído.
       const citacao = envelope.replyToExternalId ? idCompletoDaMensagem(envelope.replyToExternalId, to) : null;
       const enquete = corpoDaEnqueteWaha(envelope.sessionRef, to, envelope.body ?? "", envelope.interactive, citacao);
       await envelope.beforeSend?.();
-      const r = enquete ? await client.sendPoll({ ...enquete }) : null;
+      // Enquete só para a sessão que comprovadamente ENTREGA o voto ao CRM
+      // (`recebeVotoDeEnquete`); sem isso, o toque do contato se perderia.
+      const podeEnquete = enquete ? await client.recebeVotoDeEnquete(envelope.sessionRef) : false;
+      const r = enquete && podeEnquete ? await client.sendPoll({ ...enquete }) : null;
       if (r?.ok) {
         res = r.json;
       } else if (r && !RECUSA_DEFINITIVA_DAS_OPCOES.has(r.status)) {

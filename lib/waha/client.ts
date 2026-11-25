@@ -1145,6 +1145,36 @@ export class WahaClient {
   }
 
   /**
+   * A sessão ENTREGA o voto de enquete ao CRM? Só quando a config da sessão tem
+   * a entrada do CRM (`/api/v1/webhooks/waha/`) assinando `poll.vote` (ou `*`).
+   *
+   * Existe porque mandar enquete a quem não entrega o voto é pior que texto
+   * numerado: o contato toca, nada chega, e a automação segue por "Sem
+   * resposta". A sessão conectada antes do `poll.vote` entrar na lista só
+   * ganha o evento na próxima convergência (reconexão), e o webhook GLOBAL
+   * (env `WHATSAPP_HOOK_EVENTS`) não aparece no GET da sessão — nos dois casos
+   * a resposta é `false` e a mensagem sai como texto numerado.
+   *
+   * NUNCA lança: erro, timeout ou corpo estranho = `false`.
+   */
+  async recebeVotoDeEnquete(name: string): Promise<boolean> {
+    try {
+      const res = await this.fetchComTeto(`${this.baseUrl}/api/sessions/${encodeURIComponent(name)}`, {
+        headers: { "X-Api-Key": this.apiKey },
+      });
+      if (!res.ok) return false;
+      const body = (await res.json().catch(() => null)) as { config?: Record<string, unknown> | null } | null;
+      return entradasDeWebhook(body?.config ?? null).some((w) => {
+        if (typeof w.url !== "string" || !w.url.includes(CAMINHO_DO_WEBHOOK_DA_SESSAO)) return false;
+        const eventos = Array.isArray(w.events) ? w.events : [];
+        return eventos.includes("poll.vote") || eventos.includes("*");
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * `POST /api/sendPoll` — a enquete, a forma de opção tocável do canal por QR
    * (`sendButtons` está depreciado). O corpo sai pronto de `corpoDaEnqueteWaha`
    * (`./enquete`).
