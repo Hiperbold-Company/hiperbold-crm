@@ -21,7 +21,7 @@ export const ROTULOS_DO_TIPO: Record<CustomFieldDef["type"], string> = {
   text: "Texto curto",
   textarea: "Texto longo",
   number: "Número",
-  currency: "Moeda (BRL)",
+  currency: "Moeda",
   date: "Data",
   select: "Lista de uma escolha",
   multiselect: "Lista de várias escolhas",

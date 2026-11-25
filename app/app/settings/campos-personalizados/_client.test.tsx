@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-import type { DefinicaoDeCampo } from "@/lib/campos/definicoes";
+import { alteracaoDeDefinicaoSchema, novaDefinicaoSchema, type DefinicaoDeCampo } from "@/lib/campos/definicoes";
 
 import { CamposPersonalizadosClient, chaveDoNome, corpoDoRascunho, rascunhoDe } from "./_client";
 
@@ -102,6 +102,52 @@ describe("Configurações › Campos Personalizados", () => {
   });
 });
 
+describe("moeda por campo", () => {
+  const MOEDA: DefinicaoDeCampo = { ...CAMPO, key: "investimento", label: "Valor de investimento", type: "currency", config: {} };
+
+  it("o botão do tipo diz só Moeda e escolher o tipo mostra o seletor, na moeda da organização", async () => {
+    render(<CamposPersonalizadosClient iniciais={[]} />);
+    fireEvent.click(screen.getByTestId("novo-campo-negocio"));
+    await userEvent.click(screen.getByRole("tab", { name: "Tipo de dado" }));
+    expect(screen.queryByTestId("moeda-do-campo")).toBeNull();
+    const botao = screen.getByTestId("tipo-currency");
+    expect(botao).toHaveTextContent(/^Moeda$/);
+    await userEvent.click(botao);
+    const seletor = screen.getByLabelText("Moeda do campo") as HTMLSelectElement;
+    expect([...seletor.options].map((o) => o.value)).toEqual(["BRL", "USD", "EUR"]);
+    expect(seletor.value).toBe("BRL");
+  });
+
+  it("criar um campo em dólar grava config.moeda", async () => {
+    render(<CamposPersonalizadosClient iniciais={[]} />);
+    fireEvent.click(screen.getByTestId("novo-campo-negocio"));
+    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Valor de investimento" } });
+    await userEvent.click(screen.getByRole("tab", { name: "Tipo de dado" }));
+    await userEvent.click(screen.getByTestId("tipo-currency"));
+    await userEvent.selectOptions(screen.getByLabelText("Moeda do campo"), "USD");
+    fireEvent.click(screen.getByTestId("salvar-campo"));
+    await waitFor(() => expect(chamadas.length).toBe(1));
+    expect(JSON.parse(String(chamadas[0]?.init?.body))).toMatchObject({ type: "currency", config: { moeda: "USD" } });
+  });
+
+  it("campo antigo sem moeda abre com a da organização marcada, e a lista diz Moeda (BRL)", async () => {
+    render(<CamposPersonalizadosClient iniciais={[MOEDA, { ...MOEDA, id: "22222222-2222-4222-8222-222222222222", key: "usd", label: "Em dólar", config: { moeda: "USD" } }]} />);
+    expect(screen.getByTestId("campo-investimento")).toHaveTextContent("Moeda (BRL)");
+    expect(screen.getByTestId("campo-usd")).toHaveTextContent("Moeda (USD)");
+    fireEvent.click(screen.getAllByRole("button", { name: "Editar" })[0]!);
+    await userEvent.click(screen.getByRole("tab", { name: "Tipo de dado" }));
+    expect((screen.getByLabelText("Moeda do campo") as HTMLSelectElement).value).toBe("BRL");
+    expect(screen.getByText("Trocar a moeda não converte os valores já gravados.")).toBeInTheDocument();
+  });
+
+  it("sem escolha, nada de moeda no config; com escolha, vai na edição", () => {
+    expect(corpoDoRascunho(rascunhoDe(MOEDA)).config).not.toHaveProperty("moeda");
+    expect(corpoDoRascunho({ ...rascunhoDe(MOEDA), moeda: "EUR" }).config).toMatchObject({ moeda: "EUR" });
+    expect(rascunhoDe({ ...MOEDA, config: { moeda: "USD" } }).moeda).toBe("USD");
+    expect(rascunhoDe({ ...MOEDA, config: { moeda: "GBP" } }).moeda).toBe("");
+  });
+});
+
 describe("o corpo que a tela manda", () => {
   it("edição NUNCA leva key, type nem entidade (a rota recusaria)", () => {
     const corpo = corpoDoRascunho(rascunhoDe(CAMPO));
@@ -109,6 +155,15 @@ describe("o corpo que a tela manda", () => {
     expect(corpo).not.toHaveProperty("type");
     expect(corpo).not.toHaveProperty("entidade");
     expect(corpo.config).toMatchObject({ options: [{ value: "site", label: "Site" }], padrao: null });
+  });
+
+  it("o corpo que a tela manda na edição e na criação PASSA no schema da rota (sem 422)", () => {
+    const edicao = corpoDoRascunho(rascunhoDe(CAMPO));
+    expect(alteracaoDeDefinicaoSchema.safeParse(edicao).success).toBe(true);
+    const comMoeda = corpoDoRascunho({ ...rascunhoDe({ ...CAMPO, type: "currency", config: {} }), moeda: "USD" });
+    expect(alteracaoDeDefinicaoSchema.safeParse(comMoeda).success).toBe(true);
+    const criacao = corpoDoRascunho({ ...rascunhoDe(CAMPO), id: null, entidade: "negocio" });
+    expect(novaDefinicaoSchema.safeParse(criacao).success).toBe(true);
   });
 
   it("a chave sugerida tira acento e começa por letra", () => {

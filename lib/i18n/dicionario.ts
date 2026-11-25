@@ -17948,6 +17948,12 @@ export const DICIONARIO: Traducoes = {
   },
   Número: { es: "Número" },
   "Moeda (BRL)": { es: "Moneda (BRL)" },
+  "Moeda do campo": { es: "Moneda del campo" },
+  "Real (BRL)": { es: "Real (BRL)" },
+  "Dólar (USD)": { es: "Dólar estadounidense (USD)" },
+  "Euro (EUR)": { es: "Euro (EUR)" },
+  "Moeda da organização": { es: "Moneda de la organización" },
+  "Trocar a moeda não converte os valores já gravados.": { es: "Cambiar la moneda no convierte los valores ya guardados." },
   "Uma resposta numérica não estava no formato aceito pelo formulário. Confira se o campo contém apenas números e use o formato BRL na pergunta de moeda.":
     {
       es: "Una respuesta numérica no tenía un formato aceptado por el formulario. Comprueba que el campo contenga solo números y usa el formato BRL en la pregunta de moneda.",
