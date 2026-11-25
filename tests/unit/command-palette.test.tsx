@@ -63,8 +63,9 @@ describe("CommandPalette", () => {
   it("ignora acento, porque ninguém digita acento com pressa", async () => {
     const user = userEvent.setup();
     abrir();
-    await user.type(screen.getByRole("combobox"), "orcamento");
-    expect(screen.getByRole("option", { name: /Uso e orçamento/ })).toBeTruthy();
+    // Era "orcamento" → "Uso e orçamento", tela que saiu do catálogo em 25/11/2026.
+    await user.type(screen.getByRole("combobox"), "execucoes");
+    expect(screen.getByRole("option", { name: /Execuções/ })).toBeTruthy();
   });
 
   it("busca também na descrição, não só no rótulo", async () => {

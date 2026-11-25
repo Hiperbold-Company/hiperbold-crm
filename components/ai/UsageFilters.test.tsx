@@ -14,7 +14,8 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import type { UsagePayload } from "@/lib/ai/usage/aggregate";
 
 import { UsageFilters } from "./UsageFilters";
-import { UsageDashboardClient } from "@/app/app/ai/usage/_client";
+// O painel saiu de /app/ai/usage para Desempenho › Agentes de IA em 25/11/2026.
+import { AgentesDeIaPanel } from "@/app/app/metrics/_components/AgentesDeIaPanel";
 
 const substituir = vi.fn();
 let busca = "";
@@ -112,11 +113,11 @@ describe("UsageFilters — Tipo de uso", () => {
   });
 });
 
-describe("UsageDashboardClient — as opções não encolhem ao filtrar", () => {
+describe("AgentesDeIaPanel — as opções não encolhem ao filtrar", () => {
   it("com um tipo escolhido, os outros tipos do período continuam oferecidos", { timeout: TETO_MS }, async () => {
     busca = "invocation_kind=stage_classifier";
     const user = usuario();
-    render(<UsageDashboardClient agents={[]} initial={{ invocation_kind: "stage_classifier" }} />);
+    render(<AgentesDeIaPanel agents={[]} initial={{ invocation_kind: "stage_classifier" }} />);
 
     expect(await opcoesDoTipo(user)).toEqual([
       "Todas",

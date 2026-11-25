@@ -25,6 +25,9 @@ export default async function MetricsPage() {
   const idioma = user.idioma;
   // Funis do filtro global: leitura da sessão (a RLS decide), só os vivos.
   let funis: { id: string; name: string }[] = [];
+  // Agentes do filtro da aba "Agentes de IA" (vinda de /app/ai/usage em 25/11/2026). Só lidos
+  // para gerente para cima, o mesmo piso da aba e de `GET /api/v1/ai/usage`.
+  let agentesDeIa: { id: string; name: string }[] = [];
   if (activeOrg) {
     const supabase = await createClient();
     const { data } = await supabase
@@ -34,6 +37,15 @@ export default async function MetricsPage() {
       .eq("is_archived", false)
       .order("position");
     funis = data ?? [];
+    if (canCompare) {
+      const { data: agentes } = await supabase
+        .from("ai_agents")
+        .select("id, name")
+        .eq("organization_id", activeOrg.orgId)
+        .order("is_default", { ascending: false })
+        .order("name", { ascending: true });
+      agentesDeIa = (agentes ?? []).map((a: { id: string; name: string }) => ({ id: a.id, name: a.name }));
+    }
   }
   const t = (texto: string) => traduzir(texto, idioma);
 
@@ -54,6 +66,7 @@ export default async function MetricsPage() {
           podeVerPerdas={podeVerPerdas}
           currentUserId={user.id}
           funis={funis}
+          agentesDeIa={agentesDeIa}
         />
       </Suspense>
     </div>

@@ -35,7 +35,8 @@ const TELAS = [
   { rota: "/app/ai/knowledge/sources", nome: "acervo-de-conhecimento", dono: "W5" },
   { rota: "/app/ai/skills", nome: "habilidades", dono: "W5" },
   { rota: "/app/ai/memory", nome: "memoria-da-organizacao", dono: "W5" },
-  { rota: "/app/ai/usage", nome: "consumo", dono: "W1" },
+  // /app/ai/usage virou redirect (25/11/2026); as métricas do agente moram em Desempenho.
+  { rota: "/app/metrics?aba=agentes_de_ia", nome: "consumo", dono: "W1" },
   { rota: "/app/ai/inbox", nome: "caixa-do-humano", dono: "W3" },
   { rota: "/app/ai/routers", nome: "roteadores", dono: "W3" },
   { rota: "/app/ai/agents/new", nome: "criar-agente", dono: "W1" },

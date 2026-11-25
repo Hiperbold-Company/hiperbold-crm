@@ -26307,6 +26307,23 @@ export const DICIONARIO: Traducoes = {
   // organização (app/app/settings/plano) ───
   "Plano e uso": { es: "Plan y uso" },
   "Meu plano": { es: "Mi plan" },
+  // 25/11/2026: "Meu plano" virou "Meu plano e consumo de IA", o lugar único do consumo de IA,
+  // e as métricas técnicas do agente foram para Desempenho › Agentes de IA.
+  "Meu plano e consumo de IA": {
+    es: "Mi plan y consumo de IA",
+  },
+  "Plano contratado, pagamento, consumo de tokens de IA e cancelamento.": {
+    es: "Plan contratado, pago, consumo de tokens de IA y cancelación.",
+  },
+  "Quanto sua organização usa de cada item do plano contratado, e quantos tokens de IA já consumiu no mês.": {
+    es: "Cuánto usa tu organización de cada elemento del plan contratado, y cuántos tokens de IA ya consumió en el mes.",
+  },
+  "Tokens por dia": {
+    es: "Tokens por día",
+  },
+  "Esta aba tem filtros próprios (agente, tipo de uso e datas): não segue período, funil nem atendente do topo. O consumo de tokens do plano fica em Meu plano e consumo de IA.": {
+    es: "Esta pestaña tiene filtros propios (agente, tipo de uso y fechas): no sigue el período, el embudo ni el agente de arriba. El consumo de tokens del plan está en Mi plan y consumo de IA.",
+  },
   "Plano contratado, pagamento, uso e cancelamento.": {
     es: "Plan contratado, pago, uso y cancelación.",
   },

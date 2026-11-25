@@ -187,14 +187,14 @@ test.describe("Criar um agente pela tela", () => {
 
 test.describe("Olhar o consumo de IA", () => {
   test("a tela mostra os números do período e nomeia o que eles são", async ({ page }) => {
-    await page.goto("/app/ai/usage");
-    await expect(page.getByRole("heading", { name: /uso de ia/i })).toBeVisible();
+    // Desde 25/11/2026 as métricas do agente moram em Desempenho › Agentes de IA, sem dólar.
+    await page.goto("/app/metrics?aba=agentes_de_ia");
+    await expect(page.getByRole("heading", { name: /desempenho/i })).toBeVisible();
 
     // Os cartões do topo existem e nomeiam o que medem. "Atendimentos com IA"
     // contava CHAMADAS ao modelo e "Tempo de resposta" media UMA chamada — os
     // rótulos antigos não podem voltar (migration 0586 e a tela honesta).
     for (const rotulo of [
-      /custo no período/i,
       /chamadas de ia/i,
       /turnos do agente/i,
       /taxa de cache/i,
@@ -202,7 +202,7 @@ test.describe("Olhar o consumo de IA", () => {
     ]) {
       await expect(page.getByText(rotulo).first()).toBeVisible();
     }
-    for (const antigo of [/atendimentos com ia/i, /^tempo de resposta$/i]) {
+    for (const antigo of [/atendimentos com ia/i, /^tempo de resposta$/i, /custo no período/i, /US\$/]) {
       await expect(page.getByText(antigo)).toHaveCount(0);
     }
 
@@ -223,8 +223,9 @@ test.describe("Olhar o consumo de IA", () => {
   });
 
   test("um período sem nenhum dado é explicado, não fica em branco", async ({ page }) => {
-    await page.goto("/app/ai/usage");
-    await expect(page.getByRole("heading", { name: /uso de ia/i })).toBeVisible();
+    // Desde 25/11/2026 as métricas do agente moram em Desempenho › Agentes de IA, sem dólar.
+    await page.goto("/app/metrics?aba=agentes_de_ia");
+    await expect(page.getByRole("heading", { name: /desempenho/i })).toBeVisible();
 
     // Uma janela no passado onde não houve uso nenhum.
     const de = page.locator('input[type="date"]').first();
