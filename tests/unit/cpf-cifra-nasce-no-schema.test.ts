@@ -191,6 +191,9 @@ describe("o código grava os DOIS campos ou NENHUM (#2522)", () => {
     expect(importacao.match(/gravarCpfDoContatoPorUsuario\(/g)).toHaveLength(1);
     // E o helper grava os dois campos no MESMO update, nunca um só.
     const helper = readFileSync(join(process.cwd(), "lib/contacts/cpf-do-contato.ts"), "utf8");
-    expect(helper).toMatch(/\.update\(\{ cpf_hash: cpf\.hash, cpf_encrypted: cpf\.cifrado \}\)/);
+    // Desde a 1020 o TIPO do documento vai no mesmo update (null no Brasil e em Portugal).
+    expect(helper).toMatch(
+      /\.update\(\{ cpf_hash: cpf\.hash, cpf_encrypted: cpf\.cifrado, document_type: cpf\.tipo \?\? null \}\)/,
+    );
   });
 });

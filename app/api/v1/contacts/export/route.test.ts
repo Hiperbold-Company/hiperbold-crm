@@ -6,6 +6,7 @@
  * aqui ele é dublê de propósito: o que se mede é o que a rota faz em volta —
  * paginação até o teto, formato, papel, CPF decifrado e `contacts.exported`.
  */
+import type * as PerfilDoPaisModulo from "@/lib/legal/perfil-do-pais";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,7 +17,8 @@ import { mapHeader, mapLinha, parseCsv } from "@/lib/contacts/csv";
 import { createClient } from "@/lib/supabase/server";
 import type { Contact } from "@/lib/types/contacts";
 
-import { cpfsDecifradosDosContatos } from "@/lib/contacts/cpf-do-contato";
+import { cpfsDecifradosDosContatos, tiposDoDocumentoDosContatos } from "@/lib/contacts/cpf-do-contato";
+import { perfilDaOrganizacao, perfilDoPais } from "@/lib/legal/perfil-do-pais";
 
 import { listContactsHandler } from "../_handler";
 
@@ -25,7 +27,14 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 // outro), e o CPF sai pelo caminho da ficha (`cpfsDecifradosDosContatos`, cliente de serviço — D-216).
 const limite = vi.fn(async () => ({ allowed: true }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: () => limite() }));
-vi.mock("@/lib/contacts/cpf-do-contato", () => ({ cpfsDecifradosDosContatos: vi.fn() }));
+vi.mock("@/lib/contacts/cpf-do-contato", () => ({
+  cpfsDecifradosDosContatos: vi.fn(),
+  tiposDoDocumentoDosContatos: vi.fn(async () => new Map()),
+}));
+vi.mock("@/lib/legal/perfil-do-pais", async (importOriginal) => {
+  const real = await importOriginal<typeof PerfilDoPaisModulo>();
+  return { ...real, perfilDaOrganizacao: vi.fn() };
+});
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("../_handler", () => ({ listContactsHandler: vi.fn() }));
@@ -117,6 +126,8 @@ beforeEach(() => {
   RPC.mockResolvedValue({ data: null, error: null });
   limite.mockResolvedValue({ allowed: true });
   vi.mocked(cpfsDecifradosDosContatos).mockResolvedValue(new Map());
+  vi.mocked(tiposDoDocumentoDosContatos).mockResolvedValue(new Map());
+  vi.mocked(perfilDaOrganizacao).mockResolvedValue(perfilDoPais(null));
   vi.mocked(createClient).mockResolvedValue({ rpc: RPC } as never);
 });
 
@@ -256,6 +267,28 @@ describe("o CSV de contatos", () => {
     const vcf = await (await chamar("?formato=vcf")).text();
 
     expect(vcf).toContain("NOTE:CPF 52998224725");
+  });
+
+  it("organização nos EUA: o documento sai rotulado pelo tipo, no CSV e no vCard", async () => {
+    vi.mocked(perfilDaOrganizacao).mockResolvedValue(perfilDoPais("US"));
+    devolvePaginas([contato(1, { cpf_hash: "hash-1" })]);
+    vi.mocked(cpfsDecifradosDosContatos).mockResolvedValue(
+      new Map([["00000000-0000-4000-8000-000001", "A12345678"]]),
+    );
+    vi.mocked(tiposDoDocumentoDosContatos).mockResolvedValue(
+      new Map([["00000000-0000-4000-8000-000001", "us_passport"]]),
+    );
+
+    const csv = await (await chamar()).text();
+    const cabecalho = csv.replace(/^\uFEFF/, "").split("\n")[0]!;
+    expect(cabecalho).toContain("document,document_type");
+    expect(cabecalho).not.toMatch(/\bcpf\b/);
+    expect(dadosDoCsv(csv)[0]).toContain("A12345678,us_passport");
+
+    devolvePaginas([contato(1, { cpf_hash: "hash-1" })]);
+    const vcf = await (await chamar("?formato=vcf")).text();
+    expect(vcf).toContain("NOTE:Passaporte americano (US Passport) A12345678");
+    expect(vcf).not.toContain("NOTE:CPF");
   });
 
   it("perfil abaixo de gerente com a exportação liberada: exporta, mas SEM CPF (a ficha também não mostra)", async () => {

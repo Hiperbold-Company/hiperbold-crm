@@ -53,6 +53,12 @@ export interface Contact {
   cpf_hash?: string | null;
   /** A API diz só SE há CPF cadastrado, nunca o hash. */
   cpf_available?: boolean;
+  /**
+   * O TIPO do documento gravado (migration 1020): só nos EUA, onde o titular
+   * escolhe entre os tipos de `lib/legal/tipos-de-documento.ts`. `null` no
+   * Brasil e em Portugal (tipo implícito) e em contato sem documento.
+   */
+  document_type?: string | null;
   birthdate: string | null;
   is_blocked: boolean;
   blocked_reason: string | null;

@@ -18,6 +18,7 @@
  * seguidos de algo que não é número): o valor leva um `'` na frente. Telefone e número
  * (`+55 35 …`, `-12,5`) não levam — não são fórmula e a aspa estragaria o dado.
  */
+import { tipoDeDocumento } from "@/lib/legal/tipos-de-documento";
 import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { rotuloDaOrigem } from "@/lib/contacts/origens";
@@ -37,6 +38,8 @@ export interface ContatoParaCsv {
   custom_fields: Record<string, unknown> | null;
   /** CPF em claro (só dígitos), já decifrado pela rota. Só sai com `ReferenciasDoCsv.comCpf`. */
   cpf?: string | null;
+  /** O tipo do documento (EUA, migration 1020), lido junto com o CPF e só para quem o vê. */
+  document_type?: string | null;
   /** Negócios do contato: só funil e etapa interessam. */
   leads?: Array<{ pipeline_id: string; stage_id: string }> | null;
 }
@@ -50,6 +53,11 @@ export interface ReferenciasDoCsv {
   rotulosDeCampo?: Map<string, string>;
   /** Inclui a coluna "CPF" (a rota decifrou e o ator pode ver CPF). */
   comCpf?: boolean;
+  /**
+   * País com seletor de tipo (EUA): a coluna vira "Documento" e ganha "Tipo de documento" ao lado,
+   * com o rótulo do tipo. Brasil e Portugal seguem com "CPF", como antes.
+   */
+  comTipoDeDocumento?: boolean;
 }
 
 /** Máximo de colunas de campo personalizado: uma base bagunçada não pode gerar 500 colunas. */
@@ -119,7 +127,7 @@ export function montarCsvDeContatos(contatos: ContatoParaCsv[], ref: Referencias
     "Nome",
     "E-mail",
     "Telefone",
-    ...(ref.comCpf ? ["CPF"] : []),
+    ...(ref.comCpf ? (ref.comTipoDeDocumento ? ["Documento", "Tipo de documento"] : ["CPF"]) : []),
     "Tags",
     "Origem",
     "Entrou no CRM",
@@ -142,7 +150,11 @@ export function montarCsvDeContatos(contatos: ContatoParaCsv[], ref: Referencias
       nomeDoContato(c) ?? "",
       c.email ?? "",
       telefoneParaPlanilha(c.phone_number),
-      ...(ref.comCpf ? [c.cpf ?? ""] : []),
+      ...(ref.comCpf
+        ? ref.comTipoDeDocumento
+          ? [c.cpf ?? "", c.cpf ? (tipoDeDocumento(c.document_type)?.rotulo ?? "") : ""]
+          : [c.cpf ?? ""]
+        : []),
       (c.tags ?? []).join("; "),
       rotuloDaOrigem(c.source),
       dataHora(c.created_at, ref.timezone),

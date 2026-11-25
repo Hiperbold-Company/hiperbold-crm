@@ -74,7 +74,7 @@ const SONDA_CPF = `
    where has_column_privilege(p.papel, 'public.contacts', p.coluna, p.priv);`;
 
 /**
- * A VARREDURA: colunas de `contacts` (fora as duas do CPF) em que `authenticated` ou `anon` perdeu algum dos três
+ * A VARREDURA: colunas de `contacts` (fora as duas do CPF e o tipo do documento, 1020) em que `authenticated` ou `anon` perdeu algum dos três
  * privilégios. O resultado esperado é vazio.
  */
 function colunasSemGrant(): string {
@@ -87,7 +87,7 @@ function colunasSemGrant(): string {
              where a.attrelid = 'public.contacts'::regclass
                and a.attnum > 0
                and not a.attisdropped
-               and a.attname not in ('cpf_hash', 'cpf_encrypted')
+               and a.attname not in ('cpf_hash', 'cpf_encrypted', 'document_type')
                and not has_column_privilege(r.papel, 'public.contacts', a.attname, v.priv)) x;
   `);
   return linha ?? "";
@@ -207,12 +207,12 @@ describe("migration 0967: cpf_hash e cpf_encrypted são só do servidor", () => 
     `);
     expect((achadas ?? "").split(",")).toHaveLength(6);
   });
-  it("a lista de colunas de lib/contacts/colunas.ts (contexto das automações) é exatamente toda coluna de contacts menos as do CPF", () => {
+  it("a lista de colunas de lib/contacts/colunas.ts (contexto das automações) é exatamente toda coluna de contacts menos as do documento (o par do CPF e o tipo, 1020)", () => {
     const [reais] = sondasDesfeitas(`
       select '${MARCA}' || string_agg(attname, ', ' order by attnum)
         from pg_attribute
        where attrelid = 'public.contacts'::regclass and attnum > 0 and not attisdropped
-         and attname not in ('cpf_hash', 'cpf_encrypted');
+         and attname not in ('cpf_hash', 'cpf_encrypted', 'document_type');
     `);
     expect(
       COLUNAS_DO_CONTATO_SEM_CPF,

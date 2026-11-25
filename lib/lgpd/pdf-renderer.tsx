@@ -42,6 +42,7 @@ import {
   naoInformadoPelo,
 } from "@/lib/legal/art15";
 import { PAIS_PADRAO, PERFIS_DO_PAIS } from "@/lib/legal/perfil-do-pais";
+import { tipoDeDocumento } from "@/lib/legal/tipos-de-documento";
 
 import type { ExportPayload } from "./export-collector";
 
@@ -240,8 +241,16 @@ export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElem
             {/* A lei vem do PERFIL do país da organização (issue #1033): país
                 sem citação revisada não cita lei nenhuma — citar a errada é
                 pior do que não citar artigo nenhum. */}
-            {`${data.lei_rotulo ?? PADRAO.lei?.rotuloNoDocumento ?? "Base legal"}: `}{data.lei_citada ?? "não declarada (país sem citação revisada)"} ·
-            Solicitação #{shortId}
+            {/* País revisado SEM lei geral (EUA): não há o que citar, e dizer
+                "não declarada" afirmaria uma falta de revisão que não houve. */}
+            {data.sem_lei_geral ? (
+              <>Solicitação #{shortId}</>
+            ) : (
+              <>
+                {`${data.lei_rotulo ?? PADRAO.lei?.rotuloNoDocumento ?? "Base legal"}: `}{data.lei_citada ?? "não declarada (país sem citação revisada)"} ·
+                Solicitação #{shortId}
+              </>
+            )}
           </Text>
         </View>
 
@@ -353,7 +362,7 @@ export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElem
                   é sempre CPF, mesmo numa organização de fora do Brasil. */}
               <Text style={styles.label}>
                 {data.contact.cpf_present || !data.contact.cpf_informado_na_conversa
-                  ? data.documento_rotulo
+                  ? (tipoDeDocumento(data.contact.document_type)?.rotulo ?? data.documento_rotulo)
                   : "CPF"}:
               </Text>
               <Text style={styles.value}>
