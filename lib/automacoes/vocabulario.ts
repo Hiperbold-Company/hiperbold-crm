@@ -76,6 +76,7 @@ export const ACOES_DE_CRM: Record<CrmActionType, string> = {
   remove_tags: "Remover tags",
   set_owner: "Definir responsável",
   assign_conversation: "Atribuir a conversa e iniciar o atendimento",
+  set_carteira: "Definir carteira",
   notify: "Avisar a equipe",
   create_task: "Criar tarefa",
   add_note: "Adicionar nota",
@@ -137,6 +138,7 @@ export const REGRAS_NOVAS: Record<NovaConditionCheck["kind"], string> = {
   deal_status: "Situação do negócio",
   business_hours: "Está no horário?",
   window_open: "Janela de 24h aberta?",
+  carteira: "Carteira do contato",
 };
 
 /** O nome do campo como a pessoa o lê. */
@@ -187,6 +189,8 @@ export function fraseDaRegraNova(check: NovaConditionCheck, nomes: NomesDaAutoma
       return `O negócio está ${check.status === "open" ? "em aberto" : check.status === "won" ? "ganho" : "perdido"}`;
     case "window_open":
       return "A janela de 24h do WhatsApp está aberta (dá para mandar texto livre)";
+    case "carteira":
+      return check.op === "tem" ? "Contato tem carteira" : "Contato sem carteira";
     case "business_hours": {
       const dias = [...check.weekdays]
         .sort((a, b) => a - b)
@@ -217,6 +221,8 @@ export function fraseDaAcao(acao: CrmAction, nomes: NomesDaAutomacao = {}): stri
       return acao.mode.m === "user"
         ? `Responsável: ${nomes.pessoa?.(acao.mode.user_id) ?? "pessoa escolhida"}`
         : "Responsável por rodízio";
+    case "set_carteira":
+      return `Carteira: ${nomes.pessoa?.(acao.user_id) ?? "vendedor escolhido"}${acao.se_ja_tiver === "manter" ? " (mantém o dono de quem já tem)" : " (troca o dono de quem já tem)"}`;
     case "assign_conversation":
       return `Atribuir ${acao.todas ? "todas as conversas" : "a conversa"} a ${nomes.pessoa?.(acao.user_id) ?? "pessoa escolhida"}`;
     case "notify":
@@ -315,6 +321,9 @@ export const ERROS_DO_EFEITO: Record<string, string> = {
   sem_conversa: "o contato não tem conversa aberta para atribuir",
   contato_pessoal: "o contato é pessoal e não recebe atendimento",
   usuario_invalido: "a pessoa escolhida não é atendente desta conta",
+  carteira_dono_invalido:
+    "o vendedor escolhido não pode ter carteira nesta conta (precisa ser atendente, gerente ou administrador ativo)",
+  carteira_nao_definida: "não foi possível definir a carteira do cliente",
   plano_limite_atingido: "o limite de negócios do plano foi atingido",
   campo_desconhecido: "o campo não existe no funil",
   tag_vazia: "a tag ficou vazia depois de preencher as variáveis",
@@ -446,6 +455,18 @@ export const QUANDO_DA_ESPERA_ROTULOS: Record<QuandoDaEspera, string> = {
   next_weekday: "No próximo dia da semana",
 };
 
+/** Ação "Definir carteira": o cliente já está na carteira de OUTRO vendedor. */
+export const SE_JA_TEM_CARTEIRA: Record<"manter" | "substituir", string> = {
+  manter: "Manter o dono atual",
+  substituir: "Trocar para este vendedor",
+};
+
+/** Condição "Carteira do contato". */
+export const OPERADORES_DE_CARTEIRA: Record<"tem" | "sem", string> = {
+  tem: "Contato tem carteira",
+  sem: "Contato sem carteira",
+};
+
 export const SE_DER_ERRO: Record<"route" | "continue", string> = {
   route: "Parar e sair por “Erro”",
   continue: "Seguir com as próximas ações",
@@ -479,6 +500,8 @@ export const MAPAS_DA_AUTOMACAO: ReadonlyArray<Record<string, string>> = [
   OPERADORES_DE_ETAPA,
   SITUACOES_DO_NEGOCIO,
   SE_JA_TEM_NEGOCIO,
+  SE_JA_TEM_CARTEIRA,
+  OPERADORES_DE_CARTEIRA,
   SE_DER_ERRO,
   QUANDO_DA_ESPERA_ROTULOS,
   VALIDACOES_DA_PERGUNTA,

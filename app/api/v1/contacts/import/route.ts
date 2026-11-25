@@ -25,7 +25,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { lerMultipartComTeto } from "@/lib/api/multipart-com-teto";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { audit } from "@/lib/audit";
-import { hashCpf } from "@/lib/contacts/cpf";
+import { hashDocumento } from "@/lib/contacts/cpf";
 import { cifrarCpfDoContato, gravarCpfDoContatoPorUsuario, idsPorHashDeCpf } from "@/lib/contacts/cpf-do-contato";
 import { abrirConversaDoContatoNovo } from "@/lib/contacts/conversa-ao-criar";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -38,7 +38,7 @@ import {
   parseCsv,
 } from "@/lib/contacts/csv";
 import { contactCreateSchemaDoPais } from "@/lib/schemas";
-import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
+import { perfilDaOrganizacao, validaDocumentoDoContato } from "@/lib/legal/perfil-do-pais";
 import { contatosDonosDosExtras } from "@/lib/channels/contato-por-telefone";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { recusarEscritaEmModoLeitura } from "@/lib/billing/assinatura/recusa-de-escrita";
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     return fail("validation_failed", t("CSV vazio ou sem linhas de dados."), 422, { requestId });
   }
   const header = rows[0]!;
-  const mapeado = mapHeader(header, t, doc);
+  const mapeado = mapHeader(header, t, doc, perfil.tiposDeDocumento);
   if (mapeado.motivo !== null) {
     return fail("validation_failed", `${t("Cabeçalho inválido:")} ${mapeado.motivo}.`, 422, {
       details: { header: header.join(", ") },
@@ -169,12 +169,27 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   for (let i = 0; i < dataRows.length; i++) {
     const linha = i + 2; // 1-based contando o cabeçalho — bate com o editor de planilhas.
-    const { contato, motivo } = mapLinha(dataRows[i]!, indices, t, doc, perfil.telefoneExemplo);
+    const { contato, motivo } = mapLinha(
+      dataRows[i]!,
+      indices,
+      t,
+      doc,
+      perfil.telefoneExemplo,
+      perfil.tiposDeDocumento,
+      perfil.codigo,
+    );
     if (motivo !== null) {
       errors.push({ linha, motivo });
       continue;
     }
-    if (contato.cpf && !doc.valida(contato.cpf)) {
+    if (contato.cpf && perfil.tiposDeDocumento && perfil.tiposDeDocumento.length > 0) {
+      // País com seletor (EUA): a régua é a do TIPO que a linha declarou.
+      const r = validaDocumentoDoContato(perfil, contato.cpf, contato.document_type);
+      if (!r.ok) {
+        errors.push({ linha, motivo: t(r.mensagem) + `: "${contato.cpf}"` });
+        continue;
+      }
+    } else if (contato.cpf && !doc.valida(contato.cpf)) {
       // O texto sai do PERFIL: no Brasil continua "CPF inválido: …" (a mesma
       // chave do dicionário), e país sem checksum público diz na mensagem que a
       // conferência é de FORMA — prometer dígito verificado que não existe é o
@@ -278,9 +293,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     };
     // D-216: o CPF não vai no INSERT do usuário (o papel `authenticated` não grava `cpf_hash`/`cpf_encrypted`);
     // o servidor o grava logo depois, no contato que a RLS acabou de aceitar criar.
-    let cpfParaGravar: { hash: string; cifrado: string } | null = null;
+    let cpfParaGravar: { hash: string; cifrado: string; tipo?: string } | null = null;
     if (contato.cpf) {
-      const hash = hashCpf(contato.cpf as string);
+      // O tipo só vem nos EUA (migration 1020); sem ele, o `hashCpf` de sempre.
+      const tipo = (contato.document_type as string | undefined) ?? null;
+      const hash = hashDocumento(contato.cpf as string, tipo);
       if (!hash) {
         // Sem a chave do servidor o CPF não é gravado (falha fechada): a linha vai para os erros.
         errors.push({ linha, motivo: t("CPF indisponível neste servidor") });
@@ -288,7 +305,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
       // LGPD: além do hash (dedupe), grava a versão cifrada — igual ao create
       // unitário, senão o contato importado nasce sem CPF recuperável.
-      const cifrado = await cifrarCpfDoContato(contato.cpf as string);
+      const cifrado = await cifrarCpfDoContato(contato.cpf as string, tipo);
       if (!cifrado) {
         // Sem a chave de cifra do banco o par hash+cifrado não se completa: a linha vai para os erros.
         errors.push({ linha, motivo: t("CPF indisponível neste servidor") });
@@ -304,7 +321,8 @@ export async function POST(req: NextRequest): Promise<Response> {
         skippedDuplicates += 1;
         continue;
       }
-      cpfParaGravar = { hash, cifrado };
+      // Sem tipo (Brasil, Portugal) o objeto é o de sempre; o helper grava `document_type: null`.
+    cpfParaGravar = tipo ? { hash, cifrado, tipo } : { hash, cifrado };
     }
 
     const { data: criado, error: insErr } = await supabase

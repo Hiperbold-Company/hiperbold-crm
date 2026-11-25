@@ -163,6 +163,10 @@ export const notificationPrefsSchema = z.object({
 });
 export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
 
+/** As moedas que um campo personalizado de moeda pode ter (`config.moeda`). */
+export const MOEDAS_DO_CAMPO = ["BRL", "USD", "EUR"] as const;
+export type MoedaDoCampo = (typeof MOEDAS_DO_CAMPO)[number];
+
 export const customFieldSchema = z.object({
   key: z
     .string()
@@ -317,6 +321,12 @@ export const customFieldSchema = z.object({
    * - `exibir_no_perfil`: entra no resumo do perfil do contato;
    * - `dica_de_ajuda`: a frase curta debaixo do rótulo, no formulário.
    */
+  /**
+   * A MOEDA do campo `currency`, por campo (`config.moeda` da definição). Ausente = a moeda da
+   * organização (o comportamento de sempre). Só faz sentido no tipo `currency`; o valor gravado
+   * não muda (unidades da moeda), só como ele é escrito e lido. Leitura: `moedaDoCampo`.
+   */
+  moeda: z.enum(MOEDAS_DO_CAMPO).optional(),
   descricao: z.string().max(500).optional(),
   publico: z.boolean().optional(),
   sempre_visivel: z.boolean().optional(),

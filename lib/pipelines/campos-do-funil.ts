@@ -185,6 +185,7 @@ function configDoCorpo(campo: Partial<CustomFieldDef>): ConfigDoCampo | undefine
   if (campo.mensagem_padrao !== undefined) config.mensagem_padrao = campo.mensagem_padrao;
   if (campo.allow_new !== undefined) config.allow_new = campo.allow_new;
   if (campo.multiple !== undefined) config.multiple = campo.multiple;
+  if (campo.moeda !== undefined) config.moeda = campo.moeda;
   return Object.keys(config).length > 0 ? config : undefined;
 }
 

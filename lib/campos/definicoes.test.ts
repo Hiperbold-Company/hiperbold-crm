@@ -5,6 +5,7 @@ import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 import {
   alteracaoDeDefinicaoSchema,
   camposObrigatoriosDoFunil,
+  configDoCampoSchema,
   estatisticasDe,
   incoerenciaDaDefinicao,
   novaDefinicaoSchema,
@@ -60,6 +61,33 @@ describe("incoerenciaDaDefinicao", () => {
     expect(incoerenciaDaDefinicao("text", { padrao: "^(" })).toMatch(/expressão/);
     expect(incoerenciaDaDefinicao("text", { multiple: true })).toMatch(/pesquisável/);
     expect(incoerenciaDaDefinicao("searchable_select", { multiple: true })).toBeNull();
+  });
+});
+
+describe("moeda por campo (config.moeda)", () => {
+  it("o schema aceita BRL, USD e EUR e recusa o resto (GBP) na criação e na alteração", () => {
+    for (const moeda of ["BRL", "USD", "EUR"]) {
+      expect(configDoCampoSchema.safeParse({ moeda }).success).toBe(true);
+      expect(alteracaoDeDefinicaoSchema.safeParse({ config: { moeda } }).success).toBe(true);
+    }
+    expect(configDoCampoSchema.safeParse({ moeda: "GBP" }).success).toBe(false);
+    expect(alteracaoDeDefinicaoSchema.safeParse({ config: { moeda: "GBP" } }).success).toBe(false);
+    expect(
+      novaDefinicaoSchema.safeParse({ entidade: "negocio", key: "valor", type: "currency", label: "Valor", config: { moeda: "GBP" } })
+        .success,
+    ).toBe(false);
+  });
+
+  it("só o tipo moeda tem moeda", () => {
+    expect(incoerenciaDaDefinicao("currency", { moeda: "USD" })).toBeNull();
+    expect(incoerenciaDaDefinicao("number", { moeda: "USD" })).toMatch(/moeda/);
+  });
+
+  it("a projeção leva a moeda ao item do funil", () => {
+    expect(paraCampoDoFunil({ ...BASE, entidade: "negocio", type: "currency", config: { moeda: "USD" } })).toMatchObject({
+      type: "currency",
+      moeda: "USD",
+    });
   });
 });
 

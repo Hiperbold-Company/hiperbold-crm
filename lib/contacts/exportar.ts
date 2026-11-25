@@ -26,6 +26,7 @@
  * import já o remove (`parseCsv`/`decodificarCsv`) — é o mesmo contrato de
  * sempre, só que do lado de cá.
  */
+import { tipoDeDocumento } from "@/lib/legal/tipos-de-documento";
 import type { ModoDeEtiqueta } from "@/lib/inbox/marcador-da-conversa";
 import { marcadoresEscolhidos } from "@/lib/inbox/marcador-da-conversa";
 
@@ -59,6 +60,11 @@ export interface ContatoParaExportar {
   email?: string | null;
   phone_number?: string | null;
   cpf?: string | null;
+  /**
+   * O tipo do documento (migration 1020), só nos EUA e só para quem vê o número. No CSV vai o
+   * CÓDIGO (`us_passport`), que o importador lê de volta; no vCard, o rótulo.
+   */
+  document_type?: string | null;
   /** Data de calendário `YYYY-MM-DD`, no mesmo formato que o importador lê. */
   birthdate?: string | null;
   tags?: readonly string[] | null;
@@ -111,9 +117,49 @@ export function linhaDoCsv(contato: ContatoParaExportar): string {
     .join(",");
 }
 
-/** BOM + cabeçalho + linhas. `parseCsv` tira o BOM e detecta a vírgula. */
-export function csvDosContatos(contatos: readonly ContatoParaExportar[]): string {
-  const linhas = [CABECALHO_DO_CSV, ...contatos.map(linhaDoCsv)];
+/**
+ * O cabeçalho de uma organização com seletor de tipo (EUA): `document` no lugar
+ * de `cpf` e a coluna `document_type` ao lado — os dois nomes que o importador
+ * dos EUA reconhece, então o arquivo volta pela importação sem perder o tipo.
+ */
+export const CABECALHO_DO_CSV_COM_TIPO = [
+  "name",
+  "display_name",
+  "email",
+  "phone_number",
+  "document",
+  "document_type",
+  "birthdate",
+  "tags",
+].join(",");
+
+function linhaDoCsvComTipo(contato: ContatoParaExportar): string {
+  const tags = (contato.tags ?? []).filter((tag) => tag !== "").join(";");
+  return [
+    contato.name,
+    contato.display_name,
+    contato.email,
+    contato.phone_number,
+    contato.cpf,
+    contato.cpf ? contato.document_type : null,
+    contato.birthdate,
+    tags,
+  ]
+    .map(csvEscape)
+    .join(",");
+}
+
+/**
+ * BOM + cabeçalho + linhas. `parseCsv` tira o BOM e detecta a vírgula.
+ * `comTipoDeDocumento` só nos EUA; Brasil e Portugal saem byte a byte como antes.
+ */
+export function csvDosContatos(
+  contatos: readonly ContatoParaExportar[],
+  opcoes: { comTipoDeDocumento?: boolean } = {},
+): string {
+  const linhas = opcoes.comTipoDeDocumento
+    ? [CABECALHO_DO_CSV_COM_TIPO, ...contatos.map(linhaDoCsvComTipo)]
+    : [CABECALHO_DO_CSV, ...contatos.map(linhaDoCsv)];
   return `\uFEFF${linhas.join("\n")}\n`;
 }
 
@@ -146,7 +192,9 @@ export function vcardDoContato(contato: ContatoParaExportar): string | null {
   // CPF (decisão do dono do produto, 04/11/2026: a exportação leva todos os dados). vCard 3.0 não
   // tem campo de documento; `NOTE` é o que Android e iOS mostram na ficha.
   const cpf = valorDeCartao(contato.cpf);
-  if (cpf) linhas.push(`NOTE:CPF ${cpf}`);
+  // Nos EUA o rótulo é o do TIPO gravado (o número pode ser passaporte, ITIN…), e não "CPF".
+  const tipo = tipoDeDocumento(contato.document_type);
+  if (cpf) linhas.push(`NOTE:${tipo ? valorDeCartao(tipo.rotulo) : "CPF"} ${cpf}`);
   linhas.push("END:VCARD");
   return `${linhas.join("\n")}\n`;
 }

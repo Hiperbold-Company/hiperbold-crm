@@ -9,6 +9,7 @@ import { rotuloDoStatus, tomDoStatus } from "@/lib/followup/eventos-legiveis";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { dataHoraDaExecucao } from "@/lib/automacoes/data-da-lista";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,7 @@ export default async function ExecucoesDaAutomacaoPage({ params }: { params: Pro
     : { data: [] as Array<{ id: string; name: string | null; display_name: string | null; phone_number: string | null }> };
   // Rótulo canônico (name, depois display_name do WhatsApp, depois o telefone).
   const nomeDoContato = new Map((contatos ?? []).map((c) => [c.id, rotuloDoContato(c, t)]));
-  const quando = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString(user.idioma, { dateStyle: "short", timeStyle: "short" }) : "—";
+  const quando = (iso: string | null) => dataHoraDaExecucao(iso, user.idioma, activeOrg.timezone);
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">

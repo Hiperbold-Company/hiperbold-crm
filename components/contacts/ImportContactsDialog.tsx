@@ -2,6 +2,8 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
+import { useActiveOrg } from "@/hooks/auth/AuthProvider";
+import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +30,8 @@ interface Props {
 export function ImportContactsDialog({ open, onOpenChange }: Props) {
   const t = useT();
   const importar = useImportContacts();
+  // EUA: o documento vem com o TIPO ao lado (migration 1020); Brasil e Portugal seguem com a frase de sempre.
+  const comTipoDeDocumento = (perfilDoPais(useActiveOrg()?.country).tiposDeDocumento?.length ?? 0) > 0;
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [resumo, setResumo] = useState<Awaited<ReturnType<typeof importar.mutateAsync>> | null>(null);
@@ -67,9 +71,13 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>{t("Importar contatos de planilha")}</DialogTitle>
           <DialogDescription>
-            {t(
-              "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
-            )}
+            {comTipoDeDocumento
+              ? t(
+                  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone (sem DDI, vale +1), email, documento (número do documento), document_type (tipo: passaporte, carteira de motorista, ITIN…), nascimento, tags. Não envie SSN. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
+                )
+              : t(
+                  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
+                )}
           </DialogDescription>
         </DialogHeader>
 

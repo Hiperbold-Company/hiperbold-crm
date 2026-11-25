@@ -123,8 +123,36 @@ export type VereditoDoMotivoDaPerda =
  * lote (`leads/bulk`). Enquanto o lote escrevia só "Movido de X para Perdido",
  * o dossiê de quem foi perdido em lote não dizia por quê (#2868).
  */
-export function razaoDaPerdaNaTimeline(motivo: string): string {
-  return `Perdido — ${motivo}`;
+export function razaoDaPerdaNaTimeline(motivo: string, detalhe?: string | null): string {
+  const texto = detalheDoMotivoOutro(motivo, detalhe);
+  // Canônico em português: quem traduz é a LEITURA (`t(item.reason)`), e o
+  // detalhe é dado do operador, nunca traduzido.
+  return texto ? `Perdido — Outro motivo: ${texto}` : `Perdido — ${motivo}`;
+}
+
+/** O teto do detalhe do "Outro motivo" — o mesmo do `lost_reason`. */
+export const DETALHE_DO_MOTIVO_MAX = 500;
+
+/**
+ * O DETALHE DO "OUTRO MOTIVO" — texto do operador que NÃO passa pelo vocabulário.
+ *
+ * `lost_reason` é vocabulário (canônico ∪ `settings.lost_reasons`, vigiado pelo
+ * trigger `fn_validate_lost_reason_required`): texto livre ali é recusado com
+ * 22023. O que o operador escreve em "Outro" vai, portanto, SEPARADO: o motivo
+ * gravado é sempre o canônico `other`, e o detalhe mora na linha da timeline da
+ * perda (`reason` e `payload.lost_reason_detail` da atividade). Relatórios e
+ * métricas continuam contando por `lost_reason`.
+ *
+ * Só vale quando o motivo é `other`: detalhe junto de um motivo da lista é
+ * ignorado, em vez de gravar texto que o motivo não pediu.
+ */
+export function detalheDoMotivoOutro(
+  motivo: string | null | undefined,
+  detalhe: string | null | undefined,
+): string | null {
+  if ((motivo ?? "").trim() !== "other") return null;
+  const limpo = (detalhe ?? "").trim();
+  return limpo.length > 0 ? limpo.slice(0, DETALHE_DO_MOTIVO_MAX) : null;
 }
 
 /** Esta etapa fecha o negócio como PERDA? (Coluna do banco, nunca o nome da etapa.) */

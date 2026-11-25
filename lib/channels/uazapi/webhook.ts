@@ -8,6 +8,9 @@
  */
 import { timingSafeEqual } from "node:crypto";
 
+import type { AtribuicaoDeAnuncio } from "@/lib/leads/atribuicao-de-anuncio";
+
+import { extrairAtribuicaoUazapi } from "./atribuicao-de-anuncio";
 import type { UazapiEnvelope, UazapiMessage } from "./envelope";
 
 /**
@@ -53,6 +56,8 @@ export interface UazapiMensagemLida {
   sentAt: string | null;
   /** Id da mensagem citada, quando é resposta. */
   quotedExternalId: string | null;
+  /** Anúncio "Clique para o WhatsApp" que originou a conversa; só em entrada. */
+  anuncio: AtribuicaoDeAnuncio | null;
 }
 
 export type LeituraDaMensagem =
@@ -190,6 +195,7 @@ export function parseUazapiMensagem(env: UazapiEnvelope): LeituraDaMensagem {
       mime: tipo === "text" ? null : str(conteudoObj?.mimetype) ?? str(conteudoObj?.mimeType),
       sentAt: carimbo(m.messageTimestamp),
       quotedExternalId: str(m.quoted),
+      anuncio: saida ? null : extrairAtribuicaoUazapi(conteudo),
     },
   };
 }

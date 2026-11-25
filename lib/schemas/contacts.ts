@@ -15,7 +15,13 @@ import {
   MAXIMO_DE_ETIQUETAS_NO_FILTRO,
   MODOS_DE_ETIQUETA,
 } from "@/lib/inbox/marcador-da-conversa";
-import { isValidCpf, PAIS_PADRAO, type PerfilDoPais } from "@/lib/legal/perfil-do-pais";
+import {
+  isValidCpf,
+  PAIS_PADRAO,
+  validaDocumentoDoContato,
+  type PerfilDoPais,
+} from "@/lib/legal/perfil-do-pais";
+import { TIPOS_DE_DOCUMENTO_DO_CONTATO } from "@/lib/legal/tipos-de-documento";
 
 import { objetoComTeto, TETO_DE_TAGS } from "./tetos";
 
@@ -70,6 +76,10 @@ export const contactCreateSchema = z.object({
     .regex(PHONE_REGEX, "Telefone deve estar em formato E.164 (+5511999998888)")
     .optional(),
   cpf: z.string().refine(isValidCpf, "CPF inválido").optional(),
+  // O TIPO do documento (migration 1020) — só existe em país com seletor (EUA).
+  // A régua de cada país mora em `contactCreateSchemaDoPais`; aqui fica o
+  // vocabulário, para que nenhum valor fora do CHECK do banco passe.
+  document_type: z.enum(TIPOS_DE_DOCUMENTO_DO_CONTATO).optional(),
   birthdate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -145,13 +155,76 @@ export type ContactPatchInterno = Omit<ContactPatch, "consent" | "source_metadat
  * moeda em `lib/catalogo/moeda-da-org.ts`).
  */
 export function contactCreateSchemaDoPais(perfil: PerfilDoPais) {
-  return contactCreateSchema.extend({
-    cpf: z
-      .string()
-      .refine(perfil.documento.valida, perfil.documento.mensagemInvalido)
-      .optional(),
-    phone_number: telefoneDoPais(perfil),
-  });
+  return contactCreateSchema
+    .extend({
+      cpf: campoDoDocumento(perfil),
+      phone_number: telefoneDoPais(perfil),
+    })
+    .superRefine((dados, ctx) => conferirTipoDoDocumento(perfil, dados, ctx));
+}
+
+/**
+ * O campo do número. Em país de documento único (Brasil, Portugal) é o
+ * `refine` de sempre, com a mensagem de sempre — nenhuma mudança para eles. Em
+ * país com seletor (EUA) o número só pode ser julgado junto com o tipo, e
+ * quem julga é `conferirTipoDoDocumento`.
+ */
+function campoDoDocumento(perfil: PerfilDoPais) {
+  if (perfil.tiposDeDocumento && perfil.tiposDeDocumento.length > 0) {
+    return z.string().max(40).optional();
+  }
+  return z
+    .string()
+    .refine(perfil.documento.valida, perfil.documento.mensagemInvalido)
+    .optional();
+}
+
+/**
+ * O PAR tipo + número (decisão de 24/11/2026; régua em `validaDocumentoDoContato`).
+ *
+ * - Brasil e Portugal: `document_type` é RECUSADO (422), mesmo que seja
+ *   `br_cpf` — o tipo ali é implícito e a linha continua gravando `null`,
+ *   idêntica à de antes. Ignorar em silêncio esconderia do integrador que o
+ *   campo não foi gravado.
+ * - Estados Unidos: número sem tipo, ou tipo sem número, é recusado; o número
+ *   segue a régua do tipo escolhido.
+ */
+function conferirTipoDoDocumento(
+  perfil: PerfilDoPais,
+  dados: { cpf?: string; document_type?: string },
+  ctx: z.RefinementCtx,
+): void {
+  const temNumero = typeof dados.cpf === "string";
+  const temTipo = typeof dados.document_type === "string";
+  const comSeletor = !!perfil.tiposDeDocumento && perfil.tiposDeDocumento.length > 0;
+  if (!comSeletor) {
+    if (temTipo) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["document_type"],
+        message: "Este país usa um documento só; não envie o tipo do documento",
+      });
+    }
+    return;
+  }
+  if (!temNumero) {
+    if (temTipo) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["cpf"],
+        message: "Envie o número do documento junto com o tipo",
+      });
+    }
+    return;
+  }
+  const r = validaDocumentoDoContato(perfil, dados.cpf!, dados.document_type);
+  if (!r.ok) {
+    ctx.addIssue({
+      code: "custom",
+      path: [r.motivo === "numero_invalido" ? "cpf" : "document_type"],
+      message: r.mensagem,
+    });
+  }
 }
 
 /**
@@ -253,13 +326,12 @@ function mensagemDoTelefone(perfil: PerfilDoPais): string {
 
 /** O mesmo, para o PATCH (`app/api/v1/contacts/[id]/route.ts`). */
 export function contactPatchSchemaDoPais(perfil: PerfilDoPais) {
-  return contactPatchSchema.extend({
-    cpf: z
-      .string()
-      .refine(perfil.documento.valida, perfil.documento.mensagemInvalido)
-      .optional(),
-    phone_number: telefoneDoPais(perfil),
-  });
+  return contactPatchSchema
+    .extend({
+      cpf: campoDoDocumento(perfil),
+      phone_number: telefoneDoPais(perfil),
+    })
+    .superRefine((dados, ctx) => conferirTipoDoDocumento(perfil, dados, ctx));
 }
 
 export const CONTACT_ORDER_BY = [

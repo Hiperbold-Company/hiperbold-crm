@@ -106,6 +106,8 @@ export interface CampoFaltando {
    */
   tipo?: CustomFieldDef["type"];
   opcoes?: { value: string; label: string }[];
+  /** A moeda ESCOLHIDA do campo `currency` (`config.moeda`); ausente = a da organização. */
+  moeda?: string;
 }
 
 /** O veredito: lista vazia = pode escrever. */
@@ -307,6 +309,7 @@ export function validaCamposExigidos(entrada: EntradaDeCampos): VereditoDeCampos
       rotulo: campo.label,
       tipo: campo.type,
       ...(campo.options ? { opcoes: campo.options } : {}),
+      ...(campo.type === "currency" && campo.moeda ? { moeda: campo.moeda } : {}),
     });
   }
 

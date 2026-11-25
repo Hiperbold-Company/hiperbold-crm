@@ -32,6 +32,9 @@ import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { marcarConversaComMensagem } from "@/lib/channels/marcar-conversa";
 import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual";
 
+import { estamparAtribuicaoDoContato, metadataDoAnuncio } from "@/lib/leads/atribuicao-de-anuncio";
+import { ancoraCtwaDaMensagem } from "@/lib/leads/prova-meta-lead-submitted";
+
 import { UAZAPI_REFERENCIA_DE_MIDIA } from "../adapters/uazapi";
 import { aplicarEfeitosPosEntrada } from "../pos-entrada";
 
@@ -70,6 +73,10 @@ export async function ingestUazapiMensagem(
   const contactId = await upsertContact(admin, input.organizationId, msg);
   if (contactId === "sem_identidade") return { status: "ignored", reason: "sem_identidade_utilizavel" };
   if (!contactId) return { status: "ignored", reason: "contato_nao_resolvido" };
+
+  // Antes da mensagem e dos efeitos de entrada: o nascimento do negócio copia o
+  // `source_metadata` do contato. Best-effort (a função loga e não lança).
+  if (msg.anuncio) await estamparAtribuicaoDoContato(admin, input.organizationId, contactId, msg.anuncio);
 
   const { data: conversa, error: erroConversa } = await admin.rpc("fn_upsert_wa_conversation", {
     p_org: input.organizationId,
@@ -258,7 +265,12 @@ async function insertMessage(
       // `via_api` separa, depois, o que outro sistema mandou do que foi digitado
       // no aparelho: os dois são `external_device`, porque é esse o valor que o
       // envio procura para apagar o próprio eco.
-      metadata: msg.viaApi ? { via_api: true } : {},
+      metadata: {
+        ...(msg.viaApi ? { via_api: true } : {}),
+        // O anúncio DESTA mensagem: o contato guarda só o primeiro.
+        ...metadataDoAnuncio(msg.anuncio),
+        ...ancoraCtwaDaMensagem(msg.anuncio),
+      },
       ...(msg.sentAt ? { sent_at: msg.sentAt } : {}),
     })
     .select("id")

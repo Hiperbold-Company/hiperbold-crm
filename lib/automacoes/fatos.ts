@@ -25,6 +25,12 @@ export interface ContatoDosFatos {
    * sempre o preenche, com string vazia onde não há anúncio.
    */
   anuncio?: AnuncioDoFluxo;
+  /**
+   * O vendedor dono do cliente (`contacts.carteira_user_id`), `null` sem carteira.
+   * Só leitura: quem grava é `fn_definir_carteira_do_cliente`. Opcional só para os
+   * montadores de fatos que não o carregam — ausente é "não lido", nunca "sem dono".
+   */
+  carteira_user_id?: string | null;
 }
 
 export interface NegocioDosFatos {

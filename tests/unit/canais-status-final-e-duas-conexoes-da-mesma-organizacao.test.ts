@@ -215,6 +215,7 @@ const mensagem = (direction: "inbound" | "outbound"): UazapiMensagemLida => ({
   mime: null,
   sentAt: "2026-09-15T12:00:00.000Z",
   quotedExternalId: null,
+  anuncio: null,
 });
 
 describe("D-130 C: UAZAPI, A manda para B na mesma organização", () => {

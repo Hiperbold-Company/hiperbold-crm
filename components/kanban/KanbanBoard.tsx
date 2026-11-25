@@ -469,10 +469,10 @@ export function KanbanBoard({
         }}
         pipelineId={pipelineId}
         submitting={moveCard.isPending}
-        onConfirm={(lostReason) => {
+        onConfirm={(lostReason, lostReasonDetail) => {
           if (!perdaPendente) return;
           setPerdaPendente(null);
-          moveCard.mutate({ ...perdaPendente, lostReason });
+          moveCard.mutate({ ...perdaPendente, lostReason, lostReasonDetail });
         }}
       />
       {retomada && (
