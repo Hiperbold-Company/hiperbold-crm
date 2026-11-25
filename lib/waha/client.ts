@@ -156,7 +156,7 @@ function aplicarAcervoNaConfig(config: Record<string, unknown>, guardar: boolean
  */
 export const EVENTOS_DO_WEBHOOK_DA_SESSAO = [
   "message.any", "message.ack", "message.edited", "message.revoked",
-  "message.reaction", "session.status", "state.change",
+  "message.reaction", "poll.vote", "session.status", "state.change",
 ] as const;
 
 /**
@@ -1142,6 +1142,29 @@ export class WahaClient {
     });
     if (!res.ok) throw new Error(`waha_${res.status}`);
     return res.json();
+  }
+
+  /**
+   * `POST /api/sendPoll` — a enquete, a forma de opção tocável do canal por QR
+   * (`sendButtons` está depreciado). O corpo sai pronto de `corpoDaEnqueteWaha`
+   * (`./enquete`).
+   *
+   * Diferente de `sendMessage`, NÃO lança em resposta de erro: devolve
+   * `{ ok: false, status }`, porque quem chama decide a reserva (texto
+   * numerado) só quando o servidor respondeu que não enviou. Rede e timeout
+   * lançam como sempre — a enquete pode ter saído.
+   */
+  async sendPoll(corpo: Record<string, unknown>): Promise<{ ok: true; json: unknown } | { ok: false; status: number }> {
+    const res = await this.fetchComTeto(`${this.baseUrl}/api/sendPoll`, {
+      method: "POST",
+      headers: {
+        "X-Api-Key": this.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(corpo),
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, json: await res.json() };
   }
 
   /**

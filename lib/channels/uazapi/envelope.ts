@@ -46,6 +46,8 @@ export const uazapiMessageSchema = z.looseObject({
   /** Ver a regra no cabeçalho. `.optional()` é obrigatório no Zod 4 para `unknown` solto. */
   content: z.unknown().optional(),
   fileURL: texto,
+  /** Id do botão ou item de lista tocado (doc do servidor: "ID do botão ou item de lista selecionado"). */
+  buttonOrListid: texto,
 });
 
 export const uazapiChatSchema = z.looseObject({

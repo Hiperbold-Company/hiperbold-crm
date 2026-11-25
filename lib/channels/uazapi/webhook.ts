@@ -6,6 +6,7 @@
  * payload diz. É o que permite provar os casos difíceis (token errado, grupo,
  * contato só com id opaco, envio feito pelo celular) sem subir infraestrutura.
  */
+import { respostaDeOpcaoUazapi, type RespostaDeOpcaoUazapi } from "./menu";
 import { timingSafeEqual } from "node:crypto";
 
 import type { AtribuicaoDeAnuncio } from "@/lib/leads/atribuicao-de-anuncio";
@@ -58,6 +59,12 @@ export interface UazapiMensagemLida {
   quotedExternalId: string | null;
   /** Anúncio "Clique para o WhatsApp" que originou a conversa; só em entrada. */
   anuncio: AtribuicaoDeAnuncio | null;
+  /**
+   * Botão ou item de lista que o contato tocou; só em entrada. Vai para
+   * `messages.metadata.reply`, a mesma chave do canal oficial, e o `text` é o
+   * título da opção — é o que o agente e o follow-up casam com as opções.
+   */
+  reply?: RespostaDeOpcaoUazapi | null;
 }
 
 export type LeituraDaMensagem =
@@ -155,7 +162,9 @@ export function parseUazapiMensagem(env: UazapiEnvelope): LeituraDaMensagem {
 
   const conteudo = m.content;
   const conteudoObj = obj(conteudo);
+  const reply = saida ? null : respostaDeOpcaoUazapi(m);
   const text =
+    reply?.title ??
     str(m.text) ??
     (typeof conteudo === "string" ? str(conteudo) : null) ??
     str(conteudoObj?.caption) ??
@@ -196,6 +205,7 @@ export function parseUazapiMensagem(env: UazapiEnvelope): LeituraDaMensagem {
       sentAt: carimbo(m.messageTimestamp),
       quotedExternalId: str(m.quoted),
       anuncio: saida ? null : extrairAtribuicaoUazapi(conteudo),
+      reply,
     },
   };
 }

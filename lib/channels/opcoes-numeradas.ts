@@ -4,8 +4,9 @@
  *
  * ─── Por que texto numerado ────────────────────────────────────────────────
  *
- * Só o WhatsApp oficial desenha botões e lista (`interactive: "native"` na
- * matriz de capabilities). Nos outros canais o contato recebe o MESMO conteúdo
+ * Os canais com `interactive: "native"` na matriz de capabilities desenham
+ * botões, lista ou enquete; nos outros — e quando o canal recusa as opções
+ * nativas — o contato recebe o MESMO conteúdo
  * como texto ("1) Moradia\n2) Investimento") e responde digitando o número ou
  * o rótulo. As duas pontas moram aqui, juntas, para que a forma de escrever e a
  * forma de ler não divirjam: o número que `textoComOpcoesNumeradas` imprime é o

@@ -28,6 +28,8 @@ import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-interno
 import { lerComTeto } from "@/lib/messaging/media/ler-com-teto";
 import { MAX_MEDIA_BYTES, MediaTooLargeError, type FetchedMedia } from "@/lib/messaging/media/types";
 
+import { textoComOpcoesNumeradas } from "../opcoes-numeradas";
+import { corpoDoMenuUazapi } from "../uazapi/menu";
 import { resolveUazapiCreds, type UazapiCredentials } from "../uazapi/credentials";
 import { saudeDoEstadoUazapi } from "../uazapi/saude";
 import type {
@@ -205,9 +207,32 @@ export const uazapiAdapter: ChannelAdapter = {
     return true;
   },
 
-  async send(envelope: OutboundEnvelope): Promise<{ externalId: string | null }> {
+  async send(envelope: OutboundEnvelope): Promise<{ externalId: string | null; opcoesComoTexto?: boolean }> {
     const creds = await credenciais(envelope);
     const citacao = envelope.replyToExternalId ? { replyid: envelope.replyToExternalId } : {};
+
+    // ── OPÇÕES NATIVAS: `/send/menu`, com reserva em texto numerado ─────────
+    //
+    // A reserva só entra quando o servidor RESPONDEU com erro (a mensagem não
+    // saiu) ou quando as opções não cabem no formato do menu. Exceção de rede
+    // ou timeout sobe como sempre: o menu pode ter saído, e mandar o texto
+    // depois entregaria a pergunta duas vezes.
+    if (envelope.kind === "text" && envelope.interactive && !envelope.media) {
+      const texto = envelope.body ?? "";
+      const menu = corpoDoMenuUazapi(envelope.to, texto, envelope.interactive, envelope.replyToExternalId);
+      await envelope.beforeSend?.();
+      if (menu) {
+        const { res, json } = await chamar(creds, "/send/menu", { ...menu });
+        if (res.ok) return { externalId: idDaMensagem(json) };
+      }
+      const { res, json } = await chamar(creds, "/send/text", {
+        number: envelope.to,
+        text: textoComOpcoesNumeradas(texto, envelope.interactive),
+        ...citacao,
+      });
+      if (!res.ok) throw new Error(`uazapi_send_failed: ${motivo(json, res)}`);
+      return { externalId: idDaMensagem(json), opcoesComoTexto: true };
+    }
 
     let caminho: string;
     let corpo: Record<string, unknown>;
