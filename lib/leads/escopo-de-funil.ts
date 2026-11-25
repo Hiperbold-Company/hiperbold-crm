@@ -146,6 +146,12 @@ export const ALVO_DE_FUNIL: Record<string, AlvoDeFunil> = {
   crm_resume_ai_attendance: "sem_funil",
   crm_save_org_memory: "sem_funil",
   crm_propose_contact_field: "sem_funil",
+  // Sem `lead_id` no argumento: o alvo é o contato do turno e, para campo do
+  // NEGÓCIO, o negócio aberto dele, que só o handler descobre. Quem julga o
+  // funil desse negócio é o próprio handler (`podeOperarNoFunil` sobre
+  // `ctx.funisDoTurno`, em `lib/mcp/tools/campo-personalizado.ts`); campo do
+  // contato não toca funil.
+  crm_set_custom_field: "sem_funil",
   // Rascunho sugerido por integração (#1611): opera por `conversation_id`,
   // nunca `lead_id`, e não mexe em estado de funil nenhum. A barreira é OUTRA,
   // e é dela que a segurança depende: o RBAC da rota (agent+), o escopo

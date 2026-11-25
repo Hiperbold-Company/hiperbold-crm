@@ -17312,6 +17312,7 @@ export const DICIONARIO: Traducoes = {
   "Base de conhecimento": { es: "Base de conocimiento" },
   "Buscar dados no banco conectado": { es: "Buscar datos en la base conectada" },
   "Cadastro de clientes": { es: "Registro de clientes" },
+  "Cadastro de clientes e negócios": { es: "Registro de clientes y negocios" },
   "Cancelar um retorno agendado": { es: "Cancelar un seguimiento programado" },
   "Catálogo da loja": { es: "Catálogo de la tienda" },
   "Chamados para uma pessoa": { es: "Casos para una persona" },

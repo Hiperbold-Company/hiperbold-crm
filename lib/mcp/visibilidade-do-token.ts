@@ -84,6 +84,7 @@ export const FERRAMENTAS_SEM_DONO: ReadonlySet<string> = new Set([
   "crm_search_contacts",
   "crm_get_contact",
   "crm_propose_contact_field",
+  "crm_set_custom_field",
   "crm_describe_external_data",
   "crm_query_external_data",
   "crm_list_available_attendants",

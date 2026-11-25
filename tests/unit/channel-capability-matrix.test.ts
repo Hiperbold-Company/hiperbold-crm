@@ -89,15 +89,16 @@ describe("matriz capability × provider é exaustiva", () => {
     expect(transportaMensagem(null)).toBe(false);
   });
 
-  it("opções nativas só onde a janela de 24h é da plataforma oficial", () => {
-    // `native` é promessa de que o adapter monta botões/lista; quem não monta
-    // declara `none` e recebe texto numerado. Canal sem janela (por QR) não é a
-    // API oficial, então nunca é `native`.
+  it("opções nativas só onde o adapter monta as opções", () => {
+    // `native` é promessa de que o adapter monta botões/lista (ou enquete) e
+    // cai para texto numerado quando o canal recusa; quem não monta declara
+    // `none`. Os oficiais (janela da plataforma) e os dois aparelhos pareados
+    // cujo adapter monta: UAZAPI (`/send/menu`) e WAHA (`sendPoll`).
     const nativos = PROVIDERS.filter(
       (p) => CHANNEL_CAPABILITIES[p].interactive === "native",
     ).sort();
-    expect(nativos).toEqual(["datafy", "meta_cloud"]);
-    for (const p of nativos) {
+    expect(nativos).toEqual(["datafy", "meta_cloud", "uazapi", "waha"]);
+    for (const p of ["datafy", "meta_cloud"] as const) {
       expect(CHANNEL_CAPABILITIES[p].freeformOutsideWindow, `${p} nativo sem janela`).toBe(false);
     }
   });

@@ -40,6 +40,18 @@ export interface McpContext {
    * saem do turno.
    */
   contatoDoTurno?: string;
+  /**
+   * Os funis em que o AGENTE deste turno pode escrever
+   * (`ai_agent_versions.pipeline_ids`), com o mesmo status de `contatoDoTurno`:
+   * só o runtime injeta, junto dele, e nunca vem dos argumentos.
+   *
+   * Existe para a escrita cujo NEGÓCIO só se descobre dentro do handler
+   * (`crm_set_custom_field`, que grava campo do negócio aberto do contato sem
+   * receber `lead_id`): o escopo de funil da ponte não tem argumento para
+   * julgar, então o handler julga com `podeOperarNoFunil`. Ausente ou vazio
+   * vale NENHUM funil, a direção segura de `pipelineIds` na ponte.
+   */
+  funisDoTurno?: readonly string[];
   organizationId: string;
   role: Role;
   actor: Actor;

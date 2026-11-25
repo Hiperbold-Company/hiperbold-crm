@@ -307,8 +307,16 @@ export interface ChannelAdapter {
    * trouxe id" — desfechos que o chamador grava de forma diferente.
    */
   isConfigured(): boolean;
-  /** externalId null = canal não configurado (noop) ou resposta sem id reconhecível. */
-  send(envelope: OutboundEnvelope): Promise<{ externalId: string | null }>;
+  /**
+   * externalId null = canal não configurado (noop) ou resposta sem id reconhecível.
+   *
+   * `opcoesComoTexto: true` = o envelope trazia `interactive`, o canal RECUSOU
+   * as opções nativas (resposta HTTP de erro, ou opções que não cabem no
+   * formato dele) e o adapter mandou o mesmo conteúdo como texto numerado
+   * (`textoComOpcoesNumeradas`). Quem chama corrige a linha gravada. Erro de
+   * rede ou timeout NÃO cai aqui: pode ter saído, e reenviar duplicaria.
+   */
+  send(envelope: OutboundEnvelope): Promise<{ externalId: string | null; opcoesComoTexto?: boolean }>;
   /**
    * Códigos que o chamador grava em `metadata`/`error_code`. Vivem NO ADAPTER
    * porque carregam nome de provider, e o lint da Task 7 proíbe esse nome fora

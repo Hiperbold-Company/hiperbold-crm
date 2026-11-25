@@ -4,8 +4,9 @@
  *
  * ─── Por que texto numerado ────────────────────────────────────────────────
  *
- * Só o WhatsApp oficial desenha botões e lista (`interactive: "native"` na
- * matriz de capabilities). Nos outros canais o contato recebe o MESMO conteúdo
+ * Os canais com `interactive: "native"` na matriz de capabilities desenham
+ * botões, lista ou enquete; nos outros — e quando o canal recusa as opções
+ * nativas — o contato recebe o MESMO conteúdo
  * como texto ("1) Moradia\n2) Investimento") e responde digitando o número ou
  * o rótulo. As duas pontas moram aqui, juntas, para que a forma de escrever e a
  * forma de ler não divirjam: o número que `textoComOpcoesNumeradas` imprime é o
@@ -63,6 +64,14 @@ export const interactiveSchema = z.discriminatedUnion("kind", [
       .refine(idsUnicos, { message: "ids das opções repetidos" }),
   }),
 ]) satisfies z.ZodType<OutboundInteractive>;
+
+/**
+ * Respostas HTTP em que o canal DISSE que não enviou as opções nativas e
+ * repetir o mesmo pedido não muda nada: só nelas a reserva em texto numerado
+ * dispara. 5xx, 408 e 429 são transitórios ou ambíguos (pode ter saído) e
+ * sobem como erro, sem reenvio.
+ */
+export const RECUSA_DEFINITIVA_DAS_OPCOES: ReadonlySet<number> = new Set([400, 404, 405, 422]);
 
 /** Como as opções chegaram ao contato — gravado em `messages.metadata.interactive.entrega`. */
 export type EntregaDasOpcoes = "nativa" | "texto_numerado";
