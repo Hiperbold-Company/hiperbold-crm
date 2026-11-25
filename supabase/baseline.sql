@@ -105310,7 +105310,7 @@ begin
   ) then
     return 'ja_existe';
   end if;
-  if jsonb_array_length(v_curadas) >= p_teto then
+  if jsonb_array_length(v_curadas) >= coalesce(p_teto, 200) then
     return 'limite';
   end if;
 
