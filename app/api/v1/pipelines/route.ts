@@ -18,6 +18,7 @@ import { respostaDeRecusa } from "@/lib/api/recusa";
 import { fail, ok } from "@/lib/api/wrappers";
 import { leitorDoAtor, recortarSettingsDoFunil } from "@/lib/campos/recorte-por-papel";
 import { criarFunil } from "@/lib/pipelines/administracao";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 import { listPipelinesHandler } from "./_handler";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +42,13 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
     // 1015: a definição de campo não pública só vai para administrador.
     const leitor = leitorDoAtor(authz.actor);
+    // 1021: os motivos de perda são da organização — o settings sai EFETIVO (ver motivos-da-organizacao).
+    const motivosDaOrganizacao = await lerMotivosDaOrganizacao(authz.supabase, authz.organizationId);
     return ok(
-      pipelines.map((p) => ({ ...p, settings: recortarSettingsDoFunil(p.settings, leitor) })),
+      pipelines.map((p) => ({
+        ...p,
+        settings: settingsComMotivosDaOrganizacao(recortarSettingsDoFunil(p.settings, leitor), motivosDaOrganizacao),
+      })),
       { requestId },
     );
   } catch {

@@ -21,6 +21,7 @@
 import { CANONICAL_LOST_REASONS, categoriaPadraoDoMotivo } from "@/lib/schemas/leads";
 import { pipelineConfigPatchSchema } from "@/lib/schemas/settings";
 import { MOTIVO_DA_TRANSFERENCIA } from "@/lib/leads/motivo-da-perda";
+import { MOTIVOS_LEGADOS_DO_FUNIL, motivoNormalizado } from "@/lib/leads/motivos-da-organizacao-regua";
 
 /** O valor canônico de "outro": a saída de quem não acha o motivo na lista. */
 export const OUTRO = "other";
@@ -129,11 +130,15 @@ export function motivosDaCategoria(funis: readonly { settings: unknown }[], cate
   if (!alvo) return [];
   const vistos = new Set<string>();
   for (const funil of funis) {
-    for (const motivo of motivosComCategoriaDoFunil(funil.settings)) {
-      if (motivo.categoria === alvo) vistos.add(motivo.valor);
-      else if (!motivo.categoria && categoriaPadraoDoMotivo(motivo.valor) === alvo) {
-        vistos.add(motivo.valor);
-      }
+    // 1021: `settings` é o EFETIVO (`lost_reasons` = lista da organização). As grafias da lista
+    // legada do funil entram também, resolvidas pela mesma régua: o negócio histórico gravado com
+    // "preço " é achado pelo filtro da categoria que a organização deu a "Preço".
+    const rotulos = [
+      ...motivosComCategoriaDoFunil(funil.settings).map((m) => m.valor),
+      ...motivosComCategoriaDoFunil(legadoComoSettings(funil.settings)).map((m) => m.valor),
+    ];
+    for (const rotulo of rotulos) {
+      if (categoriaDoMotivo(rotulo, funil.settings) === alvo) vistos.add(rotulo);
     }
   }
   for (const canonico of CANONICAL_LOST_REASONS) {
@@ -142,11 +147,26 @@ export function motivosDaCategoria(funis: readonly { settings: unknown }[], cate
   return [...vistos];
 }
 
+/** A lista legada do funil (`lost_reasons_do_funil` do settings efetivo, 1021) na forma de settings. */
+function legadoComoSettings(settings: unknown): { lost_reasons: unknown } | null {
+  const legado = (settings as Record<string, unknown> | null | undefined)?.[MOTIVOS_LEGADOS_DO_FUNIL];
+  return Array.isArray(legado) ? { lost_reasons: legado } : null;
+}
+
+/**
+ * A categoria do motivo. 1021: a comparação ignora maiúsculas e espaços (a régua da fusão), e a
+ * lista da ORGANIZAÇÃO (`lost_reasons` do settings efetivo) vem antes da legada do funil. Cadastrado
+ * sem categoria na lista que achou primeiro: herda o padrão do produto.
+ */
 export function categoriaDoMotivo(valor: string, settings: unknown): string | undefined {
   const alvo = valor.trim();
   if (!alvo) return undefined;
-  for (const motivo of motivosComCategoriaDoFunil(settings)) {
-    if (motivo.categoria && motivo.valor.trim() === alvo) return motivo.categoria;
+  const chave = motivoNormalizado(alvo);
+  for (const fonte of [settings, legadoComoSettings(settings)]) {
+    for (const motivo of motivosComCategoriaDoFunil(fonte)) {
+      if (motivoNormalizado(motivo.valor) !== chave) continue;
+      return motivo.categoria ?? categoriaPadraoDoMotivo(alvo);
+    }
   }
   return categoriaPadraoDoMotivo(alvo);
 }
