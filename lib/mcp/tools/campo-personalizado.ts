@@ -25,7 +25,9 @@
  *
  * SEM GRAVAÇÃO EM DOBRO: valor igual ao que já está gravado não escreve (nem
  * atividade, nem auditoria, nem evento), e escritas do mesmo alvo neste
- * processo passam em fila (`emSequencia`).
+ * processo passam em fila (`emSequencia`). SEM APAGAR O VIZINHO: as duas
+ * escritas mesclam no banco (`fn_contato_anotar_campos`, `fn_lead_anotar_campos`),
+ * nunca regravam o mapa que leram.
  */
 import { z } from "zod";
 
@@ -137,14 +139,18 @@ async function gravarNoContato(
       };
     }
     const atual = comoMapa(ficha.custom_fields);
-    const mudam = Object.entries(validos).filter(([k, v]) => !mesmoValor(atual[k], v));
-    if (mudam.length === 0) return { gravado: true, campos: validos, sem_mudanca: true };
+    const mudam = Object.fromEntries(Object.entries(validos).filter(([k, v]) => !mesmoValor(atual[k], v)));
+    if (Object.keys(mudam).length === 0) return { gravado: true, campos: validos, sem_mudanca: true };
     try {
+      // Só as chaves que MUDAM, mescladas DENTRO do banco
+      // (`fn_contato_anotar_campos`): regravar o mapa lido apagaria a edição
+      // humana feita entre a leitura e a escrita.
       await patchContactHandler(
         ctx.supabase,
         { organization_id: ctx.organizationId, actor: ctx.actor, requestId: ctx.requestId },
         contato,
-        { custom_fields: { ...atual, ...validos } },
+        { custom_fields: mudam },
+        { mesclarCamposPersonalizados: true },
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {

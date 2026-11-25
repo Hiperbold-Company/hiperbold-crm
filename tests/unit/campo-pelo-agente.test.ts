@@ -78,10 +78,12 @@ const DEFINICOES = (org: string): Linha[] => [
 
 let tabelas: Record<string, Linha[]>;
 let updates: Array<{ tabela: string; patch: Linha; filtros: Linha }>;
+let rpcs: Array<{ nome: string; args: Linha }>;
 
 beforeEach(() => {
   auditados.length = 0;
   updates = [];
+  rpcs = [];
   tabelas = {
     custom_field_definitions: [...DEFINICOES(ORG), ...DEFINICOES(ORG_B)],
     crm_pipelines: [],
@@ -144,7 +146,17 @@ function bancoFalso() {
     const cadeia: unknown = new Proxy(alvo, { get: (t, p: string) => (p in t ? t[p] : () => cadeia) });
     return cadeia;
   };
-  return { from, rpc: () => Promise.resolve({ data: null, error: null }) };
+  // `fn_contato_anotar_campos` como o banco faz: `custom_fields || p_campos`
+  // sobre a linha VIGENTE da organização (o resto das RPCs é fogo-e-esquece).
+  const rpc = (nome: string, args: Linha) => {
+    if (nome !== "fn_contato_anotar_campos") return Promise.resolve({ data: null, error: null });
+    rpcs.push({ nome, args });
+    const linha = tabelas.contacts!.find((c) => c.organization_id === args.p_org && c.id === args.p_contato);
+    if (!linha) return Promise.resolve({ data: null, error: null });
+    linha.custom_fields = { ...(linha.custom_fields as Linha), ...(args.p_campos as Linha) };
+    return Promise.resolve({ data: linha.custom_fields, error: null });
+  };
+  return { from, rpc };
 }
 
 function montar(toolIds: string[], contatoDoTurno?: string, pipelineIds: string[] = [FUNIL]) {
@@ -178,6 +190,21 @@ describe("crm_set_custom_field — a escrita", () => {
     expect(fichaDe(CONTATO).custom_fields).toEqual({ cidade: "Recife", interesse: "moradia", renda: 4500, visitou: true });
     expect(updates).toHaveLength(1);
     expect(updates[0]!.filtros).toMatchObject({ organization_id: ORG, id: CONTATO });
+  });
+
+  it("mescla NO BANCO só as chaves que mudam: a edição humana feita ao mesmo tempo sobrevive", async () => {
+    const r = await gravar({ interesse: "Moradia" });
+    expect(r.gravado).toBe(true);
+    // O UPDATE do PostgREST não leva o mapa: quem mescla é a função.
+    expect(updates[0]!.patch).not.toHaveProperty("custom_fields");
+    expect(rpcs).toEqual([
+      { nome: "fn_contato_anotar_campos", args: { p_org: ORG, p_contato: CONTATO, p_campos: { interesse: "moradia" } } },
+    ]);
+    // Uma pessoa gravou `cidade` DEPOIS da leitura do agente: o merge no banco
+    // não a apaga, porque o agente nunca reenviou o mapa que leu.
+    fichaDe(CONTATO).custom_fields = { ...(fichaDe(CONTATO).custom_fields as Linha), cidade: "Olinda" };
+    await gravar({ visitou: "sim" });
+    expect(fichaDe(CONTATO).custom_fields).toEqual({ cidade: "Olinda", interesse: "moradia", visitou: true });
   });
 
   it("aceita o rótulo com outra caixa e grava o valor canônico da opção", async () => {
