@@ -4,14 +4,15 @@
  * modelo de chat (camada universal). Um backend mlx-whisper local implementa a
  * mesma interface para self-host em Apple Silicon (fora deste MVP).
  */
-import type { TokenUsage } from "@/lib/agent-engine/edge/llm/pricing";
+import { custoDeTranscricaoCents, type TokenUsage } from "@/lib/agent-engine/edge/llm/pricing";
 
 export interface TranscriptionProvider {
   transcribe(audio: Buffer, mime: string): Promise<string>;
   /**
    * Medição devolvida pelo fornecedor. O modelo de conversa traz tokens;
-   * o serviço OpenRouter pode trazer o custo em USD, convertido para centavos.
-   * Ausência de custo continua null, nunca uma estimativa de preço.
+   * o serviço OpenRouter pode trazer o custo em USD, convertido para centavos;
+   * o `whisper-1` da OpenAI traz a duração, que vira custo pela tarifa por
+   * minuto. Ausência de custo continua null, nunca uma estimativa de preço.
    */
   transcribeMedindo?(audio: Buffer, mime: string): Promise<{
     texto: string;
@@ -162,20 +163,47 @@ export function apiTranscriptionProvider(
       `audio.${extFor(mime)}`,
     );
     for (const [campo, valor] of camposDeIdioma(model, creds.languages ?? [])) form.append(campo, valor);
+    // A duração só é pedida onde ela vira preço (ver `cobraPorMinuto`, abaixo):
+    // `verbose_json` é formato do `whisper-1` e traz `duration` (segundos) ao
+    // lado do mesmo `text`. Os `gpt-*-transcribe`, a OpenRouter e o serviço
+    // próprio da instalação seguem no formato padrão de sempre.
+    if (cobraPorMinuto) form.append("response_format", "verbose_json");
     const res = await fetchImpl(`${base}/v1/audio/transcriptions`, {
       method: "POST",
       headers: { ...creds.headers, Authorization: `Bearer ${creds.apiKey}` },
       body: form,
     });
     if (!res.ok) throw new Error(`transcription_${res.status}`);
-    const json = (await res.json()) as { text?: string; usage?: { cost?: unknown } };
-    const custoEmUsd = json.usage?.cost;
-    const custoCents = typeof custoEmUsd === "number" && Number.isFinite(custoEmUsd) && custoEmUsd >= 0
-      && Number.isFinite(custoEmUsd * 100) ? custoEmUsd * 100 : null;
+    const json = (await res.json()) as {
+      text?: string;
+      duration?: unknown;
+      usage?: { cost?: unknown; type?: unknown; seconds?: unknown };
+    };
+    if (creds.medirCustoEmUsd) {
+      const custoEmUsd = json.usage?.cost;
+      const custoCents = typeof custoEmUsd === "number" && Number.isFinite(custoEmUsd) && custoEmUsd >= 0
+        && Number.isFinite(custoEmUsd * 100) ? custoEmUsd * 100 : null;
+      return { texto: json.text ?? "", uso: null, custoCents };
+    }
+    // `usage: { type: "duration", seconds }` é o que a OpenAI documenta para o
+    // `whisper-1`; `duration` no topo é o do `verbose_json`. Sem nenhum dos
+    // dois, o custo fica null — nunca uma estimativa pelo tamanho do arquivo.
+    const segundos =
+      json.usage?.type === "duration" && typeof json.usage.seconds === "number"
+        ? json.usage.seconds
+        : typeof json.duration === "number"
+          ? json.duration
+          : null;
+    const custoCents = cobraPorMinuto && segundos !== null ? custoDeTranscricaoCents(model, segundos) : null;
     return { texto: json.text ?? "", uso: null, custoCents };
   };
+  // A tarifa por minuto (`custoDeTranscricaoCents`) é a da API da PRÓPRIA
+  // OpenAI: o mesmo `whisper-1` num endereço configurado (serviço próprio da
+  // instalação, Groq…) cobra outra coisa, e ali o custo segue desconhecido.
+  const cobraPorMinuto =
+    !creds.medirCustoEmUsd && base === DEFAULT_BASE && custoDeTranscricaoCents(model, 0) !== null;
   return {
     transcribe: async (audio, mime) => (await transcrever(audio, mime)).texto,
-    ...(creds.medirCustoEmUsd ? { transcribeMedindo: transcrever } : {}),
+    ...(creds.medirCustoEmUsd || cobraPorMinuto ? { transcribeMedindo: transcrever } : {}),
   };
 }
