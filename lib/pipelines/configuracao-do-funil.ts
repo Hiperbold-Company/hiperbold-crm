@@ -240,26 +240,11 @@ export async function aplicarConfiguracaoDoFunil(
 
   // 1021: os motivos de perda são da ORGANIZAÇÃO. `lost_reasons` no patch do funil ACRESCENTA à lista
   // da empresa (sem apagar os outros; categoria informada substitui) e não grava mais no funil — a
-  // resposta devolve a lista da organização. Conferido ANTES da escrita do funil: falha aqui não
-  // deixa meia-configuração gravada.
+  // resposta devolve a lista da organização. O acréscimo roda DENTRO do laço, uma vez só, depois de
+  // todas as recusas (funil inexistente, campos visíveis, regras de data) e logo antes do UPDATE:
+  // pedido recusado não mexe na lista da empresa.
   let motivosNaoCouberam: unknown[] = [];
-  if (parsed.data.lost_reasons !== undefined && parsed.data.lost_reasons.length > 0) {
-    const r = await acrescentarMotivosDaOrganizacaoComAudit(createAdminClient(), {
-      organizationId,
-      motivos: parsed.data.lost_reasons,
-      autor: input.autor,
-      requestId: input.requestId,
-      origem: "configuracao_do_funil",
-    });
-    if (!r.ok) {
-      return {
-        ok: false,
-        error: r.erro,
-        erroDoBanco: { etapa: "gravacao", erro: { message: r.erro } },
-      };
-    }
-    motivosNaoCouberam = r.dados.nao_couberam;
-  }
+  let motivosAcrescentados = !(parsed.data.lost_reasons !== undefined && parsed.data.lost_reasons.length > 0);
 
   // LER-MODIFICAR-GRAVAR com trava otimista: dois salvamentos ao mesmo tempo (duas abas, a tela e um
   // token) liam o MESMO `settings`, cada um mesclava só as suas chaves e o último gravava o objeto
@@ -295,7 +280,7 @@ export async function aplicarConfiguracaoDoFunil(
         bruto && typeof bruto === "object" && !Array.isArray(bruto) ? (bruto as Record<string, unknown>) : {};
       nextSettings.campos_obrigatorios = input.editarObrigatorios(atuais);
     }
-    // 1021: `lost_reasons` NÃO grava mais no funil (foi para a organização, acima). A lista legada
+    // 1021: `lost_reasons` NÃO grava mais no funil (vai para a organização, logo antes do UPDATE). A lista legada
     // que o funil tinha fica como está: o gatilho ainda a aceita.
     if (parsed.data.campos_visiveis !== undefined) {
       if (parsed.data.campos_visiveis === null) delete nextSettings.campos_visiveis;
@@ -359,6 +344,25 @@ export async function aplicarConfiguracaoDoFunil(
           details: { [REGRAS_PERDEM_O_CAMPO]: perdem.nomes },
         };
       }
+    }
+
+    if (!motivosAcrescentados && parsed.data.lost_reasons) {
+      const r = await acrescentarMotivosDaOrganizacaoComAudit(createAdminClient(), {
+        organizationId,
+        motivos: parsed.data.lost_reasons,
+        autor: input.autor,
+        requestId: input.requestId,
+        origem: "configuracao_do_funil",
+      });
+      if (!r.ok) {
+        return {
+          ok: false,
+          error: r.erro,
+          erroDoBanco: { etapa: "gravacao", erro: { message: r.erro } },
+        };
+      }
+      motivosNaoCouberam = r.dados.nao_couberam;
+      motivosAcrescentados = true;
     }
 
     let escrita = supabase

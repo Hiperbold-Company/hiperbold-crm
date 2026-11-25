@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   rpcs: [] as Array<{ fn: string; args: Record<string, unknown> }>,
   gravacoesDoFunil: [] as Array<Record<string, unknown>>,
   audits: [] as Array<{ action: string; metadata?: Record<string, unknown> }>,
+  funilExiste: true,
 }));
 
 vi.mock("@/lib/audit", () => ({
@@ -54,7 +55,7 @@ function banco() {
         q.maybeSingle = async () => ({ data: { settings: h.org.settings }, error: null });
       } else if (tabela === "crm_pipelines") {
         q.maybeSingle = async () => ({
-          data: { id: FUNIL, name: "Vendas", organization_id: ORG, ...h.funil },
+          data: h.funilExiste ? { id: FUNIL, name: "Vendas", organization_id: ORG, ...h.funil } : null,
           error: null,
         });
         q.update = (payload: Record<string, unknown>) => {
@@ -99,6 +100,7 @@ beforeEach(() => {
   h.rpcs = [];
   h.gravacoesDoFunil = [];
   h.audits = [];
+  h.funilExiste = true;
 });
 
 describe("o leitor usa a lista da ORGANIZAÇÃO", () => {
@@ -181,6 +183,34 @@ describe("a configuração do funil (API/MCP/action) escreve na organização", 
     expect(h.gravacoesDoFunil.every((g) => (g.settings as Record<string, unknown>).lost_reasons?.toString() === "Legado")).toBe(true);
     expect(r.ok && r.dados.settings.lost_reasons).toEqual(["Antigo da empresa", "Novo"]);
     expect(h.audits.filter((a) => a.action === "organization.lost_reasons_updated")).toHaveLength(1);
+  });
+
+  it("funil inexistente: not_found e a lista da empresa não muda", async () => {
+    h.org.settings = { lost_reasons: ["Antigo da empresa"] };
+    h.funilExiste = false;
+    const r = await aplicarConfiguracaoDoFunil(db(), {
+      organizationId: ORG,
+      pipelineId: FUNIL,
+      patch: { lost_reasons: ["Novo"] },
+      autor: { actorUserId: "u" },
+    });
+    expect(!r.ok && r.error).toBe("not_found");
+    expect(h.org.settings.lost_reasons).toEqual(["Antigo da empresa"]);
+    expect(h.audits.filter((a) => a.action === "organization.lost_reasons_updated")).toEqual([]);
+  });
+
+  it("pedido recusado pelos campos visíveis não acrescenta motivo à empresa", async () => {
+    h.org.settings = { lost_reasons: ["Antigo da empresa"] };
+    h.definicoes = [{ key: "origem", entidade: "negocio" }];
+    const r = await aplicarConfiguracaoDoFunil(db(), {
+      organizationId: ORG,
+      pipelineId: FUNIL,
+      patch: { lost_reasons: ["Novo"], campos_visiveis: ["inexistente"] },
+      autor: {},
+    });
+    expect(r.ok).toBe(false);
+    expect(h.org.settings.lost_reasons).toEqual(["Antigo da empresa"]);
+    expect(h.gravacoesDoFunil).toEqual([]);
   });
 
   it("acrescentar o que já existe não audita a lista da organização", async () => {
