@@ -122,7 +122,10 @@ async function configuracaoNaTela(page: Page, id: string) {
       label: el.querySelector("legend")?.textContent?.trim() ?? "",
     })),
   );
-  return { etapas, valores: await valoresDoCard(card), campos };
+  // Desde a 1021 os motivos de perda são da EMPRESA: o editor do funil não tem mais o campo, só o
+  // aviso com o link para Configurações › Motivos de perda.
+  const motivosDaEmpresa = await card.getByTestId("motivos-de-perda-sao-da-empresa").isVisible();
+  return { etapas, valores: await valoresDoCard(card), campos, motivosDaEmpresa };
 }
 
 test.describe("Duplicar funil e o acordeão da página de Etapas", () => {
@@ -241,14 +244,17 @@ test.describe("Duplicar funil e o acordeão da página de Etapas", () => {
 
     const naTela = await configuracaoNaTela(page, novoId);
     expect(naTela.etapas, "as mesmas etapas, na mesma ordem").toEqual(ETAPAS);
-    expect(naTela.valores, "os motivos de perda").toContain(MOTIVOS.join(", "));
+    // 1021: o motivo de perda vive na empresa. A cópia não herda a lista legada do funil de origem
+    // e mostra o aviso de que os motivos são da empresa.
+    expect(naTela.motivosDaEmpresa, "os motivos de perda são da empresa").toBe(true);
+    expect(naTela.valores, "o editor não tem mais a lista de motivos do funil").not.toContain(MOTIVOS.join(", "));
     expect(naTela.campos, "o campo do negócio (chave e rótulo)").toContainEqual({ key: CAMPO.key, label: CAMPO.label });
     await captura(page, "05-copia-pelo-topo-aberta");
 
     // O banco confirma o que a tela leu, e a origem não foi tocada.
     const { data: copia } = await admin.from("crm_pipelines").select("settings").eq("id", novoId).single();
     const settings = (copia as { settings: { lost_reasons?: unknown; fields?: Array<{ key: string }> } }).settings;
-    expect(settings.lost_reasons).toEqual(MOTIVOS);
+    expect(settings.lost_reasons, "a lista legada da origem não é copiada (1021)").toBeUndefined();
     expect(settings.fields?.map((f) => f.key)).toEqual([CAMPO.key]);
     const { count: etapasDaOrigem } = await admin
       .from("crm_stages")
@@ -282,7 +288,7 @@ test.describe("Duplicar funil e o acordeão da página de Etapas", () => {
     await expect(cabecalho(page, doCardId)).toHaveAttribute("aria-expanded", "true", { timeout: ESPERA });
     const doCard = await configuracaoNaTela(page, doCardId);
     expect(doCard.etapas).toEqual(ETAPAS);
-    expect(doCard.valores).toContain(MOTIVOS.join(", "));
+    expect(doCard.motivosDaEmpresa).toBe(true);
     expect(doCard.campos).toContainEqual({ key: CAMPO.key, label: CAMPO.label });
     await captura(page, "07-copia-pelo-card-aberta");
 
