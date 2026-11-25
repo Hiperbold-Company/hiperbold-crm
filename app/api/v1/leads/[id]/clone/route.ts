@@ -27,6 +27,7 @@ import { bloqueioValeParaOrganizacao } from "@/lib/billing/planos/bloqueio-vale"
 import { podeCriar } from "@/lib/billing/planos/pode-criar";
 import { STATUS_RECUSA_DO_PLANO } from "@/lib/billing/planos/recusa-do-plano";
 import { ocultarProvaMetaNaResposta } from "@/lib/leads/prova-meta-lead-submitted";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 import { modoDeReabertura } from "@/lib/leads/reabertura";
 import {
   recusaDeCamposObrigatorios,
@@ -269,7 +270,11 @@ export async function POST(
     // e o trigger lê `new.pipeline_id` (supabase/baseline.sql).
     const motivoRecusado = recusaDeMotivoForaDoVocabulario({
       motivo: input.lost_reason,
-      settingsDoFunil: (pipelineOrigem as { settings?: unknown } | null)?.settings ?? null,
+      // 1021: o settings EFETIVO — a lista da organização e a legada do funil, como o gatilho.
+      settingsDoFunil: settingsComMotivosDaOrganizacao(
+        (pipelineOrigem as { settings?: unknown } | null)?.settings ?? null,
+        await lerMotivosDaOrganizacao(supabase, handlerCtx.organization_id),
+      ),
       idioma: authz.user.idioma,
     });
     if (motivoRecusado) {

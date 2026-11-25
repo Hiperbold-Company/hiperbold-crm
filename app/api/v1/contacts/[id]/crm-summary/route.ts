@@ -39,8 +39,9 @@ import type { Role } from "@/lib/auth/types";
 import { chavesRestritasDosCampos, recortarCampos, recortarLinha } from "@/lib/campos/recorte-por-papel";
 import { ALVO_DE_CONTATO, VINCULO_DE_CONTATO } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
-import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
+import { camposDoFunil, camposPorEscopo, camposVisiveisNoFunil, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { motivosDoFunil } from "@/lib/leads/motivos-de-perda-do-funil";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 import { createClient } from "@/lib/supabase/server";
 import { nomesDosAtendentes } from "@/lib/users/nome-do-atendente";
 
@@ -254,12 +255,16 @@ export async function GET(
     [k: string]: unknown;
   }>;
   const nomes = await nomesDosAtendentes(linhas.map((a) => a.performed_by_user_id ?? null));
+  // 1021: os motivos de perda que a janela oferece são os da ORGANIZAÇÃO (null = legado do funil).
+  const motivosDaOrganizacao = await lerMotivosDaOrganizacao(supabase, contactScope.organization_id);
 
 
   return ok(
     {
       ...enrichment,
-      leads: leadsResolvidos.map((row) => comCamposDoFunil(row as Record<string, unknown>, authz.org.role)),
+      leads: leadsResolvidos.map((row) =>
+        comCamposDoFunil(row as Record<string, unknown>, authz.org.role, motivosDaOrganizacao),
+      ),
       orders: orders.data ?? [],
       activities: linhas.map((a) => ({
         ...a,
@@ -318,18 +323,20 @@ async function anunciosDoContato(
  * `settings.fields` já traz `publico: false` dos campos de contato e de negócio da organização, então
  * o funil embutido basta para saber o que recortar.
  */
-function comCamposDoFunil(row: Record<string, unknown>, papel: Role) {
+function comCamposDoFunil(row: Record<string, unknown>, papel: Role, motivosDaOrganizacao: unknown[] | null = null) {
   const { crm_pipelines, crm_stages, ...bruto } = row;
   const fields = camposDoFunil(settingsDoEmbed(crm_pipelines));
   const lead = recortarLinha(bruto, chavesRestritasDosCampos(fields), papel);
   return {
     ...lead,
-    field_defs: camposPorEscopo(recortarCampos(fields, papel), "negocio"),
+    // O funil escolhe quais campos do NEGÓCIO mostra (`settings.campos_visiveis`); o valor escondido
+    // continua em `custom_fields`.
+    field_defs: camposVisiveisNoFunil(settingsDoEmbed(crm_pipelines), camposPorEscopo(recortarCampos(fields, papel), "negocio")),
     funil_nome: nomeDoEmbed(crm_pipelines),
     etapa_nome: nomeDoEmbed(crm_stages),
     etapas_do_funil: etapasDoEmbed(crm_pipelines),
     // O painel da conversa não tem o quadro em cache; sem isto a janela de perda cairia no padrão do produto.
-    motivos_de_perda: motivosDoFunil(settingsDoEmbed(crm_pipelines)),
+    motivos_de_perda: motivosDoFunil(settingsComMotivosDaOrganizacao(settingsDoEmbed(crm_pipelines), motivosDaOrganizacao)),
     // OS ATALHOS DO CARD (#3487). Vai o MODELO de link como está no `settings`,
     // não o link montado: quem monta é o navegador de quem clica, com os dados
     // que essa pessoa já vê (`encodeURIComponent` por valor, allowlist de

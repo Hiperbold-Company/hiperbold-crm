@@ -72,6 +72,7 @@ import {
   recusaDeMotivoDaPerdaPeloBanco,
 } from "@/lib/leads/motivo-da-perda";
 import { motivosDaCategoria } from "@/lib/leads/motivos-de-perda-do-funil";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 import type { CreateLeadInput, UpdateLeadInput } from "@/lib/schemas";
 import { ehCorrecaoDeMovimentoDaIa } from "@/lib/leads/correcao-humana";
 import { ocultarProvaMetaNaResposta, removerProvaMetaLeadSubmitted } from "@/lib/leads/prova-meta-lead-submitted";
@@ -436,8 +437,11 @@ export async function listLeadsHandler(
     const escopados = q.pipeline_id
       ? (funis ?? []).filter((f) => f.id === q.pipeline_id)
       : (funis ?? []);
+    // 1021: a categoria sai da lista da ORGANIZAÇÃO; a legada de cada funil entra para achar o
+    // negócio histórico gravado com outra grafia.
+    const motivosDaOrganizacao = await lerMotivosDaOrganizacao(supabase, ctx.organization_id);
     const permitidos = motivosDaCategoria(
-      escopados.map((f) => ({ settings: f.settings })),
+      escopados.map((f) => ({ settings: settingsComMotivosDaOrganizacao(f.settings, motivosDaOrganizacao) })),
       q.lost_reason_category,
     );
     if (permitidos.length === 0) return { leads: [], cursor: null, has_more: false };

@@ -115,3 +115,27 @@ export function campoVisivelAoPapel(campo: { publico?: boolean }, ehAdmin: boole
 export function camposVisiveisAoPapel<T extends { publico?: boolean }>(campos: T[], ehAdmin: boolean): T[] {
   return campos.filter((campo) => campoVisivelAoPapel(campo, ehAdmin));
 }
+
+/**
+ * Os campos do NEGÓCIO que ESTE funil mostra (decisão do dono do produto, 24/11/2026).
+ *
+ * O cadastro é da organização (1015) e todo funil recebe todos em `settings.fields`; o funil só
+ * ESCOLHE em `settings.campos_visiveis`. Ausente/nulo = todos (todo funil que já existia). Campo do
+ * CONTATO passa sempre: a escolha é só dos campos de negócio. Chave da lista que não existe mais é
+ * ignorada. Esconder não apaga valor — quem filtra é só a TELA (formulário, ficha, quadro, lista) e
+ * a exigência de obrigatórios; `fields`, a API, as automações e a varredura por data seguem com todos.
+ */
+export function camposVisiveisNoFunil<T extends Pick<CustomFieldDef, "key" | "escopo">>(
+  settings: Record<string, unknown> | null | undefined,
+  campos: T[],
+): T[] {
+  const lista = settings?.campos_visiveis;
+  if (!Array.isArray(lista)) return campos;
+  const visiveis = new Set(lista.filter((k): k is string => typeof k === "string"));
+  return campos.filter((campo) => escopoDoCampo(campo) === "contato" || visiveis.has(campo.key));
+}
+
+/** `camposDoFunil` já recortado pela escolha do funil — o que as telas do negócio desenham. */
+export function camposDoFunilVisiveis(settings: Record<string, unknown> | null | undefined): CustomFieldDef[] {
+  return camposVisiveisNoFunil(settings, camposDoFunil(settings));
+}

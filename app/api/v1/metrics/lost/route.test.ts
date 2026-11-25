@@ -214,8 +214,12 @@ describe("GET /api/v1/metrics/lost", () => {
       ["closed_at >=", "2026-09-01T00:00:00.000Z"],
       ["closed_at <", "2026-10-01T00:00:00.000Z"],
     ]);
-    // Os apoios continuam numa leitura só.
-    expect(consultas.filter((c) => c.tabela !== "crm_leads")).toHaveLength(2);
+    // Os apoios continuam numa leitura só cada: funis, etapas e (1021) a lista de motivos da organização.
+    expect(consultas.filter((c) => c.tabela !== "crm_leads").map((c) => c.tabela).sort()).toEqual([
+      "crm_pipelines",
+      "crm_stages",
+      "organizations",
+    ]);
   });
 
   it("acima do teto de 5.000 linhas responde truncado: true", async () => {

@@ -5,6 +5,8 @@
  *
  * Nenhuma regra de negócio mora neste arquivo (ver `ChannelAdapter` em ../types).
  */
+import { RECUSA_DEFINITIVA_DAS_OPCOES, textoComOpcoesNumeradas } from "../opcoes-numeradas";
+import { corpoDaEnqueteWaha } from "@/lib/waha/enquete";
 import { wahaContactPayload } from "@/lib/waha/contact-card";
 import { fetchWahaMedia } from "@/lib/messaging/media/waha-source";
 import { getWahaClient } from "@/lib/waha/client";
@@ -311,7 +313,7 @@ export const wahaAdapter: ChannelAdapter = {
     return fetchWahaMedia(input.url, input.hintMime ?? null);
   },
 
-  async send(envelope: OutboundEnvelope): Promise<{ externalId: string | null }> {
+  async send(envelope: OutboundEnvelope): Promise<{ externalId: string | null; opcoesComoTexto?: boolean }> {
     const client = getWahaClient();
     // Sem env de WAHA o comportamento atual é NOOP, não erro: a UI mostra o
     // banner de "container não está no ar". Transformar em exceção mudaria o
@@ -326,7 +328,36 @@ export const wahaAdapter: ChannelAdapter = {
     // no `sendText`, e mandá-lo nos outros seria pedir para a API ignorar em
     // silêncio, que é como se perde uma feature sem ninguém notar.
     let res: unknown;
-    if (envelope.kind === "contact" && envelope.contact) {
+    let opcoesComoTexto = false;
+    if (envelope.kind === "text" && envelope.interactive && !envelope.media) {
+      // OPÇÕES NATIVAS = ENQUETE (`sendPoll`). Reserva em texto numerado só
+      // quando o servidor RECUSOU de forma definitiva (400, 404, 405, 422),
+      // quando as opções não cabem numa enquete, ou quando a sessão não
+      // entrega o voto ao CRM. Rede, timeout, 5xx, 408 e 429
+      // sobem: a enquete pode ter saído.
+      const citacao = envelope.replyToExternalId ? idCompletoDaMensagem(envelope.replyToExternalId, to) : null;
+      const enquete = corpoDaEnqueteWaha(envelope.sessionRef, to, envelope.body ?? "", envelope.interactive, citacao);
+      await envelope.beforeSend?.();
+      // Enquete só para a sessão que comprovadamente ENTREGA o voto ao CRM
+      // (`recebeVotoDeEnquete`); sem isso, o toque do contato se perderia.
+      const podeEnquete = enquete ? await client.recebeVotoDeEnquete(envelope.sessionRef) : false;
+      const r = enquete && podeEnquete ? await client.sendPoll({ ...enquete }) : null;
+      if (r?.ok) {
+        res = r.json;
+      } else if (r && !RECUSA_DEFINITIVA_DAS_OPCOES.has(r.status)) {
+        // 5xx, 408, 429: transitório ou ambíguo — pode ter saído. Sobe como o
+        // `sendText` sobe, sem reenviar como texto.
+        throw new Error(`waha_${r.status}`);
+      } else {
+        opcoesComoTexto = true;
+        res = await client.sendMessage(
+          envelope.sessionRef,
+          to,
+          textoComOpcoesNumeradas(envelope.body ?? "", envelope.interactive),
+          citacao,
+        );
+      }
+    } else if (envelope.kind === "contact" && envelope.contact) {
       const resolvedId = await resolveWhatsappIdForContactCard(
         client,
         envelope.sessionRef,
@@ -377,6 +408,6 @@ export const wahaAdapter: ChannelAdapter = {
       chatId: to,
     });
 
-    return { externalId: parseWahaMessageId(res) };
+    return { externalId: parseWahaMessageId(res), ...(opcoesComoTexto ? { opcoesComoTexto: true } : {}) };
   },
 };

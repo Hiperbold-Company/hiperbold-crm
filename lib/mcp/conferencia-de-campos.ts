@@ -29,6 +29,7 @@ import { estadoEfetivoDaTarefa, TAREFA_DA_CONFERENCIA_DE_CAMPO } from "@/lib/ai/
 import type { DependenciasDoPonto } from "@/lib/ai/decisao/ponto";
 import { settingsDoFunil } from "@/lib/leads/campos-exigidos";
 import {
+  defsDoPadraoDaOrg,
   defsDoPadraoDoFunil,
   mensagemDaRecusa,
   recusasDePadrao,
@@ -118,7 +119,13 @@ export async function mensagensPendentesDoTurno(
  * em que ele vai nascer (`crm_create_lead`, #2297 — ainda não há linha em
  * `crm_leads` para ler).
  */
-export type AlvoDaConferencia = { leadId: string } | { pipelineId: string };
+/**
+ * De quem são os campos conferidos: o negócio (`leadId`), o funil de nascimento
+ * (`pipelineId`) ou o CONTATO (`contatoId`, `crm_set_custom_field`). O contato
+ * não tem funil próprio: as definições dele vêm dos funis da organização no
+ * escopo `contato` (`defsDoPadraoDaOrg`), como a ficha do contato as julga.
+ */
+export type AlvoDaConferencia = { leadId: string } | { pipelineId: string } | { contatoId: string };
 
 /**
  * O funil da conferência: rótulos (a #2234) e DEFINIÇÕES (o `padrao` da #2730),
@@ -134,6 +141,10 @@ interface FunilDaConferencia {
 
 async function funilDaConferencia(ctx: McpContext, alvo: AlvoDaConferencia): Promise<FunilDaConferencia> {
   try {
+    if ("contatoId" in alvo) {
+      const defs = await defsDoPadraoDaOrg(ctx.supabase, ctx.organizationId, "contato");
+      return { rotulos: new Map(defs.map((c) => [c.key, c.label ?? c.key])), defs };
+    }
     let settings: unknown;
     if ("pipelineId" in alvo) {
       // O id vem do ARGUMENTO do modelo, não de uma linha da organização: o

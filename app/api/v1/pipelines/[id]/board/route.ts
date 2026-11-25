@@ -51,6 +51,7 @@ import { createClient } from "@/lib/supabase/server";
 import { idsDeContatosPessoais } from "@/app/api/v1/conversations/_handler";
 import type { BoardData, Pipeline, Stage } from "@/lib/kanban/types";
 import type { Lead } from "@/lib/types/leads";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
 import { ocultarProvaMetaNaResposta } from "@/lib/leads/prova-meta-lead-submitted";
 
 export const dynamic = "force-dynamic";
@@ -741,10 +742,17 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return falhaInterna("internal_error", leadsComMarcadores.error, { requestId });
   }
 
+  // 1021: os motivos de perda são da ORGANIZAÇÃO. O quadro entrega o settings EFETIVO
+  // (`lost_reasons` = lista da organização), e a janela de perder, o filtro e a categoria do quadro
+  // leem daqui sem mudar (`useMotivosDePerdaDoFunil`, `categoriaDoMotivo`).
+  const motivosDaOrganizacao = await lerMotivosDaOrganizacao(supabase, (pipeline as Pipeline).organization_id);
   const board: BoardData = {
     pipeline: {
       ...(pipeline as Pipeline),
-      settings: recortarSettingsDoFunil((pipeline as Pipeline).settings, papel),
+      settings: settingsComMotivosDaOrganizacao(
+        recortarSettingsDoFunil((pipeline as Pipeline).settings, papel),
+        motivosDaOrganizacao,
+      ),
     } as Pipeline,
     stages: (stages ?? []) as Stage[],
     leads: leadsComMarcadores.leads.map(

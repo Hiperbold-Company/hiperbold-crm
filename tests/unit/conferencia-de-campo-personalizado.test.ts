@@ -216,6 +216,44 @@ describe("catraca por origem — tela, API de terceiros e automação não confe
   });
 });
 
+describe("campo do CONTATO passa pela mesma conferência (crm_set_custom_field)", () => {
+  async function noContato(mensagens: string[], campos: Record<string, unknown>, r: RespostasDoJev) {
+    const f: FalsoBanco = {
+      inseridas: {},
+      lidas: [],
+      settings: DECIDINDO,
+      conversa: "55555555-5555-4555-8555-555555555555",
+      mensagens: mensagens.map((body, i) => ({ direction: "inbound", body, created_at: `2026-09-01T10:0${i}:00.000Z` })),
+      // A definição do contato chega pelos funis da organização, no escopo `contato`.
+      pipelineSettings: { fields: [{ key: "quartos", label: "Quartos", type: "number", escopo: "contato" }] },
+    };
+    const resultado = await conferirCamposPersonalizados(ctxDoAgente(bancoFalso(f)), { contatoId: CONTATO }, campos, {
+      ...CHAVE,
+      fetchImpl: jev(r),
+    });
+    return { resultado, f };
+  }
+
+  it("valor que o cliente NÃO disse é recusado no contato, como no negócio", async () => {
+    const r: RespostasDoJev = { respostas: { dito_quartos: 0.2, contrario_quartos: 0.1 }, chamadas: [] };
+    const { resultado, f } = await noContato(["procuro algo pequeno pra mim e meu cachorro"], { quartos: 1 }, r);
+    expect(resultado.custom_fields).toEqual({});
+    expect(resultado.recusados[0]?.motivo).toBe("cliente_nao_disse");
+    expect(resultado.recusados[0]?.mensagem).toContain("Quartos");
+    expect(r.chamadas).toHaveLength(1);
+    // O contato não tem funil: as definições vêm dos funis da organização, nunca de um `crm_leads`.
+    expect(f.lidas).toContain("crm_pipelines");
+    expect(f.lidas).not.toContain("crm_leads");
+  });
+
+  it("valor que o cliente disse segue para a gravação", async () => {
+    const r: RespostasDoJev = { respostas: { dito_quartos: 0.97, contrario_quartos: 0.02 }, chamadas: [] };
+    const { resultado } = await noContato(["quero dois quartos"], { quartos: 2 }, r);
+    expect(resultado.custom_fields).toEqual({ quartos: 2 });
+    expect(resultado.recusados).toHaveLength(0);
+  });
+});
+
 describe("os quatro exemplos da issue, em decidindo", () => {
   it("«procuro algo pequeno pra mim e meu cachorro» → quartos: 1 devolvido com ensino", async () => {
     const r: RespostasDoJev = { respostas: { dito_quartos: 0.2, contrario_quartos: 0.1 }, chamadas: [] };

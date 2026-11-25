@@ -883,17 +883,13 @@ export async function sendMessageHandler(
     }
     const nativa =
       transportaMensagem(provider) && capabilitiesOf(provider as ChannelProvider).interactive === "native";
-    if (nativa && input.body.length > MAX_CORPO_COM_OPCOES) {
-      throw new ApiError(
-        422,
-        "validation_error",
-        { max_body: MAX_CORPO_COM_OPCOES },
-        ctx.requestId,
-        traduzir("Opções da mensagem inválidas.", ctx.idioma ?? "pt-BR"),
-      );
-    }
-    opcoes = { ...lidas.data, entrega: nativa ? "nativa" : "texto_numerado" };
-    if (nativa) opcoesDoEnvelope = lidas.data;
+    // Texto acima do teto do corpo com opções nativas não é recusado: sai como
+    // texto numerado, como num canal que não desenha opções. Recusar fazia uma
+    // automação que funcionava numerada parar de enviar quando o canal ganhou
+    // opções nativas.
+    const desenha = nativa && input.body.length <= MAX_CORPO_COM_OPCOES;
+    opcoes = { ...lidas.data, entrega: desenha ? "nativa" : "texto_numerado" };
+    if (desenha) opcoesDoEnvelope = lidas.data;
     else corpoDeSaida = textoComOpcoesNumeradas(input.body, lidas.data);
   }
 
@@ -1394,6 +1390,9 @@ export async function sendMessageHandler(
       // adapter preserva o mesmo branch (e a mesma mensagem de erro de cada
       // método) do outro lado do seam.
       let externalId: string | null;
+      // O canal recusou as opções nativas e mandou texto numerado (ver
+      // `ChannelAdapter.send`): a linha passa a gravar o que o contato leu.
+      let opcoesComoTexto = false;
       if (input.type === "template") {
         // Template é caminho próprio: não passa pelo `adapter.send` (que fala em
         // texto/mídia) porque o payload da plataforma é outro — e porque o envio
@@ -1552,6 +1551,9 @@ export async function sendMessageHandler(
           body: corpoDoCanal(corpoDeSaida ?? "") ?? "",
           ...(opcoesDoEnvelope ? { interactive: opcoesDoEnvelope } : {}),
           replyToExternalId: citada?.external_id ?? null,
+        }).then((r) => {
+          opcoesComoTexto = r.opcoesComoTexto === true && opcoesDoEnvelope !== undefined;
+          return r;
         }));
       }
 
@@ -1601,6 +1603,15 @@ export async function sendMessageHandler(
             status: "sent",
             ...(comId ? { external_id: idCanonico } : {}),
             ack: 0,
+            ...(opcoesComoTexto && opcoes
+              ? {
+                  body: textoComOpcoesNumeradas(input.body ?? "", opcoes),
+                  metadata: {
+                    ...((message as { metadata?: Record<string, unknown> | null }).metadata ?? {}),
+                    interactive: { ...opcoes, entrega: "texto_numerado" },
+                  },
+                }
+              : {}),
             // Colunas só do template — é o que responde custo e conformidade de
             // janela depois, sem varrer jsonb.
             ...(input.type === "template"

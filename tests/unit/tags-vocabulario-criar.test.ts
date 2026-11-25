@@ -56,7 +56,34 @@ function postar(corpo: unknown) {
   );
 }
 
-const gravacoes = () => rpcAdmin.mock.calls.filter((c) => c[0] === "fn_atualizar_setting_da_organizacao");
+const gravacoes = () => rpcAdmin.mock.calls.filter((c) => c[0] === "fn_acrescentar_etiqueta_ao_vocabulario");
+
+/**
+ * Dublê do contrato da função do banco: serializa as chamadas (a linha travada), recusa
+ * duplicata (caixa/aparo) e teto, e acrescenta sobre o estado que a chamada anterior deixou.
+ * A prova no banco real (duas sessões) está em tests/invariants/etiqueta-acrescentada-atomica.test.ts.
+ */
+function funcaoAtomicaDoBanco() {
+  let fila: Promise<unknown> = Promise.resolve();
+  rpcAdmin.mockImplementation((fn: string, args: { p_nome: string; p_cor: string | null; p_teto: number }) => {
+    const rodar = async () => {
+      await new Promise((r) => setTimeout(r, 5)); // a janela em que o ler→gravar antigo perdia
+      const lista = Array.isArray(estado.settings.tags) ? (estado.settings.tags as unknown[]) : [];
+      const nomeDe = (e: unknown) =>
+        (typeof e === "string" ? e : ((e as { tag?: string } | null)?.tag ?? "")).trim().toLowerCase();
+      if (lista.some((e) => nomeDe(e) === args.p_nome)) return { data: "ja_existe", error: null };
+      if (lista.length >= args.p_teto) return { data: "limite", error: null };
+      estado.settings = {
+        ...estado.settings,
+        tags: [...lista, args.p_cor ? { tag: args.p_nome, cor: args.p_cor } : { tag: args.p_nome }],
+      };
+      return { data: "criada", error: null };
+    };
+    const r = fn === "fn_acrescentar_etiqueta_ao_vocabulario" ? fila.then(rodar) : Promise.resolve({ data: null, error: { message: fn } });
+    fila = r.catch(() => undefined);
+    return r;
+  });
+}
 
 beforeEach(() => {
   estado.papel = "manager";
@@ -64,7 +91,7 @@ beforeEach(() => {
   estado.vocabulario = [];
   audit.mockClear();
   rpcAdmin.mockReset();
-  rpcAdmin.mockResolvedValue({ data: 1, error: null });
+  funcaoAtomicaDoBanco();
   rpc.mockReset();
   rpc.mockImplementation(async (fn: string) => {
     if (fn === "fn_user_role_in_org") return { data: estado.papel, error: null };
@@ -89,11 +116,8 @@ describe("criar etiqueta", () => {
     expect(r.status).toBe(201);
     expect((await r.json()).data).toEqual({ tag: "cliente vip", cor: "#0091ff" });
     expect(gravacoes()).toHaveLength(1);
-    expect(gravacoes()[0]![1]).toEqual({
-      p_org: ORG,
-      p_caminho: ["tags"],
-      p_valor: [{ tag: "cliente vip", cor: "#0091ff" }],
-    });
+    expect(gravacoes()[0]![1]).toEqual({ p_org: ORG, p_nome: "cliente vip", p_cor: "#0091ff", p_teto: 200 });
+    expect(estado.settings.tags).toEqual([{ tag: "cliente vip", cor: "#0091ff" }]);
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "tag_vocabulary.changed",
@@ -107,9 +131,8 @@ describe("criar etiqueta", () => {
     estado.settings = { tags: ["antiga", { tag: "outra", cor: "#ff0000" }], routing: { x: 1 } };
     const r = await postar({ acao: "criar", tag: "nova" });
     expect(r.status).toBe(201);
-    expect(gravacoes()[0]![1].p_valor).toEqual(["antiga", { tag: "outra", cor: "#ff0000" }, { tag: "nova" }]);
-    // outras chaves de settings (routing) nunca são tocadas: o caminho é só ["tags"]
-    expect(gravacoes()[0]![1].p_caminho).toEqual(["tags"]);
+    expect(estado.settings.tags).toEqual(["antiga", { tag: "outra", cor: "#ff0000" }, { tag: "nova" }]);
+    expect(estado.settings.routing).toEqual({ x: 1 });
   });
 
   it.each(["vip", "VIP", "  Vip  "])("duplicada (%s) já curada no settings é 409 e não grava", async (digitado) => {
@@ -117,7 +140,7 @@ describe("criar etiqueta", () => {
     const r = await postar({ acao: "criar", tag: digitado });
     expect(r.status).toBe(409);
     expect((await r.json()).error.message).toBe("Essa etiqueta já existe.");
-    expect(gravacoes()).toHaveLength(0);
+    expect(estado.settings.tags).toEqual([{ tag: "vip" }]);
   });
 
   it("duplicada que só existe em uso (fora do curado) também é 409", async () => {
@@ -144,7 +167,17 @@ describe("criar etiqueta", () => {
     const r = await postar({ acao: "criar", tag: "mais-uma" });
     expect(r.status).toBe(422);
     expect((await r.json()).error.code).toBe("limite_de_etiquetas");
-    expect(gravacoes()).toHaveLength(0);
+    expect(estado.settings.tags).toHaveLength(200);
+  });
+
+  it("duas criações simultâneas: nenhuma se perde e a repetida vira 409", async () => {
+    const [a, b, c] = await Promise.all([
+      postar({ acao: "criar", tag: "alfa" }),
+      postar({ acao: "criar", tag: "beta", cor: "#00ff00" }),
+      postar({ acao: "criar", tag: "ALFA" }),
+    ]);
+    expect([a.status, b.status, c.status].sort()).toEqual([201, 201, 409]);
+    expect((estado.settings.tags as { tag: string }[]).map((e) => e.tag).sort()).toEqual(["alfa", "beta"]);
   });
 
   it.each(["viewer", "agent"])("papel %s é recusado com 403 antes de gravar", async (papel) => {

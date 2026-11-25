@@ -162,7 +162,7 @@ async function ehEcoDeEnvioNosso(
 ): Promise<boolean> {
   const { data, error } = await admin
     .from("messages")
-    .select("body, type")
+    .select("body, type, metadata")
     .eq("organization_id", organizationId)
     .eq("conversation_id", conversationId)
     .eq("direction", "outbound")
@@ -177,11 +177,17 @@ async function ehEcoDeEnvioNosso(
   }
 
   const corpo = (msg.text ?? "").trim();
-  return ((data ?? []) as Array<{ body: string | null; type: string | null }>).some((linha) =>
-    msg.tipo === "text"
-      ? corpo.length > 0 && (linha.body ?? "").trim() === corpo
-      : (linha.type ?? "text") !== "text",
-  );
+  return ((data ?? []) as Array<{ body: string | null; type: string | null; metadata?: unknown }>).some((linha) => {
+    if (msg.tipo !== "text") return (linha.type ?? "text") !== "text";
+    const nossa = (linha.body ?? "").trim();
+    if (corpo.length === 0 || nossa.length === 0) return false;
+    if (nossa === corpo) return true;
+    // Menu de botões/lista: o eco pode trazer o texto com as opções junto. A
+    // linha nossa é o texto SEM elas, então vale o começo igual — só quando a
+    // linha ofereceu opções, para não afrouxar a régua das outras mensagens.
+    const comOpcoes = !!(linha.metadata as { interactive?: unknown } | null | undefined)?.interactive;
+    return comOpcoes && corpo.startsWith(nossa);
+  });
 }
 
 /**
@@ -269,6 +275,8 @@ async function insertMessage(
         ...(msg.viaApi ? { via_api: true } : {}),
         // O anúncio DESTA mensagem: o contato guarda só o primeiro.
         ...metadataDoAnuncio(msg.anuncio),
+        // O botão/item tocado: a mesma forma do canal oficial (`metadata.reply`).
+        ...(msg.reply ? { reply: msg.reply } : {}),
         ...ancoraCtwaDaMensagem(msg.anuncio),
       },
       ...(msg.sentAt ? { sent_at: msg.sentAt } : {}),

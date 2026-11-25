@@ -282,6 +282,13 @@ export async function duplicarFunil(
   if (o.settings) {
     const r = remapearIds(o.settings, troca, arquivadas);
     settings = ajustarAoSchema(r.valor as Record<string, unknown>, r.chavesRemovidas);
+    // 1021: os motivos de perda são da ORGANIZAÇÃO. A lista legada do funil de origem não é copiada:
+    // o funil novo oferece e aceita a lista da empresa, e copiar o legado o perpetuaria.
+    if (settings && "lost_reasons" in settings) {
+      const { lost_reasons: _legado, ...semMotivos } = settings;
+      void _legado;
+      settings = semMotivos;
+    }
     row.settings = settings;
   }
 

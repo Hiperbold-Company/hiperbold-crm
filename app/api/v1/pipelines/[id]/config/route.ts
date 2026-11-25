@@ -5,6 +5,13 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *                                       reabertura e vocabulário.
  * PATCH /api/v1/pipelines/[id]/config — grava (merge) a mesma configuração.
  *
+ * 1021 (24/11/2026): `lost_reasons` é a lista da ORGANIZAÇÃO. No GET ela vem da
+ * empresa; no PATCH ela ACRESCENTA à lista da empresa (sem apagar os outros
+ * motivos; categoria informada substitui a gravada) e não grava mais no funil.
+ * O que não couber no teto de 50 volta em `lost_reasons_nao_couberam`.
+ * `campos_visiveis` (chaves de campos do NEGÓCIO; `null` = todos) escolhe quais
+ * campos o funil mostra; campo obrigatório no funil tem de estar na lista (422).
+ *
  * ⚠️ AQUI SÓ HÁ TRANSPORTE. O merge e o audit vivem em
  * `lib/pipelines/configuracao-do-funil.ts`, o MESMO núcleo da server action da
  * tela (`updatePipelineConfig`) e das tools MCP — e o corpo é validado pelo MESMO

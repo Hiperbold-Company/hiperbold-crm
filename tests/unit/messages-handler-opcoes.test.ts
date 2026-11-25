@@ -144,13 +144,13 @@ describe("mensagem com opções", () => {
   it("canal sem opções nativas: o corpo vira texto numerado e é isso que a linha grava", async () => {
     // Sem servidor do canal por QR configurado a mensagem nasce em fila; o que
     // se afirma é a forma do corpo, decidida antes de qualquer transporte.
-    vi.stubEnv("WAHA_API_BASE_URL", undefined);
-    vi.stubEnv("WAHA_API_KEY", undefined);
+    // O canal por QR passou a desenhar opções (enquete); o intermediado segue
+    // sem elas (`interactive: "none"`). O envio em si pode falhar aqui.
     const { supabase, capturas } = criarDubleDoHandler({
-      conversation: conversa({ provider: "waha", lastInboundAt: null }),
+      conversation: conversa({ provider: "zernio", lastInboundAt: horasAtras(1) }),
     });
 
-    await sendMessageHandler(supabase, ctxAutomacao, comOpcoes());
+    await sendMessageHandler(supabase, ctxAutomacao, comOpcoes()).catch(() => undefined);
 
     const linha = capturas.inserts.messages![0]!;
     expect(linha.body).toBe("Qual o objetivo?\n\n1) Moradia\n2) Investimento");
@@ -213,19 +213,21 @@ describe("mensagem com opções", () => {
     expect(capturas.inserts.messages).toHaveLength(0);
   });
 
-  it("corpo acima de 1024 caracteres no canal nativo: recusa (a plataforma recusaria)", async () => {
+  it("corpo acima de 1024 caracteres no canal nativo: sai como texto numerado, não é recusado", async () => {
+    const spy = metaAceita();
     const { supabase, capturas } = criarDubleDoHandler({
       conversation: conversa({ lastInboundAt: horasAtras(1) }),
     });
 
-    const erro = await sendMessageHandler(
-      supabase,
-      ctxAutomacao,
-      comOpcoes({ body: "x".repeat(1025) }),
-    ).catch((e) => e);
+    await sendMessageHandler(supabase, ctxAutomacao, comOpcoes({ body: "x".repeat(1025) })).catch(() => undefined);
 
-    expect((erro as ApiError).code).toBe("validation_error");
-    expect(capturas.inserts.messages).toHaveLength(0);
+    const linha = capturas.inserts.messages![0]!;
+    expect(linha.body).toBe(`${"x".repeat(1025)}\n\n1) Moradia\n2) Investimento`);
+    expect((linha.metadata as Record<string, unknown>).interactive).toMatchObject({ entrega: "texto_numerado" });
+    // Nada de `interactive` no corpo enviado à plataforma.
+    for (const [, init] of spy.mock.calls) {
+      expect(String((init as RequestInit | undefined)?.body ?? "")).not.toContain('"interactive"');
+    }
   });
 
   it("metadata.interactive vindo do chamador é descartado: só o handler grava opções", async () => {

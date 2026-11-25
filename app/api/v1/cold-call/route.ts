@@ -25,6 +25,8 @@ import { seColdCallDesligado } from "@/lib/cold-call/modulo";
 import { lotesDeIds } from "@/lib/kanban/selecao";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { posicaoEntre, slugDeFunil } from "@/lib/pipelines/pipeline-editing";
+import { acrescentarMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { lerFunis } from "../pipelines/_funis";
 
@@ -193,6 +195,20 @@ export async function GET(): Promise<Response> {
   }
 }
 
+async function registrarMotivosDoColdCallNaOrganizacao(orgId: string, actorUserId: string, requestId: string) {
+  const r = await acrescentarMotivosDaOrganizacao(createAdminClient(), orgId, [...MOTIVOS_DE_PERDA_DO_COLD_CALL]);
+  if (!r.ok || !r.dados.mudou) return;
+  void audit({
+    action: "organization.lost_reasons_updated",
+    actorUserId,
+    organizationId: orgId,
+    resourceType: "organization",
+    resourceId: orgId,
+    requestId,
+    metadata: { origem: "cold_call", lost_reasons_count: r.dados.lista.length },
+  });
+}
+
 export async function POST(): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
@@ -257,6 +273,10 @@ export async function POST(): Promise<Response> {
       requestId,
       metadata: { name: nome, cold_call: true },
     });
+    // 1021: os motivos de perda são da ORGANIZAÇÃO — os do Cold Call entram na lista da empresa
+    // (sem apagar os outros). A cópia em `settings.lost_reasons` do funil fica de propósito: é o
+    // legado que o gatilho aceita, e garante o encerramento mesmo com a lista da empresa cheia.
+    await registrarMotivosDoColdCallNaOrganizacao(orgId, authz.user.id, requestId);
     return ok({ id: criado.id }, { status: 201, requestId });
   } catch (err) {
     return fail("internal_error", (err as Error).message, 500, { requestId });
