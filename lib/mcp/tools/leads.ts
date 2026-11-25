@@ -519,7 +519,7 @@ const moveInputShape = {
   won_reason: z.string().max(500).optional(),
   /**
    * O motivo da perda, quando o destino é etapa de perda (issue #917). O banco
-   * confere contra o vocabulário do funil (canônico + `settings.lost_reasons`) e
+   * confere contra o vocabulário (canônico + lista da organização + legado do funil, 1021) e
    * recusa a perda sem ele. O `moveLeadHandler` já aceitava; a tool descartava.
    * Sem `.min(1)`: motivo em branco é tratado em lib/leads/motivo-da-perda.ts como
    * ausente — a mesma régua do moveLeadSchema e do won_reason; string vazia

@@ -156,7 +156,7 @@ function aplicarAcervoNaConfig(config: Record<string, unknown>, guardar: boolean
  */
 export const EVENTOS_DO_WEBHOOK_DA_SESSAO = [
   "message.any", "message.ack", "message.edited", "message.revoked",
-  "message.reaction", "session.status", "state.change",
+  "message.reaction", "poll.vote", "session.status", "state.change",
 ] as const;
 
 /**
@@ -1142,6 +1142,59 @@ export class WahaClient {
     });
     if (!res.ok) throw new Error(`waha_${res.status}`);
     return res.json();
+  }
+
+  /**
+   * A sessão ENTREGA o voto de enquete ao CRM? Só quando a config da sessão tem
+   * a entrada do CRM (`/api/v1/webhooks/waha/`) assinando `poll.vote` (ou `*`).
+   *
+   * Existe porque mandar enquete a quem não entrega o voto é pior que texto
+   * numerado: o contato toca, nada chega, e a automação segue por "Sem
+   * resposta". A sessão conectada antes do `poll.vote` entrar na lista só
+   * ganha o evento na próxima convergência (reconexão), e o webhook GLOBAL
+   * (env `WHATSAPP_HOOK_EVENTS`) não aparece no GET da sessão — nos dois casos
+   * a resposta é `false` e a mensagem sai como texto numerado.
+   *
+   * NUNCA lança: erro, timeout ou corpo estranho = `false`.
+   */
+  async recebeVotoDeEnquete(name: string): Promise<boolean> {
+    try {
+      const res = await this.fetchComTeto(`${this.baseUrl}/api/sessions/${encodeURIComponent(name)}`, {
+        headers: { "X-Api-Key": this.apiKey },
+      });
+      if (!res.ok) return false;
+      const body = (await res.json().catch(() => null)) as { config?: Record<string, unknown> | null } | null;
+      return entradasDeWebhook(body?.config ?? null).some((w) => {
+        if (typeof w.url !== "string" || !w.url.includes(CAMINHO_DO_WEBHOOK_DA_SESSAO)) return false;
+        const eventos = Array.isArray(w.events) ? w.events : [];
+        return eventos.includes("poll.vote") || eventos.includes("*");
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * `POST /api/sendPoll` — a enquete, a forma de opção tocável do canal por QR
+   * (`sendButtons` está depreciado). O corpo sai pronto de `corpoDaEnqueteWaha`
+   * (`./enquete`).
+   *
+   * Diferente de `sendMessage`, NÃO lança em resposta de erro: devolve
+   * `{ ok: false, status }`, porque quem chama decide a reserva (texto
+   * numerado) só quando o servidor respondeu que não enviou. Rede e timeout
+   * lançam como sempre — a enquete pode ter saído.
+   */
+  async sendPoll(corpo: Record<string, unknown>): Promise<{ ok: true; json: unknown } | { ok: false; status: number }> {
+    const res = await this.fetchComTeto(`${this.baseUrl}/api/sendPoll`, {
+      method: "POST",
+      headers: {
+        "X-Api-Key": this.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(corpo),
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, json: await res.json() };
   }
 
   /**

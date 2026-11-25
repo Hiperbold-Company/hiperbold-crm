@@ -48,6 +48,8 @@ import { emitirFalhaDeEntrega, telefoneDoEmbed, type EmbedDoContato } from "@/li
 import type { WahaEnvelope, WahaPayload } from "@/lib/waha/envelope";
 import { bareWaMessageId, chatIdFromWaMessageId, wahaEchoExternalIds } from "@/lib/waha/message-id";
 import { logger } from "@/lib/logger";
+import { interactiveSchema } from "@/lib/channels/opcoes-numeradas";
+import { externalIdDoVoto, lerVotoDaEnquete, opcaoDoVoto } from "@/lib/waha/enquete";
 import { numeroJaAquecido } from "@/lib/ai/pacing-knobs";
 import { nomeDeArquivoLimpo } from "@/lib/messaging/media/nome-de-arquivo";
 import {
@@ -1149,6 +1151,8 @@ async function handleInbound(
   session: Session,
   p: WahaPayload,
   requestId: string,
+  /** Só o voto de enquete (`handlePollVote`): a opção escolhida, em `metadata.reply`. */
+  extras: { reply?: { id: string | null; title: string; kind: "poll_vote" } } = {},
 ): Promise<void> {
   // Reação não é mensagem: o ramo `message.reaction` do roteador grava a linha
   // LIGADA ao alvo (#2797). Ver `ehReacao` — sem este corte o `message.any`
@@ -1268,6 +1272,8 @@ async function handleInbound(
         // gravada vazia, e gravação é de linha NOVA (o INSERT é o único caminho
         // que escreve `metadata` aqui), então nada do que já está é sobrescrito.
         ...(nomeDoArquivo ? { media_filename: nomeDoArquivo } : {}),
+        // O voto de enquete: a opção escolhida, na chave de todo canal.
+        ...(extras.reply ? { reply: extras.reply } : {}),
       },
     })
     .select("id")
@@ -2399,6 +2405,50 @@ async function handleReaction(admin: Admin, session: Session, p: WahaPayload): P
 }
 
 /**
+ * `poll.vote` — o voto do cliente numa enquete NOSSA vira a resposta de texto
+ * dele, pelo MESMO caminho de uma mensagem recebida (`handleInbound`): contato,
+ * conversa, linha `inbound` e o evento que acorda o agente.
+ *
+ * - A organização é a da SESSÃO (resolvida pelo token/HMAC da rota), nunca do
+ *   payload. A enquete é procurada só nesta organização e nesta conexão.
+ * - O corpo é o TÍTULO da opção oferecida (o nome que voltou casado pela mesma
+ *   função que o enviou) e `metadata.reply.id` é o id dela; voto numa enquete
+ *   que não é nossa entra com o nome cru e sem id — continua sendo o que o
+ *   cliente disse.
+ * - O `external_id` é determinístico (`externalIdDoVoto`): reentrega bate no
+ *   unique e não grava em dobro. Voto retirado (sem opção) e voto nosso são
+ *   ignorados; voto trocado é resposta nova.
+ */
+async function handlePollVote(admin: Admin, session: Session, payload: unknown, requestId: string): Promise<void> {
+  const voto = lerVotoDaEnquete(payload);
+  if (!voto) return;
+  const cauda = bareWaMessageId(voto.pollId);
+  const { data } = await admin
+    .from("messages")
+    .select("metadata")
+    .eq("organization_id", session.organization_id)
+    .eq("channel_session_id", session.id)
+    .eq("direction", "outbound")
+    .in("external_id", [...new Set([voto.pollId, cauda])])
+    .limit(1)
+    .maybeSingle();
+  const bruto = (data as { metadata?: { interactive?: unknown } } | null)?.metadata?.interactive;
+  const lidas = bruto ? interactiveSchema.safeParse(bruto) : null;
+  const escolhida = opcaoDoVoto(voto.opcao, lidas?.success ? lidas.data : null);
+  const sintetico: WahaPayload = {
+    id: externalIdDoVoto(voto),
+    from: voto.from,
+    fromMe: false,
+    body: escolhida?.label ?? voto.opcao,
+    hasMedia: false,
+    ...(voto.timestamp !== null ? { timestamp: voto.timestamp } : {}),
+  } as WahaPayload;
+  await handleInbound(admin, session, sintetico, requestId, {
+    reply: { id: escolhida?.id ?? null, title: escolhida?.label ?? voto.opcao, kind: "poll_vote" },
+  });
+}
+
+/**
  * Roteador único de eventos WAHA. Os dois route handlers convergem aqui após
  * resolver a sessão e validar HMAC.
  */
@@ -2425,6 +2475,8 @@ export async function dispatchWahaEvent(
     await handleMessageRevoked(admin, session, payload, requestId);
   } else if (eventType === "message.reaction") {
     await handleReaction(admin, session, payload);
+  } else if (eventType === "poll.vote") {
+    await handlePollVote(admin, session, envelope.payload, requestId);
   } else if (eventType === "session.status" || eventType === "state.change") {
     await handleSessionStatus(admin, session, payload);
   }

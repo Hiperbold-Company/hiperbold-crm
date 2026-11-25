@@ -5,6 +5,7 @@ import type { JobClaim } from './queue/claim';
 // régua única (`lib/messaging/media/midia-com-legenda.ts`) — e é `import type`
 // para este contrato continuar puro, sem dependência de runtime.
 import type { TipoDeMidiaComLegenda } from '@/lib/messaging/media/midia-com-legenda';
+import type { OutboundInteractive } from '@/lib/channels/types';
 /**
  * Contrato agnóstico de canal (F2-25; blueprint risco nº 1 + veredito executivo).
  *
@@ -74,6 +75,13 @@ export interface ChannelSendInput {
   media?:
     | { storagePath: string; mime: string }
     | { url: string; mime: string; type: TipoDeMidiaComLegenda };
+  /**
+   * Presente = esta mensagem de TEXTO leva opções (botões ou lista) para o
+   * contato tocar. Quem decide se elas saem desenhadas ou como texto numerado é
+   * o handler de envio, pela capacidade do canal da conversa — o runtime não
+   * sabe (nem pergunta) qual canal é. O `body` é só o texto, sem as opções.
+   */
+  interactive?: OutboundInteractive;
 }
 
 /**

@@ -8,6 +8,30 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.6.0] — 2026-11-25
+
+### Adicionado
+
+- **Botões e lista de verdade também nas conexões UAZAPI e WAHA** Mensagens com opções (do agente de IA, das automações e dos follow-ups) agora aparecem como botões ou lista nas conexões UAZAPI e como enquete nas conexões WAHA, em vez de texto numerado. O toque no botão, o item da lista ou o voto na enquete chega à conversa como a resposta do cliente, com a opção escolhida. Se a conexão recusar as opções, ou se elas não couberem no formato do canal, a mensagem sai com as opções numeradas no texto, como antes. Na conexão WAHA, o voto só chega depois que a conexão passa a assinar o evento de voto: as instalações novas já assinam, e as conexões existentes passam a assinar quando a configuração do webhook é reaplicada.
+
+- **O agente de IA pode perguntar com botões ou lista de opções** O agente de IA agora pode mandar uma pergunta com até 3 botões ou com uma lista de até 10 opções para o cliente tocar. No WhatsApp oficial e na UAZAPI as opções aparecem como botões ou lista, e na WAHA como enquete. Onde o canal não mostra opções, ou as recusa, elas vão numeradas no próprio texto e o cliente responde com o número. Quando o cliente toca numa opção ou digita o número, o agente recebe a opção escolhida e pode gravá-la num campo personalizado com a capacidade "Preencher campo personalizado". A mensagem com opções passa pelas mesmas proteções de envio das outras mensagens do agente: intervalo entre mensagens, horário permitido, descadastro e conferência do texto. Não é preciso mudar nada para atualizar.
+
+- **O agente de IA preenche campos personalizados do contato e do negócio com as respostas do cliente** O agente ganhou a capacidade "Preencher campo personalizado", que se liga na tela de capacidades do agente (pacote Organizar a operação ou modo avançado). Com ela, o agente grava a resposta que o cliente deu, por exemplo a opção escolhida numa pergunta de qualificação, no lugar onde a empresa criou o campo em Configurações › Campos personalizados: campo do contato vai para a ficha do cliente, campo do negócio vai para o negócio aberto dele. Campo do negócio só é gravado quando o cliente tem um único negócio aberto e esse negócio está num funil liberado para o agente. Só entram os campos que a equipe vê. O valor é conferido pelo tipo do campo: em campo de lista, só uma das opções; número, data e sim/não são convertidos. Resposta igual à já gravada não grava de novo. As outras informações não mudam, e a alteração fica registrada como qualquer edição. A capacidade vem desligada, e não é preciso mudar nada para atualizar.
+
+- **Motivos de perda e campos do negócio passam a ser da empresa** Os motivos de perda agora são uma lista só da empresa, a mesma em todos os funis, em
+  Configurações › Motivos de perda (quem administra a empresa edita, com a categoria de
+  cada motivo). Na atualização, as listas que cada funil tinha são unidas nessa lista da
+  empresa sem repetir motivo, e "Outro motivo" continua sempre disponível. Os campos
+  personalizados do negócio também são da empresa: na configuração de cada funil, em
+  "Campos do negócio neste funil", quem administra escolhe quais campos aparecem ali.
+  Esconder um campo não apaga o valor, e campo obrigatório fica sempre visível.
+
+### Corrigido
+
+- **"Nova etiqueta" não perde etiqueta quando duas pessoas criam ao mesmo tempo** Ao criar etiquetas em Configurações › Etiquetas, se duas pessoas (ou duas abas) criassem uma etiqueta quase no mesmo instante, a segunda podia apagar a primeira. Agora cada criação é gravada de forma atômica no banco e nenhuma se perde. A atualização aplica uma migration no banco; não é preciso mudar nada à mão.
+
+- **Páginas de erro aparecem no idioma de quem visita** As páginas "não encontrada", "sem permissão" e "erro no servidor" passam a seguir o idioma do navegador de quem não está logado. Antes, um visitante com o navegador em inglês via a página em português.
+
 ## [2.5.1] — 2026-11-25
 
 ### Corrigido
@@ -14877,7 +14901,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.1...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.1...v2.6.0
 [2.5.1]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.3.0...v2.4.0

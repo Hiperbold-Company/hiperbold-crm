@@ -36,7 +36,9 @@ function clienteFalso(resposta: { data: unknown; error: { message: string } | nu
   };
   return {
     pedido,
-    cliente: { from: (t: string) => ((pedido.tabela = t), consulta) } as never,
+    // `??=`: a PRIMEIRA tabela é a das etapas; depois vem a leitura da lista de motivos da
+    // organização (1021), que este dublê não serve (cai no legado do funil, como deve).
+    cliente: { from: (t: string) => ((pedido.tabela ??= t), consulta) } as never,
   };
 }
 

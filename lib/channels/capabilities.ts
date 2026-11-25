@@ -35,8 +35,11 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     alteraMensagemEnviada: true,
     anexosDeSaida: TODOS_OS_ANEXOS,
     // WhatsApp comum por QR: botão e lista não têm envio estável fora da API
-    // oficial, então as opções saem como texto numerado.
-    interactive: "none",
+    // oficial (`sendButtons` está depreciado), então as opções saem como
+    // ENQUETE (`sendPoll`, `lib/waha/enquete.ts`) e o voto volta por
+    // `poll.vote`. O que não cabe numa enquete, ou que o servidor recusa, sai
+    // como texto numerado pelo próprio adapter.
+    interactive: "native",
     // É a linha que conversa com um APARELHO pareado: a agenda salva no
     // celular está lá dentro, e o `contacts/all` a devolve paginada (#2736).
     phonebook: true,
@@ -197,9 +200,10 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
     // canal saber cumprir.
     alteraMensagemEnviada: false,
     anexosDeSaida: TODOS_OS_ANEXOS,
-    // Aparelho pareado, sem WABA: opções saem como texto numerado (o inbound
-    // deste canal também não trata resposta de botão).
-    interactive: "none",
+    // O servidor desenha botões e lista (`/send/menu`, `lib/channels/uazapi/menu.ts`)
+    // e o clique volta com `buttonOrListid`. O que não cabe no formato, ou que o
+    // servidor recusa, sai como texto numerado pelo próprio adapter.
+    interactive: "native",
     // Aparelho pareado, mas o adapter da UAZAPI ainda não lê a agenda do
     // celular: `true` aqui seria um botão que só falha.
     phonebook: false,

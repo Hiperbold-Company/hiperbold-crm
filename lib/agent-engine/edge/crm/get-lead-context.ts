@@ -19,6 +19,8 @@ import { logger } from '@/lib/logger';
 import { nomeDoContato } from '@/lib/contacts/rotulo-do-contato';
 import { lerRemetenteDeGrupo } from '@/lib/messaging/remetente-de-grupo';
 import { frameMediaBody, INICIO_DA_MOLDURA_DE_MIDIA } from './moldura-de-midia';
+import type { OutboundInteractive } from '@/lib/channels/types';
+import { opcaoEscolhida, opcoesGravadasNaMensagem } from '../../agent/opcoes-da-mensagem';
 
 /**
  * Heurística conservadora de contagem: ~3,5 chars/token para pt-br (BPE real fica
@@ -68,6 +70,19 @@ export interface LeadContextMessage {
    * parseável por `Date.parse` (o offset preserva o instante exato).
    */
   sent_at: string;
+  /**
+   * Mensagem NOSSA que ofereceu opções desenhadas pelo canal (botões/lista): os
+   * títulos, na ordem. Sem isto o modelo veria só a pergunta — no canal que
+   * desenha, as opções não estão no corpo. AUSENTE quando não houve opção, ou
+   * quando elas saíram numeradas no próprio corpo.
+   */
+  opcoes_oferecidas?: string[];
+  /**
+   * Resposta do CLIENTE que escolheu uma das opções da nossa última mensagem
+   * com opções (toque no botão, número ou o próprio título): o TÍTULO escolhido.
+   * O `body` continua sendo o que ele mandou, sem reescrita.
+   */
+  opcao_escolhida?: string;
   /** Metadados de mídia (Onda 3): presentes só em mensagens com mídia. */
   type?: string;
   media_storage_path?: string | null;
@@ -494,7 +509,20 @@ function fitToBudget(
   maxTokens: number,
   fuso: string,
 ): LeadContext {
+  // As opções da última mensagem nossa que as ofereceu valem para as respostas
+  // do cliente ATÉ a próxima mensagem nossa (o histórico está em ordem crescente).
+  let opcoesPendentes: OutboundInteractive | null = null;
   let messages: LeadContextMessage[] = history.map((m) => {
+    let opcoesOferecidas: string[] | undefined;
+    let escolhida: string | null = null;
+    if (m.direction === 'outbound') {
+      opcoesPendentes = opcoesGravadasNaMensagem(m.metadata);
+      if (opcoesPendentes && (m.metadata as { interactive?: { entrega?: unknown } } | null)?.interactive?.entrega === 'nativa') {
+        opcoesOferecidas = opcoesPendentes.items.map((i) => i.label);
+      }
+    } else if (opcoesPendentes) {
+      escolhida = opcaoEscolhida({ body: m.body, metadata: m.metadata }, opcoesPendentes);
+    }
     const hasMedia = Boolean(m.media_storage_path || m.media_url);
     // A composição do corpo é UMA só, exportada logo acima: a linha canônica do
     // job passa pela mesma função. Duas receitas para a mesma linha foi o defeito
@@ -513,6 +541,8 @@ function fitToBudget(
       ...(remetente !== null && (remetente.name !== null || remetente.phone !== null)
         ? { sender: { name: remetente.name, phone: remetente.phone } }
         : {}),
+      ...(opcoesOferecidas ? { opcoes_oferecidas: opcoesOferecidas } : {}),
+      ...(escolhida !== null ? { opcao_escolhida: escolhida } : {}),
       ...(hasMedia ? { type: m.type, media_storage_path: m.media_storage_path, media_mime: m.media_mime } : {}),
     };
   });

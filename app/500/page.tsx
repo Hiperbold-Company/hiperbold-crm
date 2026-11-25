@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
-import { idiomaDaTela } from "@/lib/i18n/idiomas";
+import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 /**
@@ -26,9 +26,7 @@ export default async function InternalErrorPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const idioma = idiomaDaTela(
-    (user?.user_metadata?.locale as string | undefined) ?? null,
-  );
+  const idioma = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
   return (
     <IdiomaProvider locale={idioma}>

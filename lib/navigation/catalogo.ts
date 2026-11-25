@@ -1191,6 +1191,17 @@ export const NAV_CATALOG = [
     minRole: "admin",
   },
   {
+    // Os motivos de perda da ORGANIZAÇÃO (migration 1021): uma lista para todos os funis. Antes cada
+    // funil tinha a sua em Etapas do funil. `admin`: o mesmo piso da gravação (`salvarMotivosDePerda`).
+    href: "/app/settings/motivos-de-perda",
+    label: "Motivos de perda",
+    description: "A lista de motivos de perda da empresa, a mesma em todos os funis, com a categoria de cada um.",
+    icon: "Flag",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // A área única dos recursos opcionais (pedido do mantenedor, doc 73/80):
     // tudo o que a empresa pode ligar, com o estado e o caminho até a tela onde
     // se liga. Só leitura — quem liga continua sendo a tela do assunto.

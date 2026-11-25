@@ -14,7 +14,7 @@ import {
   filtrosForaDaLista,
   paramsDosFiltrosDaLista,
 } from "@/lib/kanban/filtros-da-lista";
-import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
+import { camposDoFunilVisiveis, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { formatValorDoNegocio } from "@/lib/money";
 import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import type { Lead } from "@/lib/types/leads";
@@ -118,7 +118,7 @@ export function ListaDoFunil({ pipelineId, pipeline: funil, stages, filtros = SE
   const leadDoDossie = leads.find((l) => l.id === dossieId) ?? null;
 
   const campoDefs = useMemo(
-    () => camposPorEscopo(camposDoFunil(funil.settings), "negocio"),
+    () => camposPorEscopo(camposDoFunilVisiveis(funil.settings), "negocio"),
     [funil.settings],
   );
 

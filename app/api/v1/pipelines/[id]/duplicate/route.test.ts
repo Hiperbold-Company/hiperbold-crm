@@ -145,7 +145,8 @@ describe("POST /api/v1/pipelines/[id]/duplicate", () => {
     });
     // `stage_id` aceita ausência no schema: a chave que apontava para a arquivada some.
     expect(s.entrada_do_inbox).toEqual({});
-    expect(s.lost_reasons).toEqual(SETTINGS.lost_reasons);
+    // 1021: os motivos de perda são da organização — a lista legada da origem NÃO é copiada.
+    expect(s.lost_reasons).toBeUndefined();
     expect(s.won_reasons).toEqual(["Fechou"]);
     expect(s.reabertura).toBe("novo_negocio");
     expect(novo.vocabulary).toEqual({ lead: "Aluno" });

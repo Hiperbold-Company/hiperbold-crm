@@ -255,9 +255,11 @@ export function recusaDeMotivoDaPerdaPeloBanco(
  * destino e a origem ainda aberta. Barrar aqui custa uma leitura e não deixa
  * meia-execução nenhuma.
  *
- * `settingsDoFunil` é o `crm_pipelines.settings` cru: a lista do tenant vive em
- * `settings.lost_reasons`, e `settings` sem ela significa "só os canônicos" — que
- * é o que o `coalesce(..., '{}')` do trigger faz.
+ * `settingsDoFunil` é o settings EFETIVO do funil (`settingsDoFunil()` de
+ * `lib/leads/campos-exigidos.ts`, migration 1021): `lost_reasons` é a lista da
+ * organização e `lost_reasons_do_funil` a legada do funil. O settings cru também
+ * serve (sem a organização, só a lista do funil), e `settings` sem lista
+ * significa "só os canônicos" — o `coalesce(..., '{}')` do trigger.
  *
  * Devolve `null` quando não há o que recusar (sem motivo informado, ou motivo
  * aceito): quem decide se motivo AUSENTE é recusa é `decideMotivoDaPerda`.
@@ -270,17 +272,24 @@ export function recusaDeMotivoForaDoVocabulario(input: {
   const motivo = (input.motivo ?? "").trim();
   if (motivo.length === 0) return null;
 
-  const extras = (input.settingsDoFunil as { lost_reasons?: unknown } | null | undefined)
-    ?.lost_reasons;
+  const settings = input.settingsDoFunil as
+    | { lost_reasons?: unknown; lost_reasons_do_funil?: unknown }
+    | null
+    | undefined;
+  const rotulos = (lista: unknown): string[] =>
+    Array.isArray(lista)
+      ? lista
+          .map((v) => (typeof v === "string" ? v : (v as { label?: unknown } | null)?.label))
+          .filter((v): v is string => typeof v === "string" && v.length > 0)
+      : [];
   const aceitos = new Set<string>([
     ...CANONICAL_LOST_REASONS,
     // #1537: o item é texto puro OU `{ label, categoria }` — o mesmo que o trigger
     // aceita; ler só o texto recusava aqui o motivo que o banco aceitaria.
-    ...(Array.isArray(extras)
-      ? extras
-          .map((v) => (typeof v === "string" ? v : (v as { label?: unknown } | null)?.label))
-          .filter((v): v is string => typeof v === "string" && v.length > 0)
-      : []),
+    ...rotulos(settings?.lost_reasons),
+    // 1021: no settings EFETIVO (`settingsDoFunil`), `lost_reasons` é a lista da ORGANIZAÇÃO e a
+    // legada do funil mora em `lost_reasons_do_funil` — o gatilho aceita as duas, e aqui também.
+    ...rotulos(settings?.lost_reasons_do_funil),
   ]);
   if (aceitos.has(motivo)) return null;
 

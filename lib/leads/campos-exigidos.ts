@@ -45,7 +45,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { traduzir } from "@/lib/i18n/dicionario";
 import { IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
-import { camposDoFunil, escopoDoCampo } from "@/lib/leads/campos-do-funil";
+import { camposDoFunil, camposVisiveisNoFunil, escopoDoCampo } from "@/lib/leads/campos-do-funil";
+import { lerMotivosDaOrganizacao, settingsComMotivosDaOrganizacao } from "@/lib/leads/motivos-da-organizacao-regua";
 import { logger } from "@/lib/logger";
 import { camposVisiveis } from "@/lib/schemas/mostrar-quando";
 import type { CustomFieldDef } from "@/lib/schemas/settings";
@@ -74,11 +75,20 @@ export async function settingsDoFunil(
   try {
     const { data, error } = await supabase
       .from("crm_pipelines")
-      .select("settings")
+      .select("settings, organization_id")
       .eq("id", pipelineId)
       .maybeSingle();
     if (error) return null;
-    return (data as { settings?: unknown } | null)?.settings ?? null;
+    const linha = data as { settings?: unknown; organization_id?: string | null } | null;
+    const settings = linha?.settings ?? null;
+    if (!linha?.organization_id) return settings;
+    // 1021: os motivos de perda são da ORGANIZAÇÃO. O settings devolvido é o EFETIVO
+    // (`lost_reasons` = lista da organização, a do funil em `lost_reasons_do_funil`), para toda
+    // régua que lê daqui aceitar o mesmo que o gatilho. Leitura da organização que falha = legado.
+    return settingsComMotivosDaOrganizacao(
+      settings,
+      await lerMotivosDaOrganizacao(supabase, linha.organization_id),
+    );
   } catch {
     return null;
   }
@@ -247,7 +257,11 @@ export function camposExigidosNoDestino(
   settingsDoFunil: unknown,
   destino: DestinoDaEscrita,
 ): CustomFieldDef[] {
-  return camposDoFunil(settingsComoRecord(settingsDoFunil)).filter(
+  // Campo que o funil ESCONDE (`settings.campos_visiveis`) não é cobrado: a ficha não o mostra, e
+  // barrar a etapa por ele seria travar por um campo invisível. A gravação já recusa esconder um
+  // obrigatório; isto é a rede para o settings escrito por outro caminho.
+  const settings = settingsComoRecord(settingsDoFunil);
+  return camposVisiveisNoFunil(settings, camposDoFunil(settings)).filter(
     (campo) => escopoDoCampo(campo) === "negocio" && campoExigidoNoDestino(campo, destino),
   );
 }

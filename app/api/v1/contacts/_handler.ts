@@ -801,7 +801,22 @@ export async function patchContactHandler(
   ctx: HandlerCtx,
   contactId: string,
   input: ContactPatchInterno,
+  /**
+   * `mesclarCamposPersonalizados`: `custom_fields` vira MERGE DENTRO DO BANCO
+   * (`fn_contato_anotar_campos`, migration 1024) em vez de substituição. É o
+   * modo de quem grava SÓ as chaves que mudaram — o agente de IA
+   * (`crm_set_custom_field`) —, e fecha a corrida em que a regravação do mapa
+   * inteiro apagava a edição humana feita ao mesmo tempo. A tela continua no
+   * modo padrão (substituição), que é o único que deixa apagar um campo.
+   * Exige o cliente de serviço: só `service_role` tem EXECUTE na função.
+   */
+  opcoes: { mesclarCamposPersonalizados?: boolean } = {},
 ): Promise<ContatoPublico> {
+  const mesclarCampos =
+    opcoes.mesclarCamposPersonalizados === true &&
+    input.custom_fields !== undefined &&
+    input.custom_fields !== null &&
+    Object.keys(input.custom_fields).length > 0;
   const { data: existing, error: selErr } = await supabase
     .from("contacts")
     // ⚠️ Os campos sensíveis entram aqui para existir o **`from`** da regra L-06
@@ -920,7 +935,7 @@ export async function patchContactHandler(
   // o objeto inteiro que ele renderizou a partir do schema do funil; um merge
   // aqui tornaria IMPOSSÍVEL apagar um campo pela tela, porque a chave removida
   // voltaria do estado anterior a cada gravação.
-  if (input.custom_fields !== undefined) patch.custom_fields = input.custom_fields;
+  if (input.custom_fields !== undefined && !mesclarCampos) patch.custom_fields = input.custom_fields;
   if (input.consent !== undefined) {
     // MERGE por finalidade, nunca substituição.
     //
@@ -955,7 +970,7 @@ export async function patchContactHandler(
     await recusarCpfDeOutroContato(ctx.organization_id, hash, contactId, ctx.requestId, ctx.idioma ?? "pt-BR");
   }
 
-  if (Object.keys(patch).length === 0 && !cpfParaGravar) {
+  if (Object.keys(patch).length === 0 && !cpfParaGravar && !mesclarCampos) {
     throw new ApiError(
       400,
       "invalid_request",
@@ -998,6 +1013,19 @@ export async function patchContactHandler(
   }
 
   const contact = updated as Contact;
+  // O MERGE ATÔMICO (modo `mesclarCamposPersonalizados`). `updated` já provou
+  // que o contato existe e é da organização, e `ctx.organization_id` vem de
+  // fonte confiável — nunca do body; na função ele é o argumento `p_org`.
+  if (mesclarCampos) {
+    const { data: mesclados, error: anotarErr } = await supabase.rpc("fn_contato_anotar_campos", {
+      p_org: ctx.organization_id,
+      p_contato: contactId,
+      p_campos: input.custom_fields,
+    });
+    if (anotarErr) throw new ApiError(500, "internal_error", undefined, ctx.requestId, anotarErr.message);
+    // A resposta é o que EXISTE no banco, não o que esta requisição mandou.
+    (contact as unknown as Record<string, unknown>).custom_fields = (mesclados as Record<string, unknown> | null) ?? {};
+  }
   if (cpfParaGravar) {
     const erroDoCpf = await gravarCpfDoContatoPorUsuario(ctx.organization_id, contact.id, cpfParaGravar);
     if (erroDoCpf) throw erroDaGravacaoDoCpf(erroDoCpf, ctx.requestId, ctx.idioma ?? "pt-BR");
@@ -1008,6 +1036,8 @@ export async function patchContactHandler(
   // O `fields` sempre nomeou as colunas gravadas, inclusive as do CPF (agora gravadas à parte).
   const fields = [
     ...Object.keys(patch).filter((k) => k !== "updated_at"),
+    // Mesclado no banco, fora do `patch`: sem esta linha a escrita não deixaria rastro.
+    ...(mesclarCampos ? ["custom_fields"] : []),
     ...(cpfParaGravar ? ["cpf_hash", "cpf_encrypted"] : []),
     // O tipo só existe nos EUA; no Brasil e em Portugal a auditoria segue nomeando o par, como sempre.
     ...(cpfParaGravar?.tipo ? ["document_type"] : []),
