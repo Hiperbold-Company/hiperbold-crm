@@ -42,6 +42,7 @@ import { renderizar } from "../template-vars";
 import { CAMPOS_PADRAO_DO_CONTATO, CAMPOS_PADRAO_DO_NEGOCIO } from "../vocabulario";
 import { executarAtribuirConversa } from "./atribuir-conversa";
 import { executarConversa } from "./conversa";
+import { executarDefinirCarteira } from "./definir-carteira";
 import { executarIniciarAutomacao } from "./iniciar-automacao";
 import { escolherNegocioParaMover } from "./mover-negocio";
 import { executarHttp } from "./http";
@@ -221,6 +222,8 @@ async function executarAcao(c: Contexto, acao: CrmAction, indice: number): Promi
     }
     case "assign_conversation":
       return executarAtribuirConversa(c, acao, membroAtivo);
+    case "set_carteira":
+      return executarDefinirCarteira(c, acao);
     case "notify": {
       const dono = c.fatos?.negocio?.owner_user_id ?? null;
       const para = acao.to === "owner" ? (dono ? [dono] : []) : acao.to;

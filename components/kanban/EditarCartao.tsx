@@ -38,7 +38,7 @@ function vagasDe(linhas: readonly CampoDoCartao[]): Vaga[] {
   return vagas.slice(0, MAXIMO_DE_LINHAS);
 }
 
-/** O cartão de exemplo da prévia: um valor para cada um dos 9 campos. */
+/** O cartão de exemplo da prévia: um valor para cada um dos 10 campos. */
 function leadDeExemplo(t: (texto: string) => string): Partial<LeadDoCartao> {
   return {
     contact_phone: "+5511987654321",
@@ -46,6 +46,9 @@ function leadDeExemplo(t: (texto: string) => string): Partial<LeadDoCartao> {
     contact_empresa: t("Clínica Bem Viver"),
     contact_cargo: t("Gerente de compras"),
     source: "site",
+    tags: [t("Cliente VIP")],
+    contact_tags: [t("Indicação")],
+    conversation_tags: [t("Orçamento")],
     conversa: { id: "exemplo", preview: t("Oi! Queria saber o valor da consulta."), last_message_at: null, unread: 0 },
     custom_fields: { utm_source: "instagram", utm_medium: "social", utm_campaign: "turmas-janeiro" },
   };
@@ -258,6 +261,8 @@ function NomeDoCampo({ campo }: { campo: CampoDoCartao }) {
       return <>{t("Cargo")}</>;
     case "origem":
       return <>{t("Origem")}</>;
+    case "etiquetas":
+      return <>{t("Etiquetas")}</>;
     case "utm_source":
       return <span title={t("utm_source: de onde veio o clique (ex.: google, instagram)")}>utm_source</span>;
     case "utm_medium":

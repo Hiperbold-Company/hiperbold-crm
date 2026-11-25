@@ -184,25 +184,18 @@ test.describe("Janela de perder — os motivos são os do funil", () => {
     await expect(page.getByText("Falha no pagamento")).toHaveCount(0);
     await captura(page, "01-motivos-do-funil");
 
-    // ── 2. "OUTRO" RECUSA ANTES DO CLIQUE, E DIZ ONDE CADASTRAR ────────────
+    // ── 2. "OUTRO" ACEITA O DETALHE: grava `other`, o texto vai à parte ────
     await page.locator('input[name="lost-reason"][value="other"]').check();
-    await expect(
-      page.getByText(/cadastre em CRM › Ver tudo em CRM › Etapas do funil/),
-      "sem esta frase, 'Outro' é beco sem saída: recusa todo texto novo e não diz onde se cadastra um",
-    ).toBeVisible();
-
     const confirmar = page.getByRole("button", { name: "Confirmar" });
-    // ⚠️ DETALHE VAZIO PASSA, e é de propósito: `other` é canônico, então o
-    // trigger o aceita em qualquer funil. Exigir o detalhe aqui deixava sem saída
-    // o `agent` que tem uma perda fora da lista e não pode cadastrar motivo.
-    await expect(confirmar, "'Outro' sem detalhe é o escape que o servidor aceita").toBeEnabled();
+    await expect(confirmar, "'Outro' sem detalhe grava `other`").toBeEnabled();
 
     await page.getByLabel(/Detalhe \(opcional\)/).fill("Cliente mudou de ideia");
-    await expect(page.getByRole("alert")).toHaveText(
-      "Esse motivo de perda não está na lista deste funil — escolha um dos motivos configurados.",
-    );
-    await expect(confirmar, "texto fora da lista é o que o trigger recusa").toBeDisabled();
-    await captura(page, "02-outro-recusado");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(
+      confirmar,
+      "o detalhe não passa pelo vocabulário do funil (CBEXS): Confirmar segue habilitado",
+    ).toBeEnabled();
+    await captura(page, "02-outro-com-detalhe");
 
     // ── 3. O MOTIVO ESCOLHIDO CHEGA AO BANCO ───────────────────────────────
     await page.locator(`input[name="lost-reason"][value="${MOTIVOS[1]}"]`).check();

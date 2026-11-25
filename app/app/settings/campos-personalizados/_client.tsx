@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useMoedaDaOrgAtiva } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import {
   COTA_DE_CAMPOS_POR_ENTIDADE,
@@ -38,8 +39,11 @@ import {
   type PresetDeValidacao,
   type TipoDoCampo,
 } from "@/lib/campos/definicoes";
+import { moedaDoCampo } from "@/lib/leads/campo-de-moeda";
 import { importarOpcoesCsv } from "@/lib/leads/campos-pesquisaveis";
-import { ROTULOS_DO_TIPO } from "@/lib/schemas/rotulos-do-campo";
+import { MOEDA_PADRAO } from "@/lib/money";
+import { ROTULOS_DO_TIPO, rotuloDoTipo } from "@/lib/schemas/rotulos-do-campo";
+import { MOEDAS_DO_CAMPO } from "@/lib/schemas/settings";
 import { CaretDown, Plus, Trash } from "@/lib/ui/icons";
 
 type Opcao = { value: string; label: string; aliases?: string[] };
@@ -63,6 +67,8 @@ export interface RascunhoDoCampo {
   preset: PresetDeValidacao;
   padrao: string;
   mensagem_padrao: string;
+  /** A moeda ESCOLHIDA do campo de moeda; vazio = segue a da organização (`config.moeda` ausente). */
+  moeda: string;
 }
 
 /** A chave sugerida a partir do nome: minúsculas, sem acento, `_` no lugar do resto. */
@@ -96,6 +102,7 @@ export function rascunhoVazio(entidade: EntidadeDoCampo): RascunhoDoCampo {
     preset: "nenhum",
     padrao: "",
     mensagem_padrao: "",
+    moeda: "",
   };
 }
 
@@ -120,6 +127,7 @@ export function rascunhoDe(d: DefinicaoDeCampo): RascunhoDoCampo {
     preset: presetDoPadrao(padrao),
     padrao,
     mensagem_padrao: typeof config.mensagem_padrao === "string" ? config.mensagem_padrao : "",
+    moeda: (MOEDAS_DO_CAMPO as readonly string[]).includes(config.moeda as string) ? (config.moeda as string) : "",
   };
 }
 
@@ -138,6 +146,8 @@ export function corpoDoRascunho(r: RascunhoDoCampo): Record<string, unknown> {
     config.allow_new = r.allow_new;
     config.multiple = r.multiple;
   }
+  // A moeda escolhida do campo de moeda. Vazia = segue a da organização: nada é gravado.
+  if (r.type === "currency" && r.moeda) config.moeda = r.moeda;
   const padrao = r.preset === "custom" ? r.padrao.trim() : (PRESETS_DE_VALIDACAO[r.preset as keyof typeof PRESETS_DE_VALIDACAO] ?? "");
   // Na edição, `null` TIRA a chave do config (merge por chave na rota); na criação, ausência basta.
   if (padrao) config.padrao = padrao;
@@ -167,6 +177,7 @@ async function chamar(url: string, init?: RequestInit): Promise<{ ok: boolean; d
 
 export function CamposPersonalizadosClient({ iniciais }: { iniciais: DefinicaoDeCampo[] }) {
   const t = useT();
+  const moedaDaOrg = useMoedaDaOrgAtiva() ?? MOEDA_PADRAO;
   const [campos, setCampos] = useState<DefinicaoDeCampo[]>(iniciais);
   const [abertos, setAbertos] = useState<Record<EntidadeDoCampo, boolean>>({ contato: true, negocio: true });
   const [rascunho, setRascunho] = useState<RascunhoDoCampo | null>(null);
@@ -243,7 +254,7 @@ export function CamposPersonalizadosClient({ iniciais }: { iniciais: DefinicaoDe
                     {lista.map((c) => (
                       <li key={c.id} className="flex flex-wrap items-center gap-2 py-2" data-testid={`campo-${c.key}`}>
                         <span className="font-medium">{c.label}</span>
-                        <span className="text-xs text-muted-foreground">{t(ROTULOS_DO_TIPO[c.type])}</span>
+                        <span className="text-xs text-muted-foreground">{rotuloDoTipo(c.type, t, moedaDoCampo(c, moedaDaOrg))}</span>
                         <code className="text-xs text-muted-foreground">{c.key}</code>
                         {c.publico ? <Badge variant="secondary">{t("Público")}</Badge> : <Badge variant="outline">{t("Só administradores nas telas")}</Badge>}
                         {c.sempre_visivel && <Badge variant="secondary">{t("Sempre visível")}</Badge>}
@@ -325,6 +336,7 @@ export function DialogoDoCampo({
   aoSalvar: (d: DefinicaoDeCampo) => void;
 }) {
   const t = useT();
+  const moedaDaOrg = useMoedaDaOrgAtiva() ?? MOEDA_PADRAO;
   const [r, setR] = useState<RascunhoDoCampo>(inicial);
   const [chaveTocada, setChaveTocada] = useState(inicial.id !== null);
   const [csv, setCsv] = useState("");
@@ -427,7 +439,7 @@ export function DialogoDoCampo({
               <p className="text-xs text-muted-foreground">{t("Pré-visualização")}</p>
               <Label>{r.label || t("Nome do campo")}</Label>
               {r.dica_de_ajuda && <p className="text-xs text-muted-foreground">{r.dica_de_ajuda}</p>}
-              <Input disabled placeholder={t(ROTULOS_DO_TIPO[r.type])} />
+              <Input disabled placeholder={rotuloDoTipo(r.type, t, r.moeda || moedaDaOrg)} />
             </div>
           </TabsContent>
 
@@ -449,6 +461,25 @@ export function DialogoDoCampo({
               ))}
             </div>
             {editando && <p className="text-xs text-muted-foreground">{t("O tipo não muda depois de criado. Para outro tipo, crie outro campo.")}</p>}
+            {r.type === "currency" && (
+              <div className="space-y-1" data-testid="moeda-do-campo">
+                <Label htmlFor="cp-moeda">{t("Moeda do campo")}</Label>
+                <select
+                  id="cp-moeda"
+                  className="h-9 w-full rounded-md border border-border bg-transparent px-2 text-sm"
+                  value={r.moeda || ((MOEDAS_DO_CAMPO as readonly string[]).includes(moedaDaOrg) ? moedaDaOrg : "")}
+                  onChange={(e) => mudar({ moeda: e.target.value })}
+                >
+                  <option value="BRL">{t("Real (BRL)")}</option>
+                  <option value="USD">{t("Dólar (USD)")}</option>
+                  <option value="EUR">{t("Euro (EUR)")}</option>
+                  {!(MOEDAS_DO_CAMPO as readonly string[]).includes(moedaDaOrg) && (
+                    <option value="">{`${t("Moeda da organização")} (${moedaDaOrg})`}</option>
+                  )}
+                </select>
+                {editando && <p className="text-xs text-muted-foreground">{t("Trocar a moeda não converte os valores já gravados.")}</p>}
+              </div>
+            )}
             {temOpcoes && (
               <div className="space-y-2" data-testid="opcoes-do-campo">
                 <Label>{t("Opções")}</Label>

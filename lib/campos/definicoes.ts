@@ -15,7 +15,12 @@
 import { z } from "zod";
 
 import { mostrarQuandoSchema } from "@/lib/schemas/mostrar-quando";
-import { camposObrigatoriosDoFunilSchema, customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
+import {
+  MOEDAS_DO_CAMPO,
+  camposObrigatoriosDoFunilSchema,
+  customFieldSchema,
+  type CustomFieldDef,
+} from "@/lib/schemas/settings";
 
 export const ENTIDADES_DE_CAMPO = ["contato", "negocio"] as const;
 export type EntidadeDoCampo = (typeof ENTIDADES_DE_CAMPO)[number];
@@ -45,10 +50,13 @@ export const configDoCampoSchema = z
   .object({
     options: customFieldSchema.shape.options,
     mostrar_quando: mostrarQuandoSchema.optional(),
-    padrao: z.string().max(500).optional(),
-    mensagem_padrao: z.string().max(200).optional(),
+    // `null` só tem sentido na ALTERAÇÃO: tira a chave do config (merge por chave em `alterarDefinicao`).
+    // É o que a tela manda ao apagar a validação; a criação o ignora (`configLimpo`).
+    padrao: z.string().max(500).nullable().optional(),
+    mensagem_padrao: z.string().max(200).nullable().optional(),
     allow_new: z.boolean().optional(),
     multiple: z.boolean().optional(),
+    moeda: z.enum(MOEDAS_DO_CAMPO).nullable().optional(),
   })
   .strict();
 export type ConfigDoCampo = z.infer<typeof configDoCampoSchema>;
@@ -141,7 +149,10 @@ export function incoerenciaDaDefinicao(type: TipoDoCampo, config: ConfigDoCampo 
   if (type !== "searchable_select" && (config?.allow_new !== undefined || config?.multiple !== undefined)) {
     return "Permitir valor novo e múltipla escolha só existem na lista pesquisável.";
   }
-  if (config?.padrao !== undefined && config.padrao.trim() !== "") {
+  if (type !== "currency" && config?.moeda != null) {
+    return "Só campos de moeda têm moeda.";
+  }
+  if (typeof config?.padrao === "string" && config.padrao.trim() !== "") {
     try {
       new RegExp(config.padrao);
     } catch {
@@ -152,7 +163,7 @@ export function incoerenciaDaDefinicao(type: TipoDoCampo, config: ConfigDoCampo 
 }
 
 /** Só as chaves de `config` que a projeção copia; o resto (de uma versão futura, por exemplo) fica. */
-const CHAVES_PROJETADAS = ["options", "mostrar_quando", "padrao", "mensagem_padrao", "allow_new", "multiple"] as const;
+const CHAVES_PROJETADAS = ["options", "mostrar_quando", "padrao", "mensagem_padrao", "allow_new", "multiple", "moeda"] as const;
 
 /**
  * A definição na forma de UM item de `settings.fields` — espelho de

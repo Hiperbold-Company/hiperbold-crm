@@ -10,7 +10,7 @@
  * A autorização continua onde estava: a leitura/escrita das outras colunas passa pelo cliente do usuário (RLS). Estas
  * funções só rodam depois dela, sobre um contato que a RLS já mostrou ao usuário.
  */
-import { cifrarCpfDaInstalacao, normalizeCpf } from "@/lib/contacts/cpf";
+import { cifrarCpfDaInstalacao, normalizarDocumento } from "@/lib/contacts/cpf";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface ErroDeCpf {
@@ -55,8 +55,8 @@ export async function idsPorHashDeCpf(
  * não consegue cifrar (chave mestra ausente): quem chama NÃO grava o CPF nesse caso, nem só o hash, porque a
  * constraint `contacts_cpf_consistency` exige `cpf_hash` e `cpf_encrypted` juntos ou nenhum.
  */
-export async function cifrarCpfDoContato(cpf: string): Promise<string | null> {
-  return cifrarCpfDaInstalacao(createAdminClient(), normalizeCpf(cpf));
+export async function cifrarCpfDoContato(cpf: string, tipo?: string | null): Promise<string | null> {
+  return cifrarCpfDaInstalacao(createAdminClient(), normalizarDocumento(cpf, tipo));
 }
 
 /** Código do `ErroDeCpf` quando nenhuma linha foi gravada: contato inexistente, de outra organização ou anonimizado. */
@@ -75,11 +75,14 @@ export const CPF_SEM_LINHA = "cpf_contato_nao_gravavel";
 export async function gravarCpfDoContatoPorUsuario(
   organizationId: string,
   contactId: string,
-  cpf: { hash: string; cifrado: string },
+  cpf: { hash: string; cifrado: string; tipo?: string | null },
 ): Promise<ErroDeCpf | null> {
+  // O TIPO vai junto com o par, sempre (migration 1020): `null` em Brasil e
+  // Portugal (tipo implícito), o escolhido nos EUA. Gravar o número sem
+  // reescrever o tipo deixaria o tipo antigo sobre um número novo.
   const { data, error } = await createAdminClient()
     .from("contacts")
-    .update({ cpf_hash: cpf.hash, cpf_encrypted: cpf.cifrado })
+    .update({ cpf_hash: cpf.hash, cpf_encrypted: cpf.cifrado, document_type: cpf.tipo ?? null })
     .eq("organization_id", organizationId)
     .eq("id", contactId)
     .eq("is_anonymized", false)
@@ -111,6 +114,34 @@ export async function decifrarCpfDoContato(organizationId: string, contactId: st
   const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext: normalizado });
   if (dec.error || typeof dec.data !== "string" || dec.data === "") return null;
   return dec.data;
+}
+
+/**
+ * O TIPO do documento (migration 1020) tem a visibilidade do NÚMERO: só sai para quem abre o documento
+ * (gerente+, decidido pelo chamador). Por isso nenhuma lista nem resposta comum o seleciona — ele é lido aqui,
+ * pelo cliente de serviço e com `organization_id` explícito, ao lado da decifragem.
+ */
+export async function tiposDoDocumentoDosContatos(
+  organizationId: string,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const saida = new Map<string, string>();
+  if (ids.length === 0) return saida;
+  const admin = createAdminClient();
+  for (let i = 0; i < ids.length; i += BLOCO_DE_CPFS) {
+    const { data, error } = await admin
+      .from("contacts")
+      .select("id, document_type")
+      .eq("organization_id", organizationId)
+      .eq("is_anonymized", false)
+      .in("id", ids.slice(i, i + BLOCO_DE_CPFS))
+      .not("document_type", "is", null);
+    if (error) continue;
+    for (const linha of (data ?? []) as Array<{ id: string; document_type: string | null }>) {
+      if (linha.document_type) saida.set(linha.id, linha.document_type);
+    }
+  }
+  return saida;
 }
 
 /** Contatos por consulta ao ler os cifrados de uma exportação (o `in` vai na URL do PostgREST). */

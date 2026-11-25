@@ -180,5 +180,12 @@ export function avaliarRegraNova(
       // Sem a leitura da janela (montador de fatos que não a carrega), "não":
       // dizer "aberta" mandaria texto livre para uma janela que ninguém mediu.
       return fatos.janela === "aberta";
+    case "carteira": {
+      // O desconhecido nunca satisfaz: sem contato, ou com a carteira não lida
+      // (montador de fatos que não a carrega), nem "tem" nem "sem".
+      const dono = fatos.contato?.carteira_user_id;
+      if (dono === undefined) return false;
+      return check.op === "tem" ? dono !== null && dono !== "" : dono === null || dono === "";
+    }
   }
 }
