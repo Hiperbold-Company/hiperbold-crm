@@ -39,6 +39,7 @@ import type { LinhaDeVocabulario } from "@/lib/schemas/tags";
 import { createClient } from "@/lib/supabase/server";
 
 import { PainelDeTags } from "./_painel";
+import { NovaEtiqueta } from "./_nova-etiqueta";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { TagsInternasForm } from "./_tags-internas-form";
 import { redesignNaRequisicao } from "@/lib/redesign/chave";
@@ -114,6 +115,8 @@ export default async function TagsPage({ searchParams }: { searchParams: Promise
         </p>
         <LinkDeAjudaDaTela />
       </header>
+
+      <NovaEtiqueta idioma={idioma} />
 
       <form method="get" className="flex max-w-xl items-center gap-2">
         <Input name="busca" aria-label={t("Buscar etiquetas")} placeholder={t("Buscar etiquetas")}

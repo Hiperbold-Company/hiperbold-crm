@@ -194,7 +194,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
             </Select>
             <p className="text-xs text-muted-foreground">
               {t(
-                "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.",
+                "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países revisados: com a lei conferida ou, como os Estados Unidos, com a conclusão de que não há lei geral a citar — a lista é curta de propósito.",
               )}
             </p>
             {/* Quem responde pelo documento precisa saber que a revisão foi
@@ -208,6 +208,20 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               >
                 {t(
                   "A citação do RGPD (artigo 15.º do Regulamento (UE) 2016/679) foi conferida contra o texto oficial numa revisão feita por IA, sem advogado em Portugal. Os prazos do sistema (7 e 15 dias úteis) são mais curtos que o prazo legal de um mês, e o relatório de acesso ainda não traz todas as informações do art. 15.º. Trocar o país muda a regra do documento do contato: a partir daí, CPF enviado por API, importação ou integração é recusado como NIF inválido. O sistema não substitui o seu encarregado da proteção de dados: confirme com ele os textos enviados aos titulares, sobretudo nas campanhas de marketing, que em Portugal, em regra, exigem consentimento prévio (Lei 41/2004, art. 13.º-A).",
+                )}
+              </p>
+            )}
+            {/* Estados Unidos: revisado SEM lei geral (24/11/2026). Mesma régua
+                de Portugal — quem responde pelo documento sabe que a revisão
+                foi feita por IA e que trocar o país muda a régua do documento. */}
+            {perfil.semLeiGeral && (
+              <p
+                role="note"
+                data-testid="aviso-pais-sem-lei-geral"
+                className="rounded-md border border-warning bg-warning-bg p-3 text-xs text-warning-fg"
+              >
+                {t(
+                  "Nos Estados Unidos não há lei federal geral de proteção de dados como a LGPD ou o RGPD, e a lei da Flórida (Florida Digital Bill of Rights) só alcança empresas com receita anual acima de US$ 1 bilhão. Por isso o documento de acesso enviado ao titular não cita lei nenhuma. Esta conclusão vem de uma revisão feita por IA, não de parecer jurídico: confirme com o seu advogado, sobretudo se você atende moradores de estados com lei própria, como a Califórnia. Trocar o país muda a regra do documento do contato: a partir daí, todo documento novo pede o tipo (carteira de motorista, passaporte, Green Card, ITIN, CPF…); os documentos já gravados continuam legíveis como estão.",
                 )}
               </p>
             )}

@@ -31,6 +31,11 @@
  *  - `ultima_mensagem` → `conversations.last_message_preview` da conversa mais
  *                        recente do contato (`lead.conversa.preview`)
  *  - `origem`          → `crm_leads.source`
+ *  - `etiquetas`       → a UNIÃO, sem repetir (sem diferenciar maiúsculas; vale a grafia
+ *                        da primeira), das três caixas: `crm_leads.tags` (negócio),
+ *                        `contacts.tags` (`lead.contact_tags`) e as das conversas do
+ *                        contato (`lead.conversation_tags`), nessa ordem. O quadro já
+ *                        traz as três sempre.
  *  - `utm_*`           → `crm_leads.custom_fields->>utm_*` (onde a captação grava;
  *                        mesma fonte da coluna de UTM da lista de Contatos)
  *
@@ -49,6 +54,7 @@ export const CAMPOS_DO_CARTAO = [
   "empresa",
   "cargo",
   "origem",
+  "etiquetas",
   "utm_source",
   "utm_medium",
   "utm_campaign",
@@ -110,7 +116,7 @@ export function settingsComLinhas(
 /** O que o card precisa do lead para escrever as linhas. */
 export type LeadDoCartao = Pick<
   Lead,
-  "contact_phone" | "contact_email" | "contact_cargo" | "contact_empresa" | "conversa" | "source" | "custom_fields"
+  "contact_phone" | "contact_email" | "contact_cargo" | "contact_empresa" | "conversa" | "source" | "custom_fields" | "tags" | "contact_tags" | "conversation_tags"
 >;
 
 function texto(valor: unknown): string | null {
@@ -118,6 +124,23 @@ function texto(valor: unknown): string | null {
   if (typeof valor !== "string") return null;
   const limpo = valor.trim();
   return limpo === "" ? null : limpo;
+}
+
+/** As etiquetas do negócio, do contato e das conversas, sem repetir (maiúsculas não diferenciam). */
+export function etiquetasDoCartao(lead: Partial<LeadDoCartao>): string[] {
+  const vistas = new Set<string>();
+  const unidas: string[] = [];
+  for (const caixa of [lead.tags, lead.contact_tags, lead.conversation_tags]) {
+    for (const bruta of caixa ?? []) {
+      const tag = texto(bruta);
+      if (tag === null) continue;
+      const chave = tag.toLowerCase();
+      if (vistas.has(chave)) continue;
+      vistas.add(chave);
+      unidas.push(tag);
+    }
+  }
+  return unidas;
 }
 
 /**
@@ -134,6 +157,10 @@ export function valorDaLinha(lead: Partial<LeadDoCartao>, campo: CampoDoCartao):
       return texto(lead.conversa?.preview);
     case "origem":
       return texto(lead.source);
+    case "etiquetas": {
+      const todas = etiquetasDoCartao(lead);
+      return todas.length > 0 ? todas.join(" · ") : null;
+    }
     case "empresa":
       return cargoEEmpresa({ empresa: lead.contact_empresa ?? null }, lead.custom_fields ?? null).empresa;
     case "cargo":

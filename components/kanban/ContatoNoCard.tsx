@@ -12,7 +12,7 @@ import {
   type LeadDoCartao,
 } from "@/lib/kanban/linhas-do-cartao";
 import type { Lead } from "@/lib/types/leads";
-import { Buildings, ChatCircle, EnvelopeSimple, IdentificationCard, Phone, Signpost } from "@/lib/ui/icons";
+import { Buildings, ChatCircle, EnvelopeSimple, IdentificationCard, Phone, Signpost, Tag } from "@/lib/ui/icons";
 
 interface Props {
   lead: Partial<LeadDoCartao> & Pick<Lead, "contact_links"> & { conversa?: Lead["conversa"] };
@@ -111,6 +111,12 @@ export function LinhaDoCartao({
       icone = <Signpost size={12} aria-hidden className="shrink-0" />;
       rotulo = t("Origem");
       exibido = rotuloDaOrigem(exibido);
+      break;
+    case "etiquetas":
+      icone = <Tag size={12} aria-hidden className="shrink-0" />;
+      rotulo = t("Etiquetas");
+      // O texto fica cortado em uma linha; o title lista todas.
+      dica = `${rotulo}: ${exibido}`;
       break;
     case "utm_source":
       rotulo = "source";

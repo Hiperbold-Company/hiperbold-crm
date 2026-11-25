@@ -15,6 +15,7 @@ import {
 import {
   citacaoDaLei,
   PAIS_PADRAO,
+  semLeiGeralRevisada,
   perfilDoPais,
   type AutoridadeDeSupervisao,
   type PerfilDoPais,
@@ -57,6 +58,11 @@ export interface ContactSnapshot {
   email: string | null;
   phone_number: string | null;
   cpf_present: boolean;
+  /**
+   * O tipo do documento armazenado (migration 1020) — só nos EUA. A chave só
+   * aparece quando há tipo: o `data.json` do Brasil e de Portugal não muda.
+   */
+  document_type?: string;
   birthdate: string | null;
   is_blocked: boolean;
   is_anonymized: boolean;
@@ -725,6 +731,8 @@ export interface ExportPayload {
   secoes_no_limite?: string[];
   /** O rótulo do documento do titular no país ("CPF", "Documento"). */
   documento_rotulo: string;
+  /** `true` só em país revisado SEM lei geral (EUA): o PDF não imprime linha de citação. */
+  sem_lei_geral?: true;
   generated_at: string;
   no_local_footprint: boolean;
   contact: ContactSnapshot | null;
@@ -1208,7 +1216,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     const { data, error } = await admin
       .from("contacts")
       .select(
-        "id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, phone_number, wa_lid, cpf_encrypted, birthdate, is_blocked, is_anonymized, consent, tags, source, source_metadata, custom_fields, created_at, last_activity_at, first_service_at",
+        "id, name, display_name, address_book_name, zip_code, street, number, complement, district, city, state, email, phone_number, wa_lid, cpf_encrypted, document_type, birthdate, is_blocked, is_anonymized, consent, tags, source, source_metadata, custom_fields, created_at, last_activity_at, first_service_at",
       )
       .eq("organization_id", organizationId)
       .eq("id", contactId)
@@ -1273,6 +1281,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         email: data.email ?? null,
         phone_number: data.phone_number ?? null,
         cpf_present: Boolean(data.cpf_encrypted),
+        ...(data.document_type ? { document_type: String(data.document_type) } : {}),
         birthdate: data.birthdate ?? null,
         is_blocked: Boolean(data.is_blocked),
         is_anonymized: Boolean(data.is_anonymized),
@@ -2664,10 +2673,13 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
 function foraDoBrasil(
   perfil: PerfilDoPais,
   controlador: Controlador,
-): Pick<ExportPayload, "lei_rotulo" | "papel_controlador" | "papel_encarregado" | "fuso"> {
+): Pick<ExportPayload, "lei_rotulo" | "sem_lei_geral" | "papel_controlador" | "papel_encarregado" | "fuso"> {
   if (perfil.codigo === PAIS_PADRAO) return {};
   return {
     ...(perfil.lei?.rotuloNoDocumento ? { lei_rotulo: perfil.lei.rotuloNoDocumento } : {}),
+    // País cuja revisão concluiu que não há lei geral (EUA): o PDF omite a linha
+    // da citação em vez de dizer "não declarada".
+    ...(semLeiGeralRevisada(perfil) ? { sem_lei_geral: true as const } : {}),
     papel_controlador: perfil.papel.controlador,
     papel_encarregado: perfil.papel.encarregado,
     ...(controlador.timezone ? { fuso: controlador.timezone } : {}),

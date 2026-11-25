@@ -41,7 +41,13 @@ import { requireRole } from "@/lib/auth/require-role";
 import { mfaEmDivida } from "@/lib/auth/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { vocabularioDeTagsSchema, type LinhaDeVocabulario } from "@/lib/schemas/tags";
+import { normalizarTag } from "@/lib/contacts/tag-normalizada";
+import { atualizarSettingDaOrganizacao } from "@/lib/organizations/atualizar-setting";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+/** Teto do vocabulário curado (`settings.tags`): acima disso a tela vira lista de arquivo morto. */
+export const TETO_DO_VOCABULARIO = 200;
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +118,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   const { acao, tag, destino, cor } = parsed.data;
 
   const db = await createClient();
+
+  if (acao === "criar") return criarEtiqueta({ db, auth, requestId, tag, cor });
+
   // #2855 — com a tela paginada, o destino da junção é digitado, não escolhido
   // numa lista. A função só recusa destino vazio: um nome que não existe faria
   // "juntar" virar um renomear sem aviso. A conferência é no vocabulário INTEIRO
@@ -165,4 +174,79 @@ export async function POST(req: NextRequest): Promise<Response> {
     metadata: { acao, tag, destino: destino ?? null, cor: cor ?? null, ...resultado },
   });
   return ok(resultado, { requestId });
+}
+
+/**
+ * `criar`: a etiqueta nasce no vocabulário curado (`organizations.settings.tags`)
+ * antes de qualquer contato, negócio ou conversa usá-la. Sem migration: é só uma
+ * entrada nova na lista que `fn_vocabulario_de_tags*` já lê. A chave `tags` é
+ * gravada pelo escritor de uma chave só (D-132), nunca regravando o `settings`.
+ *
+ * ponytail: ler a lista e regravá-la inteira deixa uma janela em que dois
+ * "criar" quase simultâneos na mesma organização perdem um deles; o 2º clique
+ * do operador resolve, e a função atômica de caminho não tem "acrescentar".
+ */
+async function criarEtiqueta(p: {
+  db: Awaited<ReturnType<typeof createClient>>;
+  auth: Extract<Awaited<ReturnType<typeof requireRole>>, { ok: true }>;
+  requestId: string;
+  tag: string;
+  cor: string | null | undefined;
+}): Promise<Response> {
+  const { db, auth, requestId } = p;
+  const nome = normalizarTag(p.tag);
+  if (nome === "") return fail("validation_failed", "Dê um nome para a etiqueta.", 422, { requestId });
+  const cor = p.cor ?? null;
+
+  // O vocabulário INTEIRO (curado + em uso + regras), a mesma leitura da tela:
+  // "já existe" é o que o operador vê na lista, não só o que está curado.
+  const { data: achadas, error: erroDaBusca } = await db.rpc("fn_vocabulario_de_tags_pagina", {
+    p_org: auth.org.orgId,
+    p_busca: nome,
+    p_offset: 0,
+    p_limit: 200,
+  });
+  const pagina = tagsPageResultSchema.safeParse(achadas);
+  if (erroDaBusca || !pagina.success)
+    return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
+  if (pagina.data.items.some((linha) => normalizarTag(linha.tag) === nome))
+    return fail("tag_ja_existe", "Essa etiqueta já existe.", 409, { requestId });
+
+  const { data: linha, error: erroDeLeitura } = await db
+    .from("organizations")
+    .select("settings")
+    .eq("id", auth.org.orgId)
+    .maybeSingle();
+  if (erroDeLeitura) return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
+  const bruta = (linha as { settings?: Record<string, unknown> | null } | null)?.settings?.["tags"];
+  const curadas: unknown[] = Array.isArray(bruta) ? bruta : [];
+  const nomeDe = (e: unknown): string =>
+    typeof e === "string" ? e : typeof (e as { tag?: unknown } | null)?.tag === "string" ? (e as { tag: string }).tag : "";
+  if (curadas.some((e) => normalizarTag(nomeDe(e)) === nome))
+    return fail("tag_ja_existe", "Essa etiqueta já existe.", 409, { requestId });
+  if (curadas.length >= TETO_DO_VOCABULARIO)
+    return fail(
+      "limite_de_etiquetas",
+      `O vocabulário chegou ao limite de ${TETO_DO_VOCABULARIO} etiquetas. Exclua ou junte alguma antes de criar outra.`,
+      422,
+      { requestId },
+    );
+
+  const gravou = await atualizarSettingDaOrganizacao(createAdminClient(), auth.org.orgId, ["tags"], [
+    ...curadas,
+    cor ? { tag: nome, cor } : { tag: nome },
+  ]);
+  if (!gravou.ok) return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
+
+  const resultado = { tag: nome, cor };
+  void audit({
+    action: "tag_vocabulary.changed",
+    actorUserId: auth.user.id,
+    organizationId: auth.org.orgId,
+    resourceType: "organization",
+    resourceId: auth.org.orgId,
+    requestId,
+    metadata: { acao: "criar", tag: nome, destino: null, cor },
+  });
+  return ok(resultado, { requestId, status: 201 });
 }

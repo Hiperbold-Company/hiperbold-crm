@@ -21,6 +21,8 @@ export interface MoveArgs {
   wonReason?: string;
   /** O motivo da perda, quando o destino é a etapa de perda — na MESMA escrita (#917). */
   lostReason?: string;
+  /** O texto de "Outro motivo": à parte do vocabulário. */
+  lostReasonDetail?: string;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface RetomadaPendente {
 export interface RecusaDeCampos {
   /** Os argumentos originais do move — o diálogo só acrescenta o que coletou. */
   args: MoveArgs;
-  faltando: { chave: string; rotulo: string; tipo?: string; opcoes?: { value: string; label: string }[] }[];
+  faltando: { chave: string; rotulo: string; tipo?: string; opcoes?: { value: string; label: string }[]; moeda?: string }[];
 }
 
 interface OpcoesDeMove {
@@ -74,6 +76,7 @@ export function useMoveCard(pipelineId: string, opcoes: OpcoesDeMove = {}) {
         ...(args.customFields ? { custom_fields: args.customFields } : {}),
         ...(args.wonReason !== undefined ? { won_reason: args.wonReason } : {}),
         ...(args.lostReason !== undefined ? { lost_reason: args.lostReason } : {}),
+        ...(args.lostReasonDetail ? { lost_reason_detail: args.lostReasonDetail } : {}),
       });
     },
     onMutate: async (args) => {

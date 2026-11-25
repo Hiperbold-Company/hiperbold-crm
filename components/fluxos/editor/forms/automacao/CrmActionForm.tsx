@@ -20,6 +20,7 @@ import {
   ALVOS,
   fraseDaAcao,
   SE_DER_ERRO,
+  SE_JA_TEM_CARTEIRA,
   SE_JA_TEM_NEGOCIO,
 } from "@/lib/automacoes/vocabulario";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
@@ -59,6 +60,8 @@ export function acaoEmBranco(type: CrmActionType): CrmAction {
       return { type, mode: { m: "round_robin" } };
     case "assign_conversation":
       return { type, user_id: "" };
+    case "set_carteira":
+      return { type, user_id: "", se_ja_tiver: "manter" };
     case "notify":
       return { type, to: "owner", message: "" };
     case "create_task":
@@ -202,6 +205,7 @@ function CamposDaAcao({
   const membros = useAssignableMembers(
     acao.type === "set_owner" ||
       acao.type === "assign_conversation" ||
+      acao.type === "set_carteira" ||
       acao.type === "notify" ||
       acao.type === "create_task",
   );
@@ -384,6 +388,34 @@ function CamposDaAcao({
             {t("Todas as conversas abertas do contato (WhatsApp, Messenger, Direct)")}
           </label>
         </Campo>
+      );
+    case "set_carteira":
+      return (
+        <>
+          <Campo
+            id={`${prefixo}-vendedor`}
+            rotulo={t("Vendedor")}
+            ajuda={t(
+              "O cliente entra na carteira deste vendedor. Os negócios abertos sem responsável e as conversas abertas do dono anterior (ou sem dono, fora da IA) passam para ele.",
+            )}
+          >
+            <Seletor
+              id={`${prefixo}-vendedor`}
+              valor={acao.user_id}
+              vazio={t("Escolha o vendedor")}
+              opcoes={opcoesDeMembro}
+              onChange={(v) => onChange({ ...acao, user_id: v })}
+            />
+          </Campo>
+          <Campo id={`${prefixo}-se-ja-tiver`} rotulo={t("Se o cliente já tiver carteira")}>
+            <Seletor
+              id={`${prefixo}-se-ja-tiver`}
+              valor={acao.se_ja_tiver}
+              opcoes={opcoesDe(SE_JA_TEM_CARTEIRA, t)}
+              onChange={(v) => onChange({ ...acao, se_ja_tiver: v as typeof acao.se_ja_tiver })}
+            />
+          </Campo>
+        </>
       );
     case "notify":
       return (

@@ -40,6 +40,9 @@ export default async function PrivacyPage() {
   // coluna `organizations.country`. Cada ramo é um literal em `t()`: chave de
   // dicionário nas duas direções, nunca frase montada em runtime.
   const ePortugal = (op.pais ?? "").trim().toUpperCase() === "PT";
+  // Estados Unidos (24/11/2026): sem lei federal geral de proteção de dados, a
+  // política não nomeia LGPD nem RGPD, e os papéis são descritos pelo que fazem.
+  const eEstadosUnidos = (op.pais ?? "").trim().toUpperCase() === "US";
 
   return (
     <>
@@ -52,15 +55,21 @@ export default async function PrivacyPage() {
 
       <section className="space-y-2">
         <h2 className="text-base font-semibold">
-          {ePortugal ? t("1. Quem é o responsável pelo tratamento") : t("1. Quem é o controlador")}
+          {ePortugal
+            ? t("1. Quem é o responsável pelo tratamento")
+            : eEstadosUnidos
+              ? t("1. Quem é o responsável pelos dados")
+              : t("1. Quem é o controlador")}
         </h2>
         <p>
           {ePortugal
             ? t("O responsável pelo tratamento dos dados tratados aqui é")
-            : t("O controlador dos dados tratados aqui é")}{" "}
+            : eEstadosUnidos
+              ? t("O responsável pelos dados tratados aqui é")
+              : t("O controlador dos dados tratados aqui é")}{" "}
           <strong>{operador}</strong>
-          {op.cnpj ? ` (${ePortugal ? "NIPC" : "CNPJ"} ${op.cnpj})` : ""} —{" "}
-          {ePortugal
+          {op.cnpj ? ` (${ePortugal ? "NIPC" : eEstadosUnidos ? "EIN" : "CNPJ"} ${op.cnpj})` : ""} —{" "}
+          {ePortugal || eEstadosUnidos
             ? t(
                 "quem instalou e opera este sistema. Os autores do software não têm acesso a este servidor nem aos dados guardados nele, e não são responsáveis pelo tratamento nem operadores desses dados.",
               )
@@ -136,7 +145,11 @@ export default async function PrivacyPage() {
       <section className="space-y-2">
         <h2 className="text-base font-semibold">{t("6. Seus direitos")}</h2>
         <p>
-          {ePortugal
+          {eEstadosUnidos
+            ? t(
+                "Você pode pedir para confirmar se há tratamento, acessar seus dados, corrigir dados incompletos ou desatualizados, pedir anonimização ou eliminação, saber com quem foram compartilhados e retirar o consentimento. Nos Estados Unidos não há lei federal geral de proteção de dados; esta instalação atende esses pedidos por política própria.",
+              )
+            : ePortugal
             ? t(
                 "O RGPD garante-lhe confirmar se há tratamento, aceder aos seus dados, corrigir dados incompletos ou desatualizados, pedir anonimização ou eliminação, saber com quem foram partilhados e retirar o consentimento.",
               )
@@ -163,7 +176,11 @@ export default async function PrivacyPage() {
 
       <section className="space-y-2">
         <h2 className="text-base font-semibold">
-          {ePortugal ? t("8. Encarregado da proteção de dados e contato") : t("8. Encarregado e contato")}
+          {ePortugal
+            ? t("8. Encarregado da proteção de dados e contato")
+            : eEstadosUnidos
+              ? t("8. Contato de privacidade")
+              : t("8. Encarregado e contato")}
         </h2>
         <p>
           {op.dpoEmail ? (
@@ -172,6 +189,8 @@ export default async function PrivacyPage() {
                 ? t(
                     "Para exercer seus direitos ou tirar dúvidas sobre privacidade, fale com o encarregado da proteção de dados:",
                   )
+                : eEstadosUnidos
+                ? t("Para exercer seus direitos ou tirar dúvidas sobre privacidade, escreva para:")
                 : t("Para exercer seus direitos ou tirar dúvidas sobre privacidade, fale com o encarregado de dados:")}{" "}
               <a className="underline underline-offset-2" href={`mailto:${op.dpoEmail}`}>
                 {op.dpoEmail}
@@ -183,6 +202,10 @@ export default async function PrivacyPage() {
               {ePortugal
                 ? t(
                     "O operador ainda não publicou um endereço de contato do encarregado da proteção de dados nesta instalação. Os pedidos devem ser feitos pelos canais de atendimento da própria organização.",
+                  )
+                : eEstadosUnidos
+                ? t(
+                    "O operador ainda não publicou um endereço de contato de privacidade nesta instalação. Os pedidos devem ser feitos pelos canais de atendimento da própria organização.",
                   )
                 : t(
                     "O operador ainda não publicou um endereço de contato do encarregado de dados nesta instalação. Os pedidos devem ser feitos pelos canais de atendimento da própria organização.",

@@ -42,6 +42,20 @@ const lead = {
 };
 
 describe("ContatoNoCard — as linhas do cartão", () => {
+  it("⭐ etiquetas: uma linha com a união (separada por ·), tooltip com todas; some quando vazia", () => {
+    const { container, rerender } = render(
+      <ContatoNoCard
+        lead={{ tags: ["VIP"], contact_tags: ["vip", "indicação"], conversation_tags: ["urgente"], contact_links: [] }}
+        linhas={["etiquetas"]}
+      />,
+    );
+    const linha = container.querySelector('[data-linha-do-cartao="etiquetas"]')!;
+    expect(linha.textContent).toContain("VIP · indicação · urgente");
+    expect(linha.getAttribute("title")).toContain("VIP · indicação · urgente");
+    rerender(<ContatoNoCard lead={{ tags: [], contact_links: [] }} linhas={["etiquetas"]} />);
+    expect(container.querySelector('[data-linha-do-cartao="etiquetas"]')).toBeNull();
+  });
+
   it("⭐ padrão (sem configuração) = o card de hoje: última mensagem e depois telefone, sem e-mail", () => {
     const { container } = render(<ContatoNoCard lead={lead} />);
     expect(ordem(container)).toEqual(["ultima_mensagem", "telefone"]);
@@ -129,6 +143,15 @@ describe("EditarCartaoDialog", () => {
 
     expect(ordem(previa)).toEqual(["telefone", "utm_campaign"]);
     expect(within(previa).getByText("turmas-janeiro")).toBeInTheDocument();
+  });
+
+  it("⭐ a opção Etiquetas existe no Select e a prévia mostra a união de exemplo", async () => {
+    comQuery(<EditarCartaoDialog pipelineId="p1" linhas={["telefone"]} onFechar={() => undefined} />);
+    await userEvent.click(screen.getByRole("combobox", { name: "Linha 2" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Etiquetas" }));
+    const previa = screen.getByTestId("previa-do-cartao");
+    expect(ordem(previa)).toEqual(["telefone", "etiquetas"]);
+    expect(within(previa).getByText(/Cliente VIP · Indicação · Orçamento/)).toBeInTheDocument();
   });
 
   it("subir troca a ordem; Salvar manda só as linhas escolhidas, na ordem", async () => {

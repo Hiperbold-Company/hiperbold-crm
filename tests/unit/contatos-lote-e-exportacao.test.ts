@@ -5,6 +5,7 @@
  * teste (`bulk-delete`, `export`, `count`, `excluir-em-lote`, `alvo-de-lote`, `consulta`, o handler
  * da lista) é o real.
  */
+import type * as PerfilDoPaisModulo from "@/lib/legal/perfil-do-pais";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,7 +40,13 @@ vi.mock("@/lib/contacts/cpf-do-contato", () => ({
   idsPorHashDeCpf: vi.fn(async () => ({ ids: [], error: null })),
   idsComCpf: vi.fn(async () => ({ ids: new Set<string>(), error: null })),
   cpfsDecifradosDosContatos: (org: string, ids: readonly string[]) => cpfsDecifrados(org, ids),
+  tiposDoDocumentoDosContatos: vi.fn(async () => new Map<string, string>()),
 }));
+// O país da organização decide se o documento sai rotulado pelo tipo (EUA); aqui, Brasil.
+vi.mock("@/lib/legal/perfil-do-pais", async (importOriginal) => {
+  const real = await importOriginal<typeof PerfilDoPaisModulo>();
+  return { ...real, perfilDaOrganizacao: vi.fn(async () => real.perfilDoPais(null)) };
+});
 
 const ORG_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ORG_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

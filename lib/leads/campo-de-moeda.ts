@@ -11,10 +11,28 @@
  * catálogo (`lib/catalogo/moeda-da-org.ts`): é fato do negócio, não do idioma de
  * quem lê — e por isso o formato também é o da moeda, pela régua de `lib/money.ts`.
  *
+ * A moeda pode ser ESCOLHIDA POR CAMPO (`config.moeda`: BRL, USD ou EUR): uma empresa em
+ * real que vende imóvel nos EUA guarda o « Valor de investimento » em dólar. Sem escolha, o
+ * campo segue na moeda da organização — ver `moedaDoCampo`.
+ *
  * O VALOR GUARDADO NÃO MUDA: o campo continua gravando unidades da moeda
  * (`1250.5`). Muda só como ele é escrito e lido na tela.
  */
+import { MOEDAS_DO_CAMPO, type MoedaDoCampo } from "@/lib/schemas/settings";
 import { formatValorDoNegocio, parseReaisToCents, simboloDaMoeda } from "@/lib/money";
+
+/**
+ * A moeda de UM campo de moeda: a escolhida (`config.moeda`, ou `moeda` no item de
+ * `settings.fields`) quando é uma das aceitas; senão a da organização. Pura: valor ausente,
+ * de outro tipo ou fora da lista (`"GBP"`) cai na moeda da organização, nunca lança.
+ */
+export function moedaDoCampo(
+  campo: { moeda?: unknown; config?: { moeda?: unknown } | null } | null | undefined,
+  moedaDaOrg: string,
+): string {
+  const escolhida = campo?.config?.moeda ?? campo?.moeda;
+  return MOEDAS_DO_CAMPO.includes(escolhida as MoedaDoCampo) ? (escolhida as string) : moedaDaOrg;
+}
 
 /** O valor guardado (`1250.5`), escrito na moeda: « R$ 1.250,50 », « 1250,50 € ». */
 export function valorDoCampoDeMoeda(valor: number, moeda: string): string {

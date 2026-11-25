@@ -79,7 +79,13 @@ export function enumsDoFollowup(): EnumDoGrafo[] {
  * mostra como "Ficha do contato" (`CollectForm`) e o invariante
  * `lib/followup/vocabulario.test.ts` cobre a tradução — e aqui, como em
  * `custom`, a pergunta certa é a de tradução, não a de palavra isolada.
+ *
+ * `tem` e `sem` (condição de carteira) entram pela mesma razão: são palavras
+ * comuns em português, e os rótulos do construtor já as usam ("sem etiqueta",
+ * "sem resposta"). Barrá-las apontava esses rótulos como vazamento. O valor de
+ * wire não sai cru: a tela o mostra pelo `OPERADORES_DE_CARTEIRA`
+ * (`lib/automacoes/vocabulario.ts`), traduzido.
  */
 export const VALORES_DE_WIRE_NA_TELA_PROIBIDOS = [
   ...new Set(enumsDoFollowup().flatMap((e) => e.valores)),
-].filter((v) => v !== "custom" && v !== "contato");
+].filter((v) => !["custom", "contato", "tem", "sem"].includes(v));
