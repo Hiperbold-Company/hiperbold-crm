@@ -13,7 +13,7 @@ import { useEffect, useId, useState } from "react";
  * `tests/unit/campo-condicional-nos-pontos-de-renderizacao.test.ts`.
  */
 import { useActiveOrg } from "@/hooks/auth/AuthProvider";
-import { exemploDoCampoDeMoeda, lerCampoDeMoeda, semAMoeda, valorDoCampoDeMoeda } from "@/lib/leads/campo-de-moeda";
+import { exemploDoCampoDeMoeda, lerCampoDeMoeda, moedaDoCampo, semAMoeda, valorDoCampoDeMoeda } from "@/lib/leads/campo-de-moeda";
 import { MOEDA_PADRAO } from "@/lib/money";
 import { Input } from "@/components/ui/input";
 import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
@@ -89,6 +89,8 @@ export interface CustomFieldDef {
   publico?: boolean;
   /** 1015: a frase curta debaixo do rótulo. */
   dica_de_ajuda?: string;
+  /** A moeda ESCOLHIDA do campo `currency`; ausente = a da organização (`moedaDoCampo`). */
+  moeda?: string;
   /** 1015: aparece mesmo vazio onde a ficha esconde o vazio (aqui o formulário já mostra todos). */
   sempre_visivel?: boolean;
 }
@@ -142,17 +144,17 @@ export function CustomFieldsEditor({ fields, value, onChange, mode, disabled, cl
   // organização, e não o DDI brasileiro em duro.
   const org = useActiveOrg();
   const telefoneExemplo = perfilDoPais(org?.country).telefoneExemplo;
-  // O campo de moeda na moeda da organização (`lib/leads/campo-de-moeda.ts`).
-  const moedaDoCampo = org?.currency ?? MOEDA_PADRAO;
+  // O campo de moeda na moeda do campo, ou na da organização (`lib/leads/campo-de-moeda.ts`).
+  const moedaDaOrg = org?.currency ?? MOEDA_PADRAO;
   function set(key: string, v: unknown) {
     onChange({ ...value, [key]: v });
   }
 
-  function gravarMoeda(key: string) {
+  function gravarMoeda(key: string, moeda: string) {
     const draft = rascunhosDeMoeda[key];
     if (draft === undefined) return;
-    const raw = semAMoeda(draft, moedaDoCampo);
-    const centavos = raw === "" ? null : lerCampoDeMoeda(raw, moedaDoCampo);
+    const raw = semAMoeda(draft, moeda);
+    const centavos = raw === "" ? null : lerCampoDeMoeda(raw, moeda);
     if (centavos !== null) set(key, centavos / 100);
     else if (raw === "") set(key, null);
     setRascunhosDeMoeda((current) => {
@@ -241,10 +243,11 @@ export function CustomFieldsEditor({ fields, value, onChange, mode, disabled, cl
               </div>
             );
           case "currency": {
+            const moeda = moedaDoCampo(f, moedaDaOrg);
             const valorNumerico = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : null;
             const formatado =
               valorNumerico !== null && Number.isFinite(valorNumerico)
-                ? valorDoCampoDeMoeda(valorNumerico, moedaDoCampo)
+                ? valorDoCampoDeMoeda(valorNumerico, moeda)
                 : "";
             return (
               <div key={f.key} className="space-y-2">
@@ -255,14 +258,14 @@ export function CustomFieldsEditor({ fields, value, onChange, mode, disabled, cl
                   inputMode="decimal"
                   value={rascunhosDeMoeda[f.key] ?? formatado}
                   onChange={(e) => setRascunhosDeMoeda((current) => ({ ...current, [f.key]: e.target.value }))}
-                  onBlur={() => gravarMoeda(f.key)}
+                  onBlur={() => gravarMoeda(f.key, moeda)}
                   onKeyDown={(e) => {
                     // Enter envia o formulário sem tirar o foco. Entrega o
                     // rascunho antes do submit, usando a mesma leitura do blur.
-                    if (e.key === "Enter") gravarMoeda(f.key);
+                    if (e.key === "Enter") gravarMoeda(f.key, moeda);
                   }}
                   disabled={disabled}
-                  placeholder={exemploDoCampoDeMoeda(moedaDoCampo)}
+                  placeholder={exemploDoCampoDeMoeda(moeda)}
                 />
               </div>
             );

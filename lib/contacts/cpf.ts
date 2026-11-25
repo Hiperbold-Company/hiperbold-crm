@@ -14,10 +14,24 @@
 import { createHmac } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { tipoDeDocumento, tipoGravaComoCpf } from "@/lib/legal/tipos-de-documento";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export function normalizeCpf(raw: string): string {
   return raw.replace(/\D/g, "");
+}
+
+/**
+ * O número do documento como é CIFRADO e entra no hash, pelo TIPO (migration
+ * 1020). Sem tipo (Brasil, Portugal, contato antigo) ou `br_cpf`: só dígitos,
+ * exatamente o `normalizeCpf` de sempre. Os tipos dos EUA guardam letra
+ * (passaporte `A12345678`, Green Card `ABC1234567890`) — passar por
+ * `normalizeCpf` apagaria as letras e gravaria outro número.
+ */
+export function normalizarDocumento(raw: string, tipo?: string | null): string {
+  if (tipoGravaComoCpf(tipo)) return normalizeCpf(raw);
+  const def = tipoDeDocumento(tipo);
+  return def ? def.normaliza(raw) : normalizeCpf(raw);
 }
 
 /** Prefixo de domínio do HMAC: a mesma chave em outro uso (cupom) nunca produz o mesmo valor. */
@@ -39,6 +53,26 @@ export function hashCpf(
   const segredo = (chave ?? "").trim();
   if (segredo === "") return null;
   return createHmac("sha256", `${DOMINIO_DO_HASH_DE_CPF}${segredo}`).update(normalizeCpf(raw)).digest("hex");
+}
+
+/**
+ * O hash do documento, pelo tipo. CPF (e documento sem tipo) é `hashCpf` —
+ * o mesmo valor de sempre, então busca e deduplicação do Brasil não mudam e o
+ * CPF de um brasileiro numa organização dos EUA casa com o mesmo CPF. Nos
+ * demais tipos o tipo entra na mensagem do HMAC: passaporte e ITIN de pessoas
+ * diferentes com os mesmos caracteres não colidem no `uniq_contacts_org_cpf`.
+ */
+export function hashDocumento(
+  raw: string,
+  tipo: string | null | undefined,
+  chave: string | undefined = process.env.CPF_ENCRYPTION_KEY,
+): string | null {
+  if (tipoGravaComoCpf(tipo)) return hashCpf(raw, chave);
+  const segredo = (chave ?? "").trim();
+  if (segredo === "") return null;
+  return createHmac("sha256", `${DOMINIO_DO_HASH_DE_CPF}${segredo}`)
+    .update(`${tipo}:${normalizarDocumento(raw, tipo)}`)
+    .digest("hex");
 }
 
 /**

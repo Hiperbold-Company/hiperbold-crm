@@ -74,6 +74,7 @@ export const O_QUE_FICA = {
   dpo_email: "o encarregado a quem ele se dirige",
   lei_citada: "a lei que fundamenta a resposta",
   lei_rotulo: "o rótulo dessa lei no país dele",
+  sem_lei_geral: "a marca de que o país dele não tem lei geral de proteção de dados a citar (Estados Unidos)",
   papel_controlador:
     "como o documento chama quem responde pelos dados no país dele (issue #2344)",
   papel_encarregado:

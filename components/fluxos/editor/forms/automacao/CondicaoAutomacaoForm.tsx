@@ -11,6 +11,7 @@ import {
   ALVOS,
   fraseDaRegraNova,
   OPERADORES,
+  OPERADORES_DE_CARTEIRA,
   OPERADORES_DE_ETAPA,
   OPERADORES_DE_TAG,
   OPERADORES_SEM_VALOR,
@@ -52,6 +53,8 @@ export function regraDeAutomacaoEmBranco(kind: Kind = "field"): NovaConditionChe
       return { kind, status: "open" };
     case "window_open":
       return { kind };
+    case "carteira":
+      return { kind, op: "tem" };
     case "business_hours":
       // O mesmo padrão do horário da espera: dias úteis, horário comercial.
       return { kind, start: "09:00", end: "18:00", weekdays: [1, 2, 3, 4, 5] };
@@ -291,6 +294,17 @@ function CamposDaRegra({
         <p className="text-xs text-text-muted" data-testid={`${prefixo}-janela-ajuda`}>
           {t("Sim quando o contato escreveu no WhatsApp nas últimas 24 horas e dá para mandar texto livre. Fora disso, só modelo aprovado sai.")}
         </p>
+      );
+    case "carteira":
+      return (
+        <Campo id={`${prefixo}-carteira`} rotulo={t("Comparação")}>
+          <Seletor
+            id={`${prefixo}-carteira`}
+            valor={regra.op}
+            opcoes={opcoesDe(OPERADORES_DE_CARTEIRA, t)}
+            onChange={(v) => onChange({ ...regra, op: v as typeof regra.op })}
+          />
+        </Campo>
       );
     case "business_hours":
       return <HorarioDaRegra prefixo={prefixo} regra={regra} onChange={onChange} />;

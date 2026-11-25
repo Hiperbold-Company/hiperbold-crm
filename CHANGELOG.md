@@ -8,6 +8,57 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.5.0] — 2026-11-24
+
+### Adicionado
+
+- **Automação define a carteira do cliente e pergunta se ele já tem carteira** O bloco "Ações no CRM" das Automações ganha a ação "Definir carteira": o cliente entra na carteira do vendedor escolhido. Se o cliente já estiver na carteira de outro vendedor, a ação mantém o dono atual (o padrão) ou troca para o vendedor escolhido, conforme a opção "Se o cliente já tiver carteira". Como na troca de carteira pela tela, os negócios abertos sem responsável e as conversas abertas do dono anterior (ou sem dono, fora da IA) passam para o novo dono. O vendedor precisa ser atendente, gerente ou administrador ativo; se não for, a ação sai por "Erro". O bloco "Condição" ganha a regra "Carteira do contato", com "Contato tem carteira" e "Contato sem carteira". Não é preciso mudar nada para atualizar.
+
+- **Botão "Duplicar" nos cartões de automação e de follow-up** Na tela Automações, o cartão de cada automação e de cada follow-up ganha o botão "Duplicar". Ele cria uma cópia com o mesmo gatilho, os mesmos filtros e os mesmos blocos, chamada "<nome> (cópia)" ("(cópia 2)" na segunda vez). A cópia nasce como rascunho, desligada: não dispara até alguém revisar e publicar, então o original e a cópia nunca rodam em dobro sem querer. Se a automação inicia ela mesma ("Iniciar outra automação" apontando para si), a cópia passa a iniciar a cópia. Duplicar exige o papel de gerente, fica no histórico de auditoria e conta no limite de automações do plano (follow-up não conta). Regras antigas não têm o botão: passe-as para o formato novo e duplique depois. Não é preciso mudar nada para atualizar.
+
+- **Etiquetas no cartão do funil** O cartão do negócio no funil mostra as etiquetas do contato, para identificar o lead sem abrir a ficha. Não é preciso mudar nada para atualizar.
+
+- **Contato com negócio em aberto não pode mais ser excluído** Um contato que tem negócio em aberto no Pipeline não pode mais ser excluído, nem pela linha
+  do contato nem em lote. A tela explica o motivo e leva ao Pipeline, onde o negócio pode ser
+  ganho, perdido ou passado para outro contato. Negócios já ganhos ou perdidos seguem como antes
+  (ficam sem contato). Não é preciso mudar nada para atualizar.
+
+- **Inglês de volta ao seletor de idioma** O inglês volta a aparecer no seletor de idioma do topo (PT/EN). O catálogo em inglês agora é carregado de fato, então a tela muda ao escolher "EN". Telas conferidas em inglês: login, Conexões (incluindo Instagram e Messenger), Chat e Automações. No editor de automação, os nomes padrão dos blocos ("Início", "Fim", "Ações de CRM", "Operação de campo") e o texto com que os blocos de mensagem e de resposta ao comentário nascem aparecem no idioma de quem monta o fluxo. Nomes e textos que o usuário escreveu não são traduzidos. O espanhol segue fora do seletor. Não é preciso mudar nada para atualizar.
+
+- **Toda empresa pode enviar a própria logo** Em Configurações › Organização, quem administra a empresa agora envia a logo dela,
+  mesmo com a marca própria desligada na instalação. A logo aparece num círculo ao lado
+  do nome da empresa no seletor de empresas do menu (sem logo, o círculo mostra as
+  iniciais) e no cabeçalho dos PDFs da empresa, como a proposta enviada ao cliente e a
+  conversa exportada. Com a marca própria desligada, a logo não muda o nome, a cor nem a
+  logo do sistema. Se quem administra a instalação ligar a marca própria depois, as logos
+  já enviadas passam a valer também como logo do sistema de cada empresa.
+
+- **Campo personalizado de moeda em real, dólar ou euro** O tipo de dado "Moeda" dos campos personalizados deixou de seguir só a moeda da empresa: cada campo pode ser em real (BRL), dólar (USD) ou euro (EUR), e a ficha do contato e do negócio mostra o valor na moeda do campo. Trocar a moeda de um campo não converte os valores já gravados. Também corrige a edição de um campo personalizado pela tela, que podia ser recusada ao salvar. A atualização aplica uma migration no banco; não é preciso mudar nada à mão.
+
+- **Botão "Nova etiqueta" em Configurações › Etiquetas** Agora dá para criar uma etiqueta, com cor opcional, direto em Configurações › Etiquetas, antes de usá-la em qualquer contato, negócio ou conversa. Ela já aparece para escolher no seletor de etiquetas. Nome repetido é recusado. Não é preciso mudar nada para atualizar.
+
+- **Estados Unidos como país da empresa, com tipo de documento do contato** A empresa pode escolher Estados Unidos como país. A ficha do contato passa a ter um seletor de tipo de documento (passaporte, carteira de motorista, ITIN e outros; o SSN não é guardado), e a importação aceita telefone com +1. Não é preciso mudar nada para atualizar.
+
+- **Várias versões da resposta no comentário do Instagram, sorteadas** O bloco "Responder no comentário" das automações aceita até 10 versões do texto: a de sempre vira a "Versão 1" e o botão "Adicionar outra versão" acrescenta as demais. A cada comentário, uma delas é sorteada. Repetir o mesmo texto em todos os comentários é lido como spam pelo Instagram; variar reduz esse risco. Versão em branco nunca é sorteada. O bloco "Responder em privado" continua com um texto só. Automações que já existem seguem com uma versão e não precisam de mudança.
+
+- **O negócio abre a conversa pela conexão que você escolher** No painel do negócio, aberto pelo Funil, o botão "Abrir conversa no Chat do CRM" ganhou logo abaixo a escolha da conexão. Ela já vem marcada com a conexão de que você é responsável em Configurações › Atendimento (com mais de uma, a primeira conectada), e a conversa abre (ou começa) por ela; dá para trocar antes de clicar. A lista mostra só as conexões que você pode usar. Quem não é responsável de nenhuma conexão vê "Automático", que funciona como antes. Não é preciso mudar nada na atualização.
+
+- **WhatsApp por QR Code via WAHA volta a ser opção em Conexões** Quando a instalação tem o WAHA configurado (`WAHA_API_BASE_URL` e `WAHA_API_KEY`), o "Criar" da tela de Conexões volta a oferecer "WhatsApp por QR Code (WAHA)", ao lado do WhatsApp por QR Code e do WhatsApp oficial, para todas as empresas. Quem administra a conta cria a conexão, lê o QR Code (que se renova sozinho) ou usa o código de pareamento, e acompanha até "Conectado". O cartão da conexão diz "WhatsApp por QR Code (WAHA)" e, no Gerenciar, reconecta e remove pelo próprio WAHA. O limite de conexões do plano vale como nos outros tipos. Sem o WAHA configurado nada muda: a opção não aparece, e a instalação também passa a subir sem as variáveis `WAHA_*`, que deixaram de ser obrigatórias. Para as mensagens recebidas entrarem no CRM, o WAHA precisa entregar os eventos ao app pela rede interna, com `WAHA_GLOBAL_WEBHOOK_ENABLED=true` no `.env` (a entrada global do WAHA segue fechada por padrão).
+
+### Corrigido
+
+- **Automação com gatilho "Mensagem recebida" volta a começar no Messenger e no Direct do Instagram** Mensagens que chegavam pelo Messenger ou pelo Direct do Instagram não iniciavam nenhuma automação com o gatilho "Mensagem recebida": a conferência de "a pessoa está respondendo a uma automação?" consultava uma coluna que não existe e falhava, e o aviso da mensagem ia sendo adiado até ser descartado. As mensagens do WhatsApp não eram afetadas. Não é preciso mudar nada para atualizar.
+
+- **Horários das execuções de automação no fuso da empresa** A data e a hora da última execução e da lista de execuções das automações aparecem no fuso configurado da empresa, iguais no servidor e no navegador.
+
+- **O Direct da resposta privada a comentário do Instagram aparece no Chat** Quando uma automação responde um comentário do Instagram em privado (bloco "Responder em privado"), o Direct chegava ao cliente, mas não aparecia na conversa do Chat. Agora a mensagem entra na conversa do contato como enviada pela automação, sem duplicar quando o Instagram confirma o envio e sem pausar o agente de IA. Quem comentou e ainda não tinha conversa ganha o contato e a conversa. Não é preciso mudar nada para atualizar.
+
+- **Ao conectar Instagram ou Messenger com várias páginas, você escolhe quais entram nesta empresa** Antes, ao conectar o Instagram ou o Messenger, todas as páginas e contas que o login da Meta alcançava viravam conexões na empresa aberta. Quem administra páginas de vários clientes podia conectar, sem querer, páginas de outros clientes na empresa errada. Agora, se o login trouxer duas ou mais contas, nada é conectado na volta: abre uma janela "Escolha quais páginas conectar nesta empresa", com a lista de contas e nenhuma marcada. Uma conta já conectada em outra empresa aparece travada. Você marca só as desta empresa, no máximo 20 por vez, e só elas são conectadas e passam a receber mensagens. Cancelar não conecta nada. A escolha vale por 10 minutos e só na empresa e na conta de usuário em que você clicou em Conectar. Com uma conta só, ela continua sendo conectada direto. Não é preciso mudar nada para atualizar.
+
+- **Next.js atualizado para 16.4.6, com correção de segurança** A base da aplicação passou do Next.js 16.4.3 para o 16.4.6, versão que corrige uma vulnerabilidade conhecida. Nada muda na tela nem na configuração da instalação.
+
+- **"Outro motivo" com detalhe volta a fechar o negócio como perdido** Ao marcar um negócio como perdido com "Outro motivo" e escrever um detalhe, o CRM recusava o texto por não estar na lista do funil. Agora a perda é gravada como "Outro motivo" e o detalhe fica na linha do tempo do negócio, no cartão, no arrasto e na ação em lote.
+
 ## [2.4.0] — 2026-11-17
 
 ### Adicionado
@@ -14820,7 +14871,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.4.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.1.0...v2.2.0

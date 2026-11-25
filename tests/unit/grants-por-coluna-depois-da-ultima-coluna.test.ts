@@ -46,7 +46,8 @@ describe("grant por coluna fica depois da última coluna de cada tabela", () => 
   }
 
   it("o controle negativo: sem o bloco no fim, contacts reprovaria", () => {
-    // sonda-do-baseline: primeira-de-proposito — o controle mede o bloco ORIGINAL da 0967, no meio do arquivo.
+    // O controle mede o bloco ORIGINAL da 0967, no meio do arquivo: desde a 1020 o bloco da 0998 também
+    // exclui `document_type`, então esta linha só aparece ali (uma ocorrência, sem ambiguidade de âncora).
     const antigo = BASELINE.indexOf("and a.attname not in ('cpf_hash', 'cpf_encrypted');");
     expect(antigo).toBeGreaterThan(0);
     expect(ultimaColunaAcrescentada("contacts")).toBeGreaterThan(antigo);

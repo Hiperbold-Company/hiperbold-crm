@@ -76,6 +76,18 @@ export async function enrollFollowupFlow(
       status: 422,
     };
   }
+  // Automação visual só começa pela porta dela (`fn_automacao_iniciar`, com papel,
+  // gatilho, reentrada e teto). Inscrita por aqui, uma automação com "Definir
+  // carteira" deixava um atendente tirar o cliente da carteira de um colega,
+  // o que a tela da carteira recusa.
+  if (pointer.surface === "automacao") {
+    return {
+      ok: false,
+      code: "flow_not_enrollable",
+      message: "Automação começa pelo gatilho dela, não por inscrição.",
+      status: 422,
+    };
+  }
 
   if (pointer.status !== "active" || !pointer.active_version_id) {
     return {

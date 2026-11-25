@@ -166,9 +166,11 @@ test.describe("Lote 12 — quadro do funil", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  test('#938 "Outro" — com detalhe fora da lista é RECUSADO antes do clique; sem detalhe passa', async ({
-    page,
-  }) => {
+  // Desde o conserto do "Outro motivo" (lote 24/11), o detalhe NÃO é o motivo:
+  // o motivo grava sempre `other` e o texto vai à parte, para a linha do tempo.
+  // Antes, o texto virava o `lost_reason` e o vocabulário do funil o recusava —
+  // a tela barrava antes do clique. Agora o detalhe livre é aceito.
+  test('#938 "Outro" — com detalhe livre é ACEITO: grava other e o detalhe vai à parte', async ({ page }) => {
     await login(page, c.users.manager!.email, c.password);
     await abreQuadro(page, pipelineId, `Outro ${SUFIXO}`);
     const card = page.getByRole("group", { name: `Negócio: Outro ${SUFIXO}` });
@@ -177,27 +179,21 @@ test.describe("Lote 12 — quadro do funil", () => {
 
     await page.locator('input[name="lost-reason"][value="other"]').check();
     const confirmar = page.getByRole("button", { name: "Confirmar" });
-    registra(`#938 outro · vazio, Confirmar habilitado = ${await confirmar.isEnabled()}`);
     expect(await confirmar.isEnabled()).toBe(true);
-    await expect(page.getByText(/cadastre em CRM › Ver tudo em CRM › Etapas do funil/)).toBeVisible();
 
     await page.getByLabel(/Detalhe \(opcional\)/).fill("Mudou de ideia");
-    await expect(page.getByRole("alert")).toBeVisible();
-    registra(
-      `#938 outro · com texto fora da lista: alerta="${await page.getByRole("alert").innerText()}" · Confirmar habilitado = ${await confirmar.isEnabled()}`,
-    );
-    expect(await confirmar.isEnabled()).toBe(false);
-    await captura(page, "938-03-outro-texto-recusado");
-
-    // Vazio de novo: volta a ser o escape que o servidor aceita.
-    await page.getByLabel(/Detalhe \(opcional\)/).fill("");
     await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByText(/O detalhe fica na linha do tempo do negócio/)).toBeVisible();
+    registra(`#938 outro · com detalhe livre: Confirmar habilitado = ${await confirmar.isEnabled()}`);
+    expect(await confirmar.isEnabled()).toBe(true);
+    await captura(page, "938-03-outro-com-detalhe-aceito");
+
     const resposta = page.waitForResponse(
       (r) => r.url().includes(`/leads/${leads.outro}/lose`) && r.request().method() === "POST",
     );
     await confirmar.click();
     const r = await resposta;
-    registra(`#938 outro · vazio → POST /lose = ${r.status()}`);
+    registra(`#938 outro · com detalhe → POST /lose = ${r.status()}`);
     expect(r.status()).toBe(200);
     const { data } = await admin
       .from("crm_leads")
@@ -206,7 +202,7 @@ test.describe("Lote 12 — quadro do funil", () => {
       .single();
     registra(`#938 outro · banco = ${JSON.stringify(data)}`);
     expect(data).toMatchObject({ status: "lost", lost_reason: "other" });
-    await captura(page, "938-04-outro-vazio-gravado");
+    await captura(page, "938-04-outro-com-detalhe-gravado");
   });
 
   // ══════════════════════════════════════════════════════════════════════════

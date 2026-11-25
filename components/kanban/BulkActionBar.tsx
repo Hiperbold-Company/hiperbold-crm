@@ -160,12 +160,16 @@ export function BulkActionBar({
     );
   };
 
-  const runLoseMove = async (motivo: string) => {
+  const runLoseMove = async (motivo: string, detalhe?: string) => {
     if (!perdaPendente) return;
     const res = await bulk.mutateAsync({
       action: "move",
       lead_ids: selectedIds,
-      params: { stage_id: perdaPendente, lost_reason: motivo },
+      params: {
+        stage_id: perdaPendente,
+        lost_reason: motivo,
+        ...(detalhe ? { lost_reason_detail: detalhe } : {}),
+      },
     });
     const n = res.data.updated_count;
     toast.success(
@@ -234,12 +238,16 @@ export function BulkActionBar({
   // `stages` que a barra já recebe diz quem é.
   const etapaDePerda = stages.find((s) => s.is_lost) ?? null;
 
-  const runLose = async (motivo: string) => {
+  const runLose = async (motivo: string, detalhe?: string) => {
     if (!etapaDePerda) return;
     const res = await bulk.mutateAsync({
       action: "move",
       lead_ids: selectedIds,
-      params: { stage_id: etapaDePerda.id, lost_reason: motivo },
+      params: {
+        stage_id: etapaDePerda.id,
+        lost_reason: motivo,
+        ...(detalhe ? { lost_reason_detail: detalhe } : {}),
+      },
     });
     const n = res.data.updated_count;
     toast.success(`${n} ${t(n > 1 ? "marcados como perdidos." : "marcado como perdido.")}`);

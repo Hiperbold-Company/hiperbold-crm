@@ -114,6 +114,17 @@ export const crmActionSchema = z.discriminatedUnion("type", [
     /** Todas as conversas abertas do contato (não só a do canal do gatilho). Ausente = só uma. */
     todas: z.boolean().optional(),
   }),
+  /**
+   * Definir a CARTEIRA do cliente (`contacts.carteira_user_id`, o vendedor dono
+   * do contato) pela porta única `fn_definir_carteira_do_cliente`, com a origem
+   * `automacao`. `se_ja_tiver`: o que fazer quando o contato já está na carteira
+   * de OUTRO vendedor — `manter` não grava nada; `substituir` grava sempre.
+   */
+  z.strictObject({
+    type: z.literal("set_carteira"),
+    user_id: uuid,
+    se_ja_tiver: z.enum(["manter", "substituir"]),
+  }),
   z.strictObject({
     type: z.literal("notify"),
     to: z.union([z.literal("owner"), z.array(uuid).min(1).max(10)]),
@@ -318,6 +329,12 @@ export const regrasNovasDeCondicao = {
    * cair na saída "Erro" com `janela_fechada`.
    */
   window_open: { kind: z.literal("window_open") },
+  /**
+   * "Contato tem carteira" / "Contato sem carteira": o contato está (ou não) na
+   * carteira de um vendedor (`contacts.carteira_user_id`). Sem contato, nenhuma
+   * das duas responde Sim.
+   */
+  carteira: { kind: z.literal("carteira"), op: z.enum(["tem", "sem"]) },
   business_hours: {
     kind: z.literal("business_hours"),
     start: z.string().max(5),

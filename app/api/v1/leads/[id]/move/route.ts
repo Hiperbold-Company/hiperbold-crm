@@ -29,6 +29,8 @@ import {
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import {
   decideMotivoDaPerda,
+  detalheDoMotivoOutro,
+  razaoDaPerdaNaTimeline,
   recusaDeMotivoDaPerdaPeloBanco,
 } from "@/lib/leads/motivo-da-perda";
 import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
@@ -309,6 +311,11 @@ export async function POST(
     .eq("organization_id", orgId)
     .maybeSingle();
 
+  // O texto de "Outro motivo" só existe se ESTA escrita gravou `other`.
+  const detalheOutro = detalheDoMotivoOutro(
+    veredito.patch.lost_reason,
+    input.lost_reason_detail,
+  );
   const atividade = await emitLeadActivity(supabase, {
     organizationId: lead.organization_id,
     leadId,
@@ -317,11 +324,14 @@ export async function POST(
     sourceModule: "crm",
     sourceId: leadId,
     actor: authz.actor,
-    reason: stageChangeReason(fromStage?.name ?? null, stage.name),
+    reason: detalheOutro
+      ? razaoDaPerdaNaTimeline("other", detalheOutro)
+      : stageChangeReason(fromStage?.name ?? null, stage.name),
     payload: {
       from_stage_id: lead.stage_id,
       to_stage_id: input.stage_id,
       pipeline_id: lead.pipeline_id,
+      ...(detalheOutro ? { lost_reason_detail: detalheOutro } : {}),
     },
   });
   if (!atividade.ok) {

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { roleAtLeast } from "@/lib/auth/types";
-import { PAIS_PADRAO, perfilDoPais } from "@/lib/legal/perfil-do-pais";
+import { PAIS_PADRAO, perfilDoPais, validaDocumentoDoContato } from "@/lib/legal/perfil-do-pais";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,8 @@ interface FormShape {
   email?: string;
   phone_number?: string;
   cpf?: string;
+  /** O tipo do documento — só existe em país com seletor (EUA). */
+  document_type?: string;
   /** As etiquetas do contato novo — o seletor grava esta lista. */
   tags?: string[];
 }
@@ -122,11 +124,18 @@ export function NewContactDialog({
       email: "",
       phone_number: "",
       cpf: "",
+      document_type: "",
       tags: [],
     },
   });
 
   const cpfError = form.formState.errors.cpf;
+  // País com seletor de tipo de documento (EUA, decisão de 24/11/2026): o
+  // titular escolhe QUAL documento informa, e o número segue a régua do tipo.
+  const tiposDeDocumento = perfil.tiposDeDocumento ?? [];
+  const comSeletor = tiposDeDocumento.length > 0;
+  const tipoEscolhido = useWatch({ control: form.control, name: "document_type" }) ?? "";
+  const tipoAtual = tiposDeDocumento.find((tipo) => tipo.codigo === tipoEscolhido) ?? null;
   // ENQUANTO O DOCUMENTO ESTIVER INVÁLIDO, O ENVIO FICA IMPEDIDO (#3496).
   // Avisar no campo e deixar o clique seguir faria o aviso virar decoração: o
   // botão é a segunda testemunha do mesmo erro, e não a primeira. Quem digitou
@@ -186,6 +195,9 @@ export function NewContactDialog({
     if (values.email?.trim()) payload.email = values.email.trim();
     if (values.phone_number?.trim()) payload.phone_number = values.phone_number.trim();
     if (values.cpf?.trim()) payload.cpf = values.cpf.trim();
+    // O tipo só vai quando o país tem seletor e há número: no Brasil e em
+    // Portugal o servidor recusa o campo (o tipo é implícito).
+    if (comSeletor && values.cpf?.trim() && values.document_type) payload.document_type = values.document_type;
     if (tags.length) payload.tags = tags;
 
     // A MESMA régua do servidor: a tela que mostra 'Bilhete' não pode
@@ -267,8 +279,29 @@ export function NewContactDialog({
           <div className="space-y-2">
             {/* O documento é o do PAÍS da organização — a API já valida por ele
                 (`contactCreateSchemaDoPais`); só a tela escrevia "CPF" em duro. */}
+            {comSeletor && (
+              <>
+                <Label htmlFor="document_type">{t("Tipo de documento")}</Label>
+                <select
+                  id="document_type"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  {...form.register("document_type", {
+                    onChange: () => {
+                      if ((form.getValues("cpf") ?? "").trim() !== "") void form.trigger("cpf");
+                    },
+                  })}
+                >
+                  <option value="">{t("Escolha o tipo")}</option>
+                  {tiposDeDocumento.map((tipo) => (
+                    <option key={tipo.codigo} value={tipo.codigo}>
+                      {t(tipo.rotulo)}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
             <Label htmlFor="cpf">
-              {perfil.documento.rotulo} ({t("opcional")})
+              {comSeletor ? t("Número do documento") : perfil.documento.rotulo} ({t("opcional")})
             </Label>
             {/* Validação no CAMPO, não no rodapé (#3496).
                 O servidor já recusava o documento pelo perfil do país; a tela
@@ -278,13 +311,17 @@ export function NewContactDialog({
                 embaixo do input. Opcional continua opcional: vazio passa. */}
             <Input
               id="cpf"
-              placeholder={perfil.documento.exemplo}
+              placeholder={tipoAtual?.exemplo ?? perfil.documento.exemplo}
               aria-invalid={cpfError ? true : undefined}
               aria-describedby={cpfError ? "cpf-erro" : undefined}
               {...form.register("cpf", {
                 validate: (valor) => {
                   const texto = (valor ?? "").trim();
                   if (texto.length === 0) return true;
+                  if (comSeletor) {
+                    const r = validaDocumentoDoContato(perfil, texto, form.getValues("document_type"));
+                    return r.ok || t(r.mensagem);
+                  }
                   return perfil.documento.valida(texto) || perfil.documento.mensagemInvalido;
                 },
               })}

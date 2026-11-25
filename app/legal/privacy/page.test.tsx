@@ -11,6 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: async () => ({ data: { user: null } }) },
   }),
 }));
+const paisDoOperador = vi.hoisted(() => ({ valor: null as string | null }));
 vi.mock("@/lib/i18n/idiomaAnonimo", () => ({ idiomaDoVisitante: async () => "pt-BR" }));
 vi.mock("@/lib/legal/operador", () => ({
   resolverOperador: async () => ({
@@ -23,7 +24,7 @@ vi.mock("@/lib/legal/operador", () => ({
     resolvido: false,
     // Coluna vazia = Brasil (lib/legal/perfil-do-pais.ts). O vocabulário da
     // política em PT é coberto por `lgpd-rotulos-por-pais.test.tsx` (#2344).
-    pais: null as string | null,
+    pais: paisDoOperador.valor,
   }),
   nomeDoOperador: () => "o operador desta instalação",
 }));
@@ -69,5 +70,20 @@ describe("/legal/privacy — seção dos dados do Google", () => {
       "7. Segurança",
       "8. Encarregado e contato",
     ]);
+  });
+
+  it("Estados Unidos: sem LGPD nem RGPD, papéis descritos pelo que fazem (24/11/2026)", async () => {
+    paisDoOperador.valor = "US";
+    try {
+      const { container } = render(await PrivacyPage());
+      const texto = container.textContent ?? "";
+      expect(texto).not.toMatch(/LGPD|RGPD/);
+      expect(texto).toContain("Nos Estados Unidos não há lei federal geral de proteção de dados");
+      const titulos = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+      expect(titulos).toContain("1. Quem é o responsável pelos dados");
+      expect(titulos).toContain("8. Contato de privacidade");
+    } finally {
+      paisDoOperador.valor = null;
+    }
   });
 });

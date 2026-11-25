@@ -183,6 +183,16 @@ describe("#3026 — a porta da carteira: quem não é agent+ não grava", () => 
       expect.objectContaining({ p_org: ORG, p_actor: DONO, p_contact: CONTATO, p_dono: DONO }),
     );
   });
+
+  it("a auditoria diz de qual empresa é e quem trocou o dono", async () => {
+    const resposta = await PATCH(pedido(DONO), { params: Promise.resolve({ id: CONTATO }) });
+
+    expect(resposta.status).toBe(200);
+    expect(mocks.audit).toHaveBeenCalledTimes(1);
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "contact.carteira_changed", organizationId: ORG, actorUserId: DONO }),
+    );
+  });
 });
 
 /**
