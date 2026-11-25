@@ -42,7 +42,6 @@ import { mfaEmDivida } from "@/lib/auth/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { vocabularioDeTagsSchema, type LinhaDeVocabulario } from "@/lib/schemas/tags";
 import { normalizarTag } from "@/lib/contacts/tag-normalizada";
-import { atualizarSettingDaOrganizacao } from "@/lib/organizations/atualizar-setting";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -178,13 +177,9 @@ export async function POST(req: NextRequest): Promise<Response> {
 
 /**
  * `criar`: a etiqueta nasce no vocabulário curado (`organizations.settings.tags`)
- * antes de qualquer contato, negócio ou conversa usá-la. Sem migration: é só uma
- * entrada nova na lista que `fn_vocabulario_de_tags*` já lê. A chave `tags` é
- * gravada pelo escritor de uma chave só (D-132), nunca regravando o `settings`.
- *
- * ponytail: ler a lista e regravá-la inteira deixa uma janela em que dois
- * "criar" quase simultâneos na mesma organização perdem um deles; o 2º clique
- * do operador resolve, e a função atômica de caminho não tem "acrescentar".
+ * antes de qualquer contato, negócio ou conversa usá-la. O acréscimo é atômico no
+ * banco (`fn_acrescentar_etiqueta_ao_vocabulario`, migration 1023): trava a linha da
+ * organização, recusa duplicata e teto e grava só a chave `tags`.
  */
 async function criarEtiqueta(p: {
   db: Awaited<ReturnType<typeof createClient>>;
@@ -212,31 +207,22 @@ async function criarEtiqueta(p: {
   if (pagina.data.items.some((linha) => normalizarTag(linha.tag) === nome))
     return fail("tag_ja_existe", "Essa etiqueta já existe.", 409, { requestId });
 
-  const { data: linha, error: erroDeLeitura } = await db
-    .from("organizations")
-    .select("settings")
-    .eq("id", auth.org.orgId)
-    .maybeSingle();
-  if (erroDeLeitura) return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
-  const bruta = (linha as { settings?: Record<string, unknown> | null } | null)?.settings?.["tags"];
-  const curadas: unknown[] = Array.isArray(bruta) ? bruta : [];
-  const nomeDe = (e: unknown): string =>
-    typeof e === "string" ? e : typeof (e as { tag?: unknown } | null)?.tag === "string" ? (e as { tag: string }).tag : "";
-  if (curadas.some((e) => normalizarTag(nomeDe(e)) === nome))
-    return fail("tag_ja_existe", "Essa etiqueta já existe.", 409, { requestId });
-  if (curadas.length >= TETO_DO_VOCABULARIO)
+  // A checagem, o teto e o acréscimo são UM passo no banco, com a linha da organização travada:
+  // dois "criar" simultâneos se enfileiram e o segundo parte da lista que o primeiro gravou.
+  const { data: situacao, error: erroDoAcrescimo } = await createAdminClient().rpc(
+    "fn_acrescentar_etiqueta_ao_vocabulario",
+    { p_org: auth.org.orgId, p_nome: nome, p_cor: cor, p_teto: TETO_DO_VOCABULARIO },
+  );
+  if (erroDoAcrescimo) return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
+  if (situacao === "ja_existe") return fail("tag_ja_existe", "Essa etiqueta já existe.", 409, { requestId });
+  if (situacao === "limite")
     return fail(
       "limite_de_etiquetas",
       `O vocabulário chegou ao limite de ${TETO_DO_VOCABULARIO} etiquetas. Exclua ou junte alguma antes de criar outra.`,
       422,
       { requestId },
     );
-
-  const gravou = await atualizarSettingDaOrganizacao(createAdminClient(), auth.org.orgId, ["tags"], [
-    ...curadas,
-    cor ? { tag: nome, cor } : { tag: nome },
-  ]);
-  if (!gravou.ok) return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
+  if (situacao !== "criada") return fail("internal_error", "Não foi possível concluir a operação.", 500, { requestId });
 
   const resultado = { tag: nome, cor };
   void audit({
