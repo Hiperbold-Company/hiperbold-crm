@@ -239,6 +239,7 @@ export const GRUPOS_DAS_CONFIGURACOES: readonly GrupoDaColuna[] = [
       "/app/settings/tenant/proposals",
       "/app/settings/tenant/financeiro",
       "/app/settings/campos-personalizados",
+      "/app/settings/motivos-de-perda",
       "/app/settings/automacoes",
     ],
   },
