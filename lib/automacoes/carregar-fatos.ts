@@ -53,7 +53,7 @@ export async function carregarFatosDaAutomacao(
   const [{ data: contato, error: erroContato }, { data: negocios, error: erroNegocios }] = await Promise.all([
     admin
       .from("contacts")
-      .select("id, name, email, phone_number, birthdate, tags, custom_fields, source_metadata")
+      .select("id, name, email, phone_number, birthdate, tags, custom_fields, source_metadata, carteira_user_id")
       .eq("organization_id", orgId)
       .eq("id", contactId)
       .maybeSingle(),
@@ -95,6 +95,7 @@ export async function carregarFatosDaAutomacao(
           tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
           custom_fields: objeto(c.custom_fields),
           anuncio: anuncioDoFluxo(c.source_metadata),
+          carteira_user_id: (c.carteira_user_id as string | null | undefined) ?? null,
         }
       : null,
     negocio,

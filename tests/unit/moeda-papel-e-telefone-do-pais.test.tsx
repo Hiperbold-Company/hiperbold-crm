@@ -116,6 +116,32 @@ describe("1. o campo de moeda segue a moeda da organização", () => {
     expect(plano((screen.getByLabelText("Orçamento") as HTMLInputElement).value)).toBe(plano(valorDoCampoDeMoeda(1250.5, "EUR")));
   });
 
+  it("campo em dólar numa organização em euro: o editor e o diálogo usam a moeda DO CAMPO", () => {
+    const mudancas: Array<Record<string, unknown>> = [];
+    const campos = [{ key: "invest", label: "Investimento", type: "currency" as const, moeda: "USD" as const }];
+    render(<CustomFieldsEditor fields={campos} value={{ invest: 1250.5 }} onChange={(v) => mudancas.push(v)} mode="lead" />);
+    const campo = screen.getByLabelText("Investimento") as HTMLInputElement;
+    expect(plano(campo.value)).toBe("$1,250.50");
+    expect(plano(campo.placeholder)).toBe(plano(exemploDoCampoDeMoeda("USD")));
+    fireEvent.change(campo, { target: { value: "$1,300.25" } });
+    fireEvent.blur(campo);
+    expect(mudancas.at(-1)).toEqual({ invest: 1300.25 });
+
+    const confirmados: Array<{ customFields: Record<string, unknown> }> = [];
+    render(
+      <CamposObrigatoriosDialog
+        open
+        onOpenChange={() => {}}
+        recusa={{ args: {} as never, faltando: [{ chave: "invest", rotulo: "Investimento", tipo: "currency", moeda: "USD" }] }}
+        onConfirmar={(v) => confirmados.push(v)}
+      />,
+    );
+    const exemplo = plano(exemploDoCampoDeMoeda("USD", 1250));
+    fireEvent.change(screen.getByPlaceholderText((_, el) => plano(el?.getAttribute("placeholder")) === exemplo), { target: { value: "1,300.25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mover agora" }));
+    expect(confirmados).toEqual([{ customFields: { invest: 1300.25 } }]);
+  });
+
   it("no editor, só o símbolo apaga o campo, e texto que não é número não grava nada", () => {
     const mudancas: Array<Record<string, unknown>> = [];
     const campos = [{ key: "orcamento", label: "Orçamento", type: "currency" as const }];

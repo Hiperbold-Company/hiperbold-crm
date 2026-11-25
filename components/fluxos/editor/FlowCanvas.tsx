@@ -308,7 +308,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
           ? configPadraoDaAcao(triggerKind)
           : type === "condition" && surface === "automacao"
             ? { combinator: "and" as const, checks: [regraDeAutomacaoEmBranco()] }
-            : visual.defaultConfig();
+            : visual.defaultConfig(t);
       const newNode: RFNode = {
         id,
         type,
@@ -537,6 +537,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
     </div>
   );
 }
+
 
 export function FlowCanvas(props: Props) {
   return (

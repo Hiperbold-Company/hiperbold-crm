@@ -104717,6 +104717,547 @@ on conflict (id) do update
 
 notify pgrst, 'reload schema';
 
+-- ---- contato com negócio em aberto não sai (migration 1019, fork Hiperbold) ----
+-- Espelho da migration 20261119180000_1019_contato_com_negocio_aberto_nao_sai.sql. Antes da VARREDURA anon:
+-- cria função. Depois do bloco da 0971, então o create or replace de fn_excluir_contatos_em_lote abaixo
+-- é a ÚLTIMA definição dela no arquivo.
+--
+-- 1019, contato com negócio em aberto não sai (fork Hiperbold, regra do dono do produto em 19/11/2026).
+--
+-- A regra. Negócio em aberto sem contato é negócio sem lead: a exclusão da ficha deixava o negócio
+-- no funil, órfão, porque `crm_leads.contact_id` é `ON DELETE SET NULL`. A partir daqui um contato
+-- com `crm_leads.status = 'open'` (mesmo `contact_id`, mesma organização) NÃO pode ser apagado.
+-- Ganho e perdido seguem como antes: ficam, sem contato.
+--
+-- Por que no banco. A regra já existia no TypeScript (lixeira de uma linha, pré-checagem do diálogo
+-- e exclusão em lote), mas `fn_apagar_contato_com_historico`, `fn_excluir_contatos_em_lote` e o
+-- `DELETE /rest/v1/contacts` direto não conferiam `crm_leads`: quem chamasse a RPC ou a REST
+-- passava por cima. E a contagem pelo cliente do usuário era cega para o `agent`, porque a RLS de
+-- `crm_leads` (`fn_can_view_lead`) esconde o negócio de outro dono.
+--
+--  1. `fn_contato_com_negocio_aberto_nao_sai()`: função de gatilho, `security definer` (enxerga o
+--     negócio que a RLS de quem apaga esconde), `search_path = public, pg_temp`, EXECUTE revogado
+--     de public, anon e authenticated (o gatilho dispara sem EXECUTE de quem apaga). Recusa com
+--     errcode próprio `HB409` e mensagem `contato_com_negocio_aberto`; o handler da rota mapeia
+--     esse código para 409 (`ERRCODE_CONTATO_COM_NEGOCIO_ABERTO` em `lib/contacts/vinculos-restrict.ts`).
+--  2. `trg_contato_com_negocio_aberto_nao_sai`: BEFORE DELETE em `public.contacts`, por linha.
+--  3. A exclusão da ORGANIZAÇÃO inteira continua funcionando. `contacts.organization_id` é
+--     `ON DELETE CASCADE`, e a cascata dispara o gatilho com o negócio ainda de pé (a ordem entre
+--     as cascatas de `contacts` e `crm_leads` não é garantida). O gatilho libera quando a
+--     organização da linha já não existe: a ação de FK roda depois do DELETE de `organizations`,
+--     no mesmo comando, e enxerga a linha já apagada. Organização sumida leva os negócios pela mesma
+--     cascata (`crm_leads.organization_id` também é CASCADE), então não sobra negócio órfão.
+--     Não usamos `pg_trigger_depth() > 1`: ele liberaria QUALQUER exclusão de contato feita de
+--     dentro de outro gatilho (hoje ou no futuro), não só a da organização; a pergunta "a
+--     organização ainda existe?" é a própria condição que torna a exclusão segura.
+--  4. `fn_excluir_contatos_em_lote` (corpo da 0971) ganha o `not exists` de negócio em aberto no
+--     alvo: o contato barrado fica de fora (o chamador o classifica como bloqueado), como já
+--     acontecia com a agenda. Sem isso o gatilho abortaria o bloco inteiro. Mesmo contrato:
+--     SECURITY INVOKER, `search_path = ''`, piso `manager`, tudo-ou-nada, mesmos revoke e grant.
+--
+-- Idempotente: create or replace function, drop trigger if exists + create trigger, revoke/grant.
+-- Gate: tests/invariants/contato-com-negocio-aberto-nao-sai.test.ts.
+
+set lock_timeout = '3s';
+
+create or replace function public.fn_contato_com_negocio_aberto_nao_sai()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  -- A organização inteira está saindo (cascata de organizations): os negócios dela saem na mesma
+  -- cascata, então não há negócio órfão a proteger.
+  if not exists (select 1 from public.organizations o where o.id = old.organization_id) then
+    return old;
+  end if;
+
+  if exists (
+    select 1
+      from public.crm_leads l
+     where l.organization_id = old.organization_id
+       and l.contact_id = old.id
+       and l.status = 'open'
+  ) then
+    raise exception using
+      errcode = 'HB409',
+      message = 'contato_com_negocio_aberto',
+      detail  = 'O contato tem negócio em aberto no Pipeline. Ganhe, perca ou passe o negócio para outro contato antes de excluir.';
+  end if;
+
+  return old;
+end;
+$$;
+
+revoke execute on function public.fn_contato_com_negocio_aberto_nao_sai() from public, anon, authenticated;
+
+comment on function public.fn_contato_com_negocio_aberto_nao_sai() is
+  'Migration 1019 (fork Hiperbold): gatilho BEFORE DELETE de contacts. Recusa (errcode HB409, contato_com_negocio_aberto) a exclusão de contato com crm_leads status=open na mesma organização. Libera quando a organização já não existe (cascata da exclusão da organização).';
+
+drop trigger if exists trg_contato_com_negocio_aberto_nao_sai on public.contacts;
+create trigger trg_contato_com_negocio_aberto_nao_sai
+  before delete on public.contacts
+  for each row execute function public.fn_contato_com_negocio_aberto_nao_sai();
+
+create or replace function public.fn_excluir_contatos_em_lote(
+  p_organization_id uuid,
+  p_contact_ids uuid[]
+)
+returns uuid[]
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_alvo uuid[];
+  v_apagados uuid[];
+begin
+  if auth.uid() is not null
+     and not public.fn_role_at_least(p_organization_id, 'manager') then
+    raise exception using errcode = '42501', message = 'insufficient_role';
+  end if;
+
+  if p_organization_id is null or p_contact_ids is null or cardinality(p_contact_ids) = 0 then
+    return '{}'::uuid[];
+  end if;
+  if cardinality(p_contact_ids) > 100 then
+    raise exception using errcode = '22023', message = 'lote_grande_demais';
+  end if;
+
+  select coalesce(array_agg(c.id), '{}'::uuid[]) into v_alvo
+    from public.contacts c
+   where c.organization_id = p_organization_id
+     and c.id = any (p_contact_ids)
+     and c.is_merged_into is null
+     and c.is_anonymized = false
+     and not exists (
+       select 1 from public.calendar_appointments a
+        where a.contact_id = c.id and a.organization_id = p_organization_id
+     )
+     -- 1019: negócio em aberto barra a ficha (o gatilho recusaria e abortaria o bloco inteiro).
+     and not exists (
+       select 1 from public.crm_leads l
+        where l.contact_id = c.id and l.organization_id = p_organization_id and l.status = 'open'
+     );
+  if cardinality(v_alvo) = 0 then
+    return '{}'::uuid[];
+  end if;
+
+  delete from public.messages
+   where organization_id = p_organization_id and contact_id = any (v_alvo);
+  delete from public.conversations
+   where organization_id = p_organization_id and contact_id = any (v_alvo);
+
+  with d as (
+    delete from public.contacts
+     where organization_id = p_organization_id and id = any (v_alvo)
+    returning id
+  )
+  select coalesce(array_agg(id), '{}'::uuid[]) into v_apagados from d;
+
+  -- Tudo-ou-nada: ficha que a RLS não deixou apagar não pode ter perdido o histórico.
+  if cardinality(v_apagados) <> cardinality(v_alvo) then
+    raise exception using errcode = 'P0001', message = 'lote_nao_apagou_tudo';
+  end if;
+
+  return v_apagados;
+end;
+$$;
+
+revoke execute on function public.fn_excluir_contatos_em_lote(uuid, uuid[]) from public, anon;
+grant execute on function public.fn_excluir_contatos_em_lote(uuid, uuid[]) to authenticated;
+
+comment on function public.fn_excluir_contatos_em_lote(uuid, uuid[]) is
+  'Exclui até 100 contatos vivos de uma organização (mensagens, conversas e ficha) numa só transação: tudo-ou-nada. SECURITY INVOKER, piso manager. Deixa de fora contato com compromisso na agenda, com negócio em aberto (1019), anonimizado e lápide de fusão. Devolve os ids apagados.';
+
+reset lock_timeout;
+
+notify pgrst, 'reload schema';
+
+-- ---- tipo do documento do contato (migration 1020, fork Hiperbold) ----
+set lock_timeout = '3s';
+
+alter table public.contacts
+  add column if not exists document_type text;
+
+-- Só cria quando falta (padrão do bloco 1012): o update.sh reaplica o baseline inteiro, e drop+add
+-- revalidaria a tabela toda a cada atualização.
+do $hb_1020_check_do_tipo$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.contacts'::regclass
+       and conname = 'contacts_document_type_check'
+  ) then
+    alter table public.contacts
+      add constraint contacts_document_type_check
+      check (document_type is null or document_type = any (array['us_drivers_license', 'us_state_id',
+             'us_passport', 'us_green_card', 'us_itin', 'foreign_passport', 'br_cpf']::text[]));
+  end if;
+end
+$hb_1020_check_do_tipo$;
+
+comment on column public.contacts.document_type is
+  'O TIPO do documento gravado em cpf_hash/cpf_encrypted (migration 1020). Só preenchido em país com seletor '
+  '(EUA), onde o titular escolhe entre os tipos de lib/legal/tipos-de-documento.ts; null no Brasil e em Portugal '
+  '(tipo implícito CPF/NIF) e em contato sem documento. O gatilho trg_contacts_tipo_segue_o_documento zera o tipo '
+  'sempre que o par do documento fica nulo (anonimização LGPD inclusive). Sem SSN de propósito.';
+
+-- O tipo morre junto com o documento: quem zera o par (fn_lgpd_cascade_redact_contact, merge, qualquer
+-- caminho futuro) zera o tipo sem precisar saber dele. Sem HTTP, sem leitura de outra tabela.
+--
+-- E o tipo não muda SEM o número (catraca no padrão da 0967): o papel `authenticated` tem grant de
+-- UPDATE na coluna (régua de grant por coluna da 0998), e sem esta recusa trocaria pela REST o tipo de
+-- um número que ele nem lê — o passaporte viraria "CPF" com os mesmos caracteres. Quem grava o par é
+-- o servidor (`service_role`, `gravarCpfDoContatoPorUsuario`) ou função do dono (`postgres`), e esses
+-- passam.
+create or replace function public.fn_contacts_tipo_segue_o_documento()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $fn$
+begin
+  if tg_op = 'UPDATE'
+     and new.document_type is distinct from old.document_type
+     and new.cpf_hash is not distinct from old.cpf_hash
+     and current_user not in ('service_role', 'postgres') then
+    raise exception 'document_type só muda junto com o documento, pelo servidor'
+      using errcode = '42501';
+  end if;
+  if new.cpf_hash is null then
+    new.document_type := null;
+  end if;
+  return new;
+end;
+$fn$;
+
+revoke execute on function public.fn_contacts_tipo_segue_o_documento() from public, anon, authenticated;
+
+drop trigger if exists trg_contacts_tipo_segue_o_documento on public.contacts;
+create trigger trg_contacts_tipo_segue_o_documento
+  before insert or update on public.contacts
+  for each row execute function public.fn_contacts_tipo_segue_o_documento();
+
+-- O tipo segue o padrão do PAR do CPF (0967/0998), não o das outras colunas: só o servidor lê e grava.
+-- O tipo tem a visibilidade do número (só gerente+ vê, e quem vê é o servidor, com o cliente de serviço);
+-- com grant, qualquer membro o leria pela REST. Revoke explícito: quem atualizou de uma versão desta
+-- migration que concedia o grant não fica com ele. O bloco da 0998 no fim do baseline também o exclui.
+revoke select (document_type), insert (document_type), update (document_type)
+  on table public.contacts from public, anon, authenticated;
+
+reset lock_timeout;
+-- ---- moeda do campo na projeção (migration 1022) ----
+-- Espelho da migration 20261124170000_1022_moeda_do_campo_na_projecao.sql. Antes da VARREDURA anon.
+
+create or replace function public.fn_campos_personalizados_projetados(p_org uuid, p_obrigatorios jsonb)
+returns jsonb
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select coalesce(jsonb_agg(item order by ordem_pos, ordem_criado, ordem_chave), '[]'::jsonb)
+    from (
+      select d.position as ordem_pos,
+             d.created_at as ordem_criado,
+             d.key as ordem_chave,
+             (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb)
+                from jsonb_each(
+                       (select coalesce(jsonb_object_agg(c.key, c.value), '{}'::jsonb)
+                          from jsonb_each(d.config) c
+                         where c.key in ('options', 'mostrar_quando', 'padrao', 'mensagem_padrao',
+                                         'allow_new', 'multiple', 'moeda'))
+                       || jsonb_build_object(
+                            'key', d.key,
+                            'label', d.label,
+                            'type', d.type,
+                            'required', case when d.obrigatorio then true end,
+                            'grupo', d.grupo,
+                            'escopo', case when d.entidade = 'contato' then 'contato' end,
+                            'descricao', d.descricao,
+                            'publico', case when not d.publico then false end,
+                            'sempre_visivel', case when d.sempre_visivel then true end,
+                            'exibir_no_perfil', case when d.exibir_no_perfil then true end,
+                            'dica_de_ajuda', d.dica_de_ajuda,
+                            'obrigatorio_em',
+                              case when jsonb_typeof(p_obrigatorios) = 'object'
+                                    and jsonb_typeof(p_obrigatorios -> d.key) = 'object'
+                                   then p_obrigatorios -> d.key end
+                          )) e
+               where e.value <> 'null'::jsonb) as item
+        from public.custom_field_definitions d
+       where d.organization_id = p_org
+    ) projetados;
+$$;
+
+revoke execute on function public.fn_campos_personalizados_projetados(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.fn_campos_personalizados_projetados(uuid, jsonb) to service_role;
+
+create or replace function public.fn_adotar_campos_legados_da_organizacao(p_org uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  c_tipos constant text[] := array['text', 'textarea', 'number', 'currency', 'date', 'select', 'multiselect',
+                                   'searchable_select', 'boolean', 'email', 'phone', 'url', 'file'];
+  c_props constant text[] := array['options', 'mostrar_quando', 'padrao', 'mensagem_padrao', 'allow_new', 'multiple', 'moeda'];
+  r record;
+  v_ent text;
+  v_outra text;
+  v_lk text;
+  v_chave text;
+  v_cand text;
+  v_i integer;
+  v_grupo jsonb;
+  v_venc jsonb;
+  v_dif jsonb;
+  v_canon jsonb := '{}'::jsonb;      -- lower(chave) -> { entidade: {chave, original, item, funil, funil_nome, renomeado} }
+  v_ordem jsonb := '[]'::jsonb;      -- [[lower(chave), entidade], ...] na ordem em que apareceram
+  v_obrig jsonb := '{}'::jsonb;      -- funil -> { chave: obrigatorio_em }
+  v_conflitos jsonb := '[]'::jsonb;
+  v_todas jsonb;
+  v_usadas jsonb := '{}'::jsonb;
+  v_par jsonb;
+  v_n integer;
+  v_def jsonb;
+  v_item jsonb;
+  v_ins integer;
+  v_inseridas integer := 0;
+  v_restritas jsonb := '{}'::jsonb;  -- lower(chave) -> true quando QUALQUER ocorrência tem publico:false
+begin
+  if p_org is null then
+    return 0;
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('hb_1015_campos:' || p_org::text, 0));
+  if exists (select 1 from public.custom_field_definitions d where d.organization_id = p_org) then
+    return 0;
+  end if;
+  perform set_config('hb.campos_adocao', p_org::text, true);
+
+  -- Toda chave válida que já existe na organização: a chave distinta de uma entidade nunca pode
+  -- cair em cima de outra que aparece mais adiante.
+  select coalesce(jsonb_object_agg(k, true), '{}'::jsonb)
+    into v_todas
+    from (select distinct lower(f.item ->> 'key') as k
+            from public.crm_pipelines p
+           cross join lateral jsonb_array_elements(
+                   case when jsonb_typeof(p.settings -> 'fields') = 'array' then p.settings -> 'fields'
+                        else '[]'::jsonb end) as f(item)
+           where p.organization_id = p_org
+             and jsonb_typeof(f.item) = 'object'
+             and coalesce(f.item ->> 'key', '') ~ '^[A-Za-z][A-Za-z0-9_]{0,39}$') chaves;
+
+  for r in
+    select p.id as funil, p.name as funil_nome, f.item, f.ord
+      from public.crm_pipelines p
+     cross join lateral jsonb_array_elements(
+             case when jsonb_typeof(p.settings -> 'fields') = 'array' then p.settings -> 'fields'
+                  else '[]'::jsonb end) with ordinality as f(item, ord)
+     where p.organization_id = p_org
+       and jsonb_typeof(p.settings) = 'object'
+     order by p.created_at, p.id, f.ord
+  loop
+    continue when jsonb_typeof(r.item) is distinct from 'object'
+      or coalesce(r.item ->> 'key', '') !~ '^[A-Za-z][A-Za-z0-9_]{0,39}$'
+      or btrim(coalesce(r.item ->> 'label', '')) = ''
+      or not (coalesce(r.item ->> 'type', '') = any (c_tipos));
+
+    v_ent := case when r.item ->> 'escopo' = 'contato' then 'contato' else 'negocio' end;
+    v_outra := case when v_ent = 'contato' then 'negocio' else 'contato' end;
+    v_lk := lower(r.item ->> 'key');
+    -- Restrito vence: basta UMA ocorrência da chave (sem diferenciar maiúsculas, em qualquer funil
+    -- e em qualquer entidade) com `publico:false` para toda definição dessa chave nascer restrita.
+    -- Herdar do funil mais antigo deixava à vista da IA e do cliente um valor que outro funil marcou
+    -- como só do admin — inclusive o valor antigo que fica na chave original depois da cópia.
+    if r.item -> 'publico' = 'false'::jsonb then
+      v_restritas := v_restritas || jsonb_build_object(v_lk, true);
+    end if;
+    v_grupo := coalesce(v_canon -> v_lk, '{}'::jsonb);
+    v_venc := v_grupo -> v_ent;
+
+    if v_venc is null then
+      if v_grupo ? v_outra then
+        -- A mesma chave já é da OUTRA entidade: chave própria, nunca fusão.
+        v_i := 1;
+        loop
+          v_cand := case when v_i = 1 then left(r.item ->> 'key', 31) || '_' || v_ent
+                         else left(r.item ->> 'key', 31 - length(v_i::text)) || '_' || v_ent || v_i::text end;
+          exit when not (v_todas ? lower(v_cand)) and not (v_usadas ? lower(v_cand));
+          v_i := v_i + 1;
+        end loop;
+        v_chave := v_cand;
+        v_usadas := v_usadas || jsonb_build_object(lower(v_chave), true);
+        v_conflitos := v_conflitos || jsonb_build_array(jsonb_build_object(
+          'chave', v_grupo -> v_outra ->> 'chave',
+          'chave_nova', v_chave,
+          'entidade_nova', v_ent,
+          'funis', jsonb_build_array(
+            jsonb_build_object('id', v_grupo -> v_outra ->> 'funil', 'nome', v_grupo -> v_outra ->> 'funil_nome'),
+            jsonb_build_object('id', r.funil, 'nome', r.funil_nome)),
+          'diferenca', jsonb_build_array('entidade'),
+          'resolucao', 'chave_distinta_com_valores_copiados'));
+      else
+        v_chave := r.item ->> 'key';
+      end if;
+      v_venc := jsonb_build_object('chave', v_chave, 'original', r.item ->> 'key', 'item', r.item,
+                                   'funil', r.funil, 'funil_nome', r.funil_nome,
+                                   'renomeado', v_chave is distinct from r.item ->> 'key');
+      v_canon := v_canon || jsonb_build_object(v_lk, v_grupo || jsonb_build_object(v_ent, v_venc));
+      v_ordem := v_ordem || jsonb_build_array(jsonb_build_array(v_lk, v_ent));
+    else
+      v_dif := '[]'::jsonb;
+      if (r.item ->> 'type') is distinct from (v_venc -> 'item' ->> 'type') then
+        v_dif := v_dif || '["tipo"]'::jsonb;
+      end if;
+      if (r.item -> 'options') is distinct from (v_venc -> 'item' -> 'options') then
+        v_dif := v_dif || '["opcoes"]'::jsonb;
+      end if;
+      if coalesce(r.item -> 'required' = 'true'::jsonb, false)
+         is distinct from coalesce(v_venc -> 'item' -> 'required' = 'true'::jsonb, false) then
+        v_dif := v_dif || '["obrigatorio"]'::jsonb;
+      end if;
+      if (r.item ->> 'key') is distinct from (v_venc ->> 'original') then
+        v_dif := v_dif || '["maiusculas"]'::jsonb;
+      end if;
+      -- `publico` NÃO segue o funil mais antigo (ver `v_restritas`): a diferença fica gravada.
+      if coalesce(r.item -> 'publico' <> 'false'::jsonb, true)
+         is distinct from coalesce(v_venc -> 'item' -> 'publico' <> 'false'::jsonb, true) then
+        v_dif := v_dif || '["publico"]'::jsonb;
+      end if;
+      if jsonb_array_length(v_dif) > 0 then
+        v_conflitos := v_conflitos || jsonb_build_array(jsonb_build_object(
+          'chave', v_venc ->> 'chave',
+          'chave_no_funil', r.item ->> 'key',
+          'entidade', v_ent,
+          'funis', jsonb_build_array(
+            jsonb_build_object('id', v_venc ->> 'funil', 'nome', v_venc ->> 'funil_nome'),
+            jsonb_build_object('id', r.funil, 'nome', r.funil_nome)),
+          'diferenca', v_dif,
+          'resolucao', 'vale_o_funil_mais_antigo'));
+      end if;
+      v_chave := v_venc ->> 'chave';
+    end if;
+
+    -- Chave final diferente da do funil (chave própria da outra entidade, OU a mesma chave com
+    -- maiúsculas diferentes que caiu na definição do funil mais antigo): COPIA os valores para a
+    -- chave final (a antiga fica onde estava). Só olhar `renomeado` deixava `Cidade` do segundo
+    -- funil fora da definição `cidade`.
+    if v_chave is distinct from (r.item ->> 'key') then
+      if v_ent = 'contato' then
+        update public.contacts c
+           set custom_fields = c.custom_fields || jsonb_build_object(v_chave, c.custom_fields -> (r.item ->> 'key'))
+         where c.organization_id = p_org
+           and c.is_anonymized is not true
+           and jsonb_typeof(c.custom_fields) = 'object'
+           and c.custom_fields ? (r.item ->> 'key')
+           and not c.custom_fields ? v_chave;
+      else
+        update public.crm_leads l
+           set custom_fields = l.custom_fields || jsonb_build_object(v_chave, l.custom_fields -> (r.item ->> 'key'))
+         where l.organization_id = p_org
+           and l.pipeline_id = r.funil
+           and jsonb_typeof(l.custom_fields) = 'object'
+           and l.custom_fields ? (r.item ->> 'key')
+           and not l.custom_fields ? v_chave;
+      end if;
+    end if;
+
+    -- A obrigatoriedade do funil, na chave final; a primeira ocorrência no funil vence.
+    if jsonb_typeof(r.item -> 'obrigatorio_em') = 'object'
+       and not (coalesce(v_obrig -> (r.funil::text), '{}'::jsonb) ? v_chave) then
+      v_obrig := v_obrig || jsonb_build_object(r.funil::text,
+        coalesce(v_obrig -> (r.funil::text), '{}'::jsonb) || jsonb_build_object(v_chave, r.item -> 'obrigatorio_em'));
+    end if;
+  end loop;
+
+  if jsonb_array_length(v_ordem) = 0 then
+    perform set_config('hb.campos_adocao', '', true);
+    return 0;
+  end if;
+
+  -- (1) rollback e obrigatoriedade, ANTES de a projeção reescrever `fields`. A regra que já estava
+  -- em `campos_obrigatorios` vence a que vem do item.
+  update public.crm_pipelines p
+     set settings = p.settings
+         || case when p.settings ? 'campos_legados' then '{}'::jsonb
+                 else jsonb_build_object('campos_legados', p.settings -> 'fields') end
+         || jsonb_build_object('campos_obrigatorios',
+              coalesce(v_obrig -> (p.id::text), '{}'::jsonb)
+              || case when jsonb_typeof(p.settings -> 'campos_obrigatorios') = 'object'
+                      then p.settings -> 'campos_obrigatorios' else '{}'::jsonb end)
+   where p.organization_id = p_org
+     and jsonb_typeof(p.settings) = 'object'
+     and jsonb_typeof(p.settings -> 'fields') = 'array'
+     and jsonb_array_length(p.settings -> 'fields') > 0;
+
+  -- (2) uma definição por chave final. A projeção corre pelo gatilho AFTER, linha a linha.
+  for v_par, v_n in
+    select x.e, x.o::integer from jsonb_array_elements(v_ordem) with ordinality as x(e, o)
+  loop
+    v_def := v_canon -> (v_par ->> 0) -> (v_par ->> 1);
+    v_item := v_def -> 'item';
+    insert into public.custom_field_definitions
+      (organization_id, entidade, key, label, type, obrigatorio, grupo, descricao, publico, sempre_visivel,
+       exibir_no_perfil, dica_de_ajuda, config, position)
+    values (
+      p_org,
+      v_par ->> 1,
+      v_def ->> 'chave',
+      left(btrim(v_item ->> 'label'), 80),
+      v_item ->> 'type',
+      coalesce(v_item -> 'required' = 'true'::jsonb, false),
+      case when v_item ->> 'grupo' in ('dados', 'rastreamento') then v_item ->> 'grupo' end,
+      case when jsonb_typeof(v_item -> 'descricao') = 'string' then nullif(left(v_item ->> 'descricao', 500), '') end,
+      coalesce(v_item -> 'publico' <> 'false'::jsonb, true) and not (v_restritas ? (v_par ->> 0)),
+      coalesce(v_item -> 'sempre_visivel' = 'true'::jsonb, false),
+      coalesce(v_item -> 'exibir_no_perfil' = 'true'::jsonb, false),
+      case when jsonb_typeof(v_item -> 'dica_de_ajuda') = 'string' then nullif(left(v_item ->> 'dica_de_ajuda', 300), '') end,
+      (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb)
+         from jsonb_each(v_item) e
+        where e.key = any (c_props) and e.value <> 'null'::jsonb),
+      v_n * 1000
+    )
+    on conflict do nothing;
+    get diagnostics v_ins = row_count;
+    v_inseridas := v_inseridas + v_ins;
+  end loop;
+
+  -- (3) o conflito fica GRAVADO na organização (a tela e o suporte o leem depois).
+  if jsonb_array_length(v_conflitos) > 0 then
+    update public.organizations o
+       set settings = coalesce(o.settings, '{}'::jsonb)
+           || jsonb_build_object('campos_conflitos',
+                case when jsonb_typeof(o.settings -> 'campos_conflitos') = 'array'
+                     then o.settings -> 'campos_conflitos' else '[]'::jsonb end || v_conflitos)
+     where o.id = p_org
+       and jsonb_typeof(coalesce(o.settings, '{}'::jsonb)) = 'object';
+    raise notice '1015: % conflito(s) de campo personalizado na organização % (gravados em organizations.settings.campos_conflitos)',
+      jsonb_array_length(v_conflitos), p_org;
+  end if;
+
+  perform set_config('hb.campos_adocao', '', true);
+  return v_inseridas;
+end;
+$$;
+
+revoke execute on function public.fn_adotar_campos_legados_da_organizacao(uuid) from public, anon, authenticated;
+grant execute on function public.fn_adotar_campos_legados_da_organizacao(uuid) to service_role;
+
+-- Reprojeta os funis das organizações que JÁ têm um campo com `config.moeda` (hoje nenhuma: a chave
+-- ainda não era projetada). Idempotente: a projeção é função pura das definições, reaplicar grava o
+-- mesmo `fields`.
+update public.crm_pipelines p
+   set settings = jsonb_set(
+         p.settings,
+         '{fields}',
+         public.fn_campos_personalizados_projetados(p.organization_id, p.settings -> 'campos_obrigatorios')
+       )
+ where jsonb_typeof(p.settings) = 'object'
+   and exists (select 1 from public.custom_field_definitions d
+                where d.organization_id = p.organization_id and d.config ? 'moeda');
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -110303,7 +110844,8 @@ begin
    where a.attrelid = 'public.contacts'::regclass
      and a.attnum > 0
      and not a.attisdropped
-     and a.attname not in ('cpf_hash', 'cpf_encrypted');
+     -- `document_type` (1020) fica fechado como o par do CPF: só o servidor lê e grava o tipo.
+     and a.attname not in ('cpf_hash', 'cpf_encrypted', 'document_type');
   revoke select, insert, update on table public.contacts from anon, authenticated;
   execute format('grant select (%s) on table public.contacts to anon, authenticated', v_colunas);
   execute format('grant insert (%s) on table public.contacts to anon, authenticated', v_colunas);

@@ -35,6 +35,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   use: {
+    // Mesmo motivo do playwright.config.ts da raiz: as jornadas afirmam o texto em português.
+    locale: "pt-BR",
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
     // Microfone falso: o composer grava áudio via getUserMedia/MediaRecorder —

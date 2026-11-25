@@ -29,8 +29,11 @@ export interface NodeVisual {
   /** Left accent border on the node card. */
   borderClassName: string;
   defaultLabel: string;
-  defaultConfig: () => FlowNode["config"];
+  /** Recebe o `t` de quem monta o fluxo: o texto que o bloco traz ao nascer sai no idioma dele. */
+  defaultConfig: (t?: (texto: string) => string) => FlowNode["config"];
 }
+
+const semTraducao = (texto: string) => texto;
 
 type RegraDeCondicao = Extract<FlowNode, { type: "condition" }>["config"]["checks"][number];
 
@@ -230,7 +233,7 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     chipClassName: "bg-success-bg text-success-fg",
     borderClassName: "border-l-success",
     defaultLabel: "Enviar mensagem",
-    defaultConfig: () => ({ body: "Olá, {{contact.name}}!" }),
+    defaultConfig: (t = semTraducao) => ({ body: t("Olá, {{contact.name}}!") }),
   },
   question: {
     type: "question",
@@ -257,7 +260,7 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     chipClassName: "bg-accent-soft text-accent",
     borderClassName: "border-l-accent-500",
     defaultLabel: "Responder em privado",
-    defaultConfig: () => ({ text: "Oi, @{{gatilho.autor_usuario}}! Te mandei aqui o que você pediu." }),
+    defaultConfig: (t = semTraducao) => ({ text: t("Oi, @{{gatilho.autor_usuario}}! Te mandei aqui o que você pediu.") }),
   },
   instagram_public_reply: {
     type: "instagram_public_reply",
@@ -266,7 +269,7 @@ export const NODE_VISUALS: Record<NodeType, NodeVisual> = {
     chipClassName: "bg-info-bg text-info-fg",
     borderClassName: "border-l-info",
     defaultLabel: "Responder no comentário",
-    defaultConfig: () => ({ text: "Te chamei no Direct!" }),
+    defaultConfig: (t = semTraducao) => ({ text: t("Te chamei no Direct!") }),
   },
   instagram_check_follow: {
     type: "instagram_check_follow",
@@ -441,10 +444,16 @@ export function describeNodeConfig(
       const c = config as ConfigOf<"question">;
       return c.question.slice(0, 60);
     }
-    case "instagram_private_reply":
-    case "instagram_public_reply": {
+    case "instagram_private_reply": {
       const c = config as ConfigOf<"instagram_private_reply">;
       return c.text.slice(0, 60);
+    }
+    case "instagram_public_reply": {
+      const c = config as ConfigOf<"instagram_public_reply">;
+      const extras = (c.variations ?? []).filter((v) => v.trim() !== "").length;
+      return extras > 0
+        ? `${c.text.slice(0, 60)} (+${extras} ${extras === 1 ? t("versão") : t("versões")})`
+        : c.text.slice(0, 60);
     }
     case "instagram_check_follow":
       return t("Segue o perfil?");

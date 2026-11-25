@@ -969,7 +969,7 @@ function detalhesDoEfeito(p: Record<string, unknown>): string | null {
       }
       const r = texto(d.resultado);
       const resultado =
-        r === "criado" ? "negócio criado" : r === "ja_existia" ? "já existia" : r === "movido" ? "movido" : r === "sem_mudanca" ? "já estava assim" : "feito";
+        r === "criado" ? "negócio criado" : r === "ja_existia" ? "já existia" : r === "movido" ? "movido" : r === "sem_mudanca" ? "já estava assim" : r === "mantido" ? "mantido o dono atual" : "feito";
       return `${nome}: ${resultado}`;
     })
     .join("; ");

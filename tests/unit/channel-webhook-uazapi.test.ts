@@ -74,6 +74,7 @@ describe("parseUazapiMensagem", () => {
         mime: null,
         sentAt: new Date(1_789_500_000_000).toISOString(),
         quotedExternalId: null,
+        anuncio: null,
       },
     });
   });

@@ -140,7 +140,7 @@ export function ContactPickerDialog({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome ou telefone…"
+            placeholder={t("Buscar por nome ou telefone…")}
             className="pl-8"
             autoFocus
           />
@@ -148,7 +148,7 @@ export function ContactPickerDialog({
 
         <div className="max-h-48 overflow-y-auto rounded-md border border-border">
           {list.isLoading && contacts.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">Carregando…</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("Carregando…")}</p>
           ) : contacts.length === 0 ? (
             <p className="px-3 py-4 text-center text-sm text-muted-foreground">
               {debounced ? t("Nenhum contato encontrado na base.") : t("Nenhum contato com telefone na base.")}
@@ -224,7 +224,7 @@ export function ContactPickerDialog({
               </button>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="manual-contact-name">Nome (opcional)</Label>
+              <Label htmlFor="manual-contact-name">{t("Nome (opcional)")}</Label>
               <Input
                 id="manual-contact-name"
                 value={manualName}
@@ -249,14 +249,14 @@ export function ContactPickerDialog({
               disabled={sending || !resolvedManualPhone}
               onClick={pickManual}
             >
-              Enviar contato
+              {t("Enviar contato")}
             </Button>
           </div>
         )}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => close(false)} disabled={sending}>
-            Cancelar
+            {t("Cancelar")}
           </Button>
         </DialogFooter>
       </DialogContent>

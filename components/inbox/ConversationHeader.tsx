@@ -253,7 +253,7 @@ export function ConversationHeader({
     automaticoAtivo && !encerrada && conversation.assigned_to_user_id !== null;
 
   if (user.support?.access_mode === "support_readonly") return <header className="flex items-center justify-between border-b p-4">
-    <strong>{displayName}</strong><span className="text-sm text-muted-foreground">{STATUS_LABEL[status] ?? status} · Somente leitura</span>
+    <strong>{displayName}</strong><span className="text-sm text-muted-foreground">{STATUS_LABEL[status] ?? status} · {t("Somente leitura")}</span>
   </header>;
   return (
     // `flex-wrap` porque este header travava a LARGURA DA TELA INTEIRA. Ele

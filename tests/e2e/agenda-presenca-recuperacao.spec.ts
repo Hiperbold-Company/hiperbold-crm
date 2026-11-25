@@ -33,7 +33,14 @@ async function rpc(name: string, args: Record<string, unknown>) {
 }
 async function fixture() {
   const email = `presenca-${randomUUID()}@invariant.test`;
-  const { data, error } = await db.auth.admin.createUser({ email, password, email_confirm: true });
+  // Perfil em pt-BR: a spec de fuso roda com o navegador em en-US e afirma o
+  // texto em português; sem idioma salvo, o inglês visível venceria.
+  const { data, error } = await db.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { locale: "pt-BR" },
+  });
   if (error || !data.user) throw error;
   const user = data.user.id;
   users.push(user);
@@ -164,9 +171,11 @@ async function inbound(
 async function login(page: Page, email: string) {
   await page.context().clearCookies();
   await page.goto("/login");
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  // Seletores sem idioma: a tela de login segue o navegador, e a spec de fuso
+  // usa en-US.
+  await page.locator("#email").fill(email);
+  await page.locator("#password").fill(password);
+  await page.locator('button[type="submit"]').click();
   await page.waitForURL(/\/app(?:\/|$)/, { timeout: 60000 });
 }
 // O radar só pinta as listas depois que a tela busca /api/v1/leads/at-risk, e

@@ -37,7 +37,8 @@ import {
   leitorVeCamposRestritos,
   recortarValores,
   unirChavesRestritas, chaveEhRestrita } from "@/lib/campos/recorte-por-papel";
-import { cpfsDecifradosDosContatos } from "@/lib/contacts/cpf-do-contato";
+import { cpfsDecifradosDosContatos, tiposDoDocumentoDosContatos } from "@/lib/contacts/cpf-do-contato";
+import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { exigirPermissao } from "@/lib/permissoes/servidor";
 import { resolverAlvoDeLote } from "@/lib/contacts/alvo-de-lote";
 import {
@@ -58,6 +59,14 @@ import {
 } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
 import { listContactsHandler, type ContatoPublico } from "../_handler";
+
+/** O país da organização tem seletor de tipo de documento (hoje, os EUA)? */
+async function paisTemTipoDeDocumento(
+  supabase: Parameters<typeof perfilDaOrganizacao>[0],
+  orgId: string,
+): Promise<boolean> {
+  return ((await perfilDaOrganizacao(supabase, orgId)).tiposDeDocumento?.length ?? 0) > 0;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -149,12 +158,20 @@ export async function POST(req: NextRequest): Promise<Response> {
     // MESMO papel mínimo dela (manager): a permissão de exportar é liberável até o Leitor, e o
     // Leitor não vê CPF na ficha. O audit abaixo registra se o CPF saiu — nunca o valor.
     const comCpf = podeVerCpf(authz.org.role);
+    // EUA: o documento sai rotulado pelo TIPO (migration 1020), com a mesma visibilidade do número —
+    // por isso o país só é lido para quem vê o documento.
+    const comTipoDeDocumento =
+      comCpf && (await paisTemTipoDeDocumento(supabase, organizationId));
     if (comCpf) {
       const cpfs = await cpfsDecifradosDosContatos(
         organizationId,
         contatos.map((c) => c.id),
       );
       for (const c of contatos) c.cpf = cpfs.get(c.id) ?? null;
+      if (comTipoDeDocumento) {
+        const tipos = await tiposDoDocumentoDosContatos(organizationId, contatos.map((c) => c.id));
+        for (const c of contatos) c.document_type = tipos.get(c.id) ?? null;
+      }
     }
 
     const [funis, etapas] = await Promise.all([
@@ -193,6 +210,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       etapas: new Map((etapas.data ?? []).map((e) => [e.id as string, e.name as string])),
       rotulosDeCampo,
       comCpf,
+      comTipoDeDocumento,
     });
 
     await audit({
@@ -368,12 +386,13 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const exportados = lidos.slice(0, TETO_DO_EXPORT);
   const comCpf = podeVerCpf(authz.org.role);
+  const comTipoDeDocumento = comCpf && (await paisTemTipoDeDocumento(supabase, authz.org.orgId));
   let cpfs = new Map<string, string>();
+  let tipos = new Map<string, string>();
   if (comCpf) {
-    cpfs = await cpfsDecifradosDosContatos(
-      authz.org.orgId,
-      exportados.filter((c) => c.cpf_available).map((c) => c.id),
-    );
+    const comDocumento = exportados.filter((c) => c.cpf_available).map((c) => c.id);
+    cpfs = await cpfsDecifradosDosContatos(authz.org.orgId, comDocumento);
+    if (comTipoDeDocumento) tipos = await tiposDoDocumentoDosContatos(authz.org.orgId, comDocumento);
   }
   const contatos: ContatoParaExportar[] = exportados.map((c) => ({
     name: c.name,
@@ -381,11 +400,12 @@ export async function GET(req: NextRequest): Promise<Response> {
     email: c.email,
     phone_number: c.phone_number,
     cpf: cpfs.get(c.id) ?? null,
+    document_type: tipos.get(c.id) ?? null,
     birthdate: c.birthdate,
     tags: c.tags,
   }));
 
-  const corpo = formato === "csv" ? csvDosContatos(contatos) : vcardsDosContatos(contatos);
+  const corpo = formato === "csv" ? csvDosContatos(contatos, { comTipoDeDocumento }) : vcardsDosContatos(contatos);
 
   await audit({
     action: "contacts.exported",

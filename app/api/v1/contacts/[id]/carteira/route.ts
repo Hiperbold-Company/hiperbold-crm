@@ -203,6 +203,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
   }
 
   await audit({
+    organizationId: orgId,
+    actorUserId: authz.user.id,
     action: "contact.carteira_changed",
     resourceType: "contact",
     resourceId: contactId,

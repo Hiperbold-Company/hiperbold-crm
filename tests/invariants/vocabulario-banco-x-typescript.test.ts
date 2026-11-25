@@ -608,6 +608,13 @@ const PARES: Array<{
     arquivo: "lib/mensagens-agendadas/regras.ts",
     simbolo: "STATUS_DA_AGENDADA",
   },
+  {
+    tabela: "contacts",
+    coluna: "document_type",
+    // O tipo do documento do contato (1020, país Estados Unidos): nasce com o par.
+    arquivo: "lib/legal/tipos-de-documento.ts",
+    simbolo: "TIPOS_DE_DOCUMENTO_DO_CONTATO",
+  },
 ];
 
 /** Tira um nível de parênteses externos, se ele envolver a expressão inteira. */

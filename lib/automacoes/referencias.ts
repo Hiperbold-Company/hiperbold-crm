@@ -12,7 +12,7 @@ import { segredosDoBloco } from "./http";
 export interface ReferenciasDoGrafo {
   funis: string[];
   etapas: string[];
-  /** Pessoas citadas (dono, rodízio, aviso, responsável da tarefa): membros ativos desta organização. */
+  /** Pessoas citadas (dono, carteira, rodízio, aviso, responsável da tarefa): membros ativos desta organização. */
   pessoas: string[];
   /** Fontes de captação (`webhook_sources`) do gatilho "lead criado". */
   fontes: string[];
@@ -42,6 +42,7 @@ export function referenciasDoGrafo(graph: FlowGraph): ReferenciasDoGrafo {
           if (a.mode.m === "round_robin") a.mode.user_ids?.forEach((id) => pessoas.add(id));
         }
         if (a.type === "assign_conversation") pessoas.add(a.user_id);
+        if (a.type === "set_carteira") pessoas.add(a.user_id);
         if (a.type === "notify" && Array.isArray(a.to)) a.to.forEach((id) => pessoas.add(id));
         if (a.type === "create_task" && a.assignee !== "owner") pessoas.add(a.assignee);
         if (a.type === "start_automation") automacoes.add(a.pointer_id);

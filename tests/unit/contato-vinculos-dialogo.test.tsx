@@ -44,6 +44,18 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn(), orgAtivaDaApi: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// O negócio em aberto é contado pelo cliente admin (a RLS do atendente esconde
+// negócio de colega). Aqui nenhum contato tem negócio: contagem zero.
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => {
+    const cadeia: Record<string, unknown> = {};
+    cadeia.select = () => cadeia;
+    cadeia.eq = () => cadeia;
+    cadeia.then = (resolver: (v: unknown) => unknown) =>
+      Promise.resolve({ count: 0, error: null }).then(resolver);
+    return { from: () => cadeia };
+  },
+}));
 vi.mock("@/lib/audit", () => ({
   audit: vi.fn(async () => undefined),
   isServiceRoleConfigured: () => false,

@@ -7617,6 +7617,7 @@ export type Database = {
           custom_fields: NonNullable<Json>;
           display_name: string | null;
           district: string | null;
+          document_type: string | null;
           email: string | null;
           email_normalized: string | null;
           first_service_at: string | null;
@@ -7680,6 +7681,7 @@ export type Database = {
           custom_fields?: NonNullable<Json>;
           display_name?: string | null;
           district?: string | null;
+          document_type?: string | null;
           email?: string | null;
           email_normalized?: never;
           first_service_at?: string | null;
@@ -7742,6 +7744,7 @@ export type Database = {
           custom_fields?: NonNullable<Json>;
           display_name?: string | null;
           district?: string | null;
+          document_type?: string | null;
           email?: string | null;
           email_normalized?: never;
           first_service_at?: string | null;

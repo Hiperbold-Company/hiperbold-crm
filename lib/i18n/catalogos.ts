@@ -16,6 +16,7 @@
  * no navegador — nada de carga assíncrona por idioma nesta fatia.
  */
 import type { Idioma } from "./idiomas";
+import en from "./traducoes/en.json";
 import type { IdiomaVisivel } from "./registro";
 
 /**
@@ -34,9 +35,10 @@ import type { IdiomaVisivel } from "./registro";
  */
 type IdiomaDeCatalogoVisivel = Extract<IdiomaVisivel, { fonteDoTexto: "catalogo" }>["codigo"];
 
-// ponytail: vazio enquanto nenhum idioma de catálogo é visível (turco, chinês e
-// inglês estão em construção); a promoção importa o JSON aqui.
-const CATALOGOS: Readonly<Record<IdiomaDeCatalogoVisivel, Readonly<Record<string, string>>>> = {};
+// Turco e chinês seguem em construção; a promoção de cada um importa o JSON aqui.
+const CATALOGOS: Readonly<Record<IdiomaDeCatalogoVisivel, Readonly<Record<string, string>>>> = {
+  en: en as Readonly<Record<string, string>>,
+};
 
 /** Os idiomas cujo texto vem de um catálogo, e não de coluna do dicionário. */
 export const IDIOMAS_COM_CATALOGO = Object.keys(CATALOGOS) as Idioma[];

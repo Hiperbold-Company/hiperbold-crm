@@ -15,6 +15,7 @@
  */
 import { z } from "zod";
 
+import { TAMANHO_MAXIMO_DA_TAG } from "@/lib/contacts/tag-normalizada";
 import { corDeEtiquetaValida, normalizarCorDeEtiqueta } from "@/lib/tags/cor-da-etiqueta";
 
 /**
@@ -25,7 +26,7 @@ import { corDeEtiquetaValida, normalizarCorDeEtiqueta } from "@/lib/tags/cor-da-
 export const TAG_MAX = 60;
 
 /** Ações do vocabulário. Cada uma é uma operação atômica do banco. */
-export const ACOES_DE_VOCABULARIO = ["renomear", "juntar", "excluir", "definir_cor"] as const;
+export const ACOES_DE_VOCABULARIO = ["renomear", "juntar", "excluir", "definir_cor", "criar"] as const;
 export type AcaoDeVocabulario = (typeof ACOES_DE_VOCABULARIO)[number];
 
 export const tagSchema = z
@@ -66,6 +67,23 @@ export const vocabularioDeTagsSchema = z
     cor: corDeEtiquetaSchema.nullish(),
   })
   .superRefine((valor, ctx) => {
+    if (valor.acao === "criar") {
+      // `criar` nasce no vocabulário curado (a rota grava em `settings.tags`, sem
+      // passar pela função de banco): o nome cabe no teto de 40 da normalização
+      // (`normalizarTag`) — cortar em silêncio criaria uma etiqueta que o operador
+      // não digitou. A cor é opcional; destino não faz sentido aqui.
+      if (valor.destino != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["destino"],
+          message: "destino_invalido_para_acao",
+        });
+      }
+      if (valor.tag.length > TAMANHO_MAXIMO_DA_TAG) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tag"], message: "tag_longa_demais" });
+      }
+      return;
+    }
     if (valor.acao === "definir_cor") {
       // Presente-e-nula é pedido legítimo ("tirar a cor"); AUSENTE é erro de
       // quem chamou: sem o campo não dá para distinguir "limpe" de "esqueci de

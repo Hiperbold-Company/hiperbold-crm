@@ -1,7 +1,7 @@
 /**
  * A TELA DIZ QUE A REVISÃO DE PORTUGAL FOI FEITA POR IA (doc 88).
  *
- * A ajuda do seletor afirma "Só aparecem países com a lei revisada". Com
+ * A ajuda do seletor afirma "Só aparecem países revisados". Com
  * Portugal revisado por IA, sem advogado, essa frase sozinha induz em erro quem
  * responde pelo documento. O aviso também diz o efeito no fluxo que o operador
  * não vê: trocar para Portugal faz CPF chegar como "NIF inválido".

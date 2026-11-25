@@ -637,6 +637,7 @@ export const novaConditionCheckSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.deal_status }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.business_hours }),
   z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.window_open }),
+  z.strictObject({ ...identidadeDoRamo, ...regrasNovasDeCondicao.carteira }),
 ]);
 export type NovaConditionCheck = z.infer<typeof novaConditionCheckSchema>;
 
@@ -915,6 +916,19 @@ export const instagramReplyConfigSchema = z.strictObject({
 });
 export type InstagramReplyConfig = z.infer<typeof instagramReplyConfigSchema>;
 
+/** Versões extras da resposta pública (além do `text`): no total, até 10 versões sorteadas. */
+export const MAX_VERSOES_EXTRAS_DA_RESPOSTA_PUBLICA = 9;
+
+/** "Responder no comentário": o texto principal + versões extras; a cada execução uma é sorteada. */
+export const instagramPublicReplyConfigSchema = instagramReplyConfigSchema.extend({
+  // Versão vazia é aceita (o editor cria a caixa antes de a pessoa escrever) e nunca é sorteada.
+  variations: z
+    .array(tpl(MAX_TEXTO_DA_RESPOSTA_AO_COMENTARIO))
+    .max(MAX_VERSOES_EXTRAS_DA_RESPOSTA_PUBLICA)
+    .optional(),
+});
+export type InstagramPublicReplyConfig = z.infer<typeof instagramPublicReplyConfigSchema>;
+
 /** "Confere se segue": sem configuração (usa a conta e o autor do comentário do gatilho). */
 export const instagramCheckFollowConfigSchema = z.strictObject({});
 
@@ -1123,7 +1137,7 @@ export const flowNodeSchema = z.discriminatedUnion('type', [
     type: z.literal('instagram_public_reply'),
     label: z.string().min(1).max(60),
     position: z.strictObject({ x: z.number(), y: z.number() }),
-    config: instagramReplyConfigSchema,
+    config: instagramPublicReplyConfigSchema,
   }),
   z.strictObject({
     id: z.string().min(1),
