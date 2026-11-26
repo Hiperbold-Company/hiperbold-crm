@@ -844,10 +844,10 @@ function buildDeriveDeps(
       await avisarMidiaNaoLida(
         orgId,
         d.tipo,
-        `o limite de gasto com IA deste mês foi atingido e a IA está configurada para parar nele, então ${d.oQueNaoSaiu} ao provedor`,
+        `o limite de segurança de IA desta empresa foi atingido, então ${d.oQueNaoSaiu} ao provedor`,
         "Enquanto o limite valer, a IA também não responde: as conversas vão para a fila de atendimento humano.",
         undefined,
-        "Para resolver, suba o limite ou desligue a parada em Uso de IA › Orçamento.",
+        "Para resolver, fale com o suporte para ampliar o limite.",
       );
       return true;
     }

@@ -28,11 +28,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-function fmtCost(cents: number | null): string {
-  if (cents == null) return "—";
-  return `US$ ${(cents / 100).toFixed(4)}`;
-}
-
 function fmtLatency(ms: number | null): string {
   if (ms == null) return "—";
   if (ms < 1000) return `${ms}ms`;
@@ -82,7 +77,6 @@ export function RunDetailDrawer({ run, open, onOpenChange }: Props) {
               <Cell label={t("Tokens (in/out)")}>
                 {(run.tokens_in ?? 0).toLocaleString()} / {(run.tokens_out ?? 0).toLocaleString()}
               </Cell>
-              <Cell label={t("Custo")}>{fmtCost(run.cost_cents)}</Cell>
               <Cell label={t("Latência")}>{fmtLatency(run.latency_ms)}</Cell>
               <Cell label={t("Steps")}>{run.steps_count ?? 0}</Cell>
             </dl>

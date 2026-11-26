@@ -41,11 +41,6 @@ function fmtLatency(ms: number | null): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function fmtCost(cents: number | null): string {
-  if (cents == null) return "—";
-  return `US$ ${(cents / 100).toFixed(4)}`;
-}
-
 export function RunsTable({ agentId, active }: Props) {
   const t = useT();
   const { data, isLoading, error, refetch, isFetching } = useAgentRuns(agentId, {
@@ -87,7 +82,6 @@ export function RunsTable({ agentId, active }: Props) {
               <TableHead>{t("Status")}</TableHead>
               <TableHead>{t("Tipo")}</TableHead>
               <TableHead>{t("Tokens (in/out)")}</TableHead>
-              <TableHead>{t("Custo")}</TableHead>
               <TableHead>{t("Latência")}</TableHead>
               <TableHead>{t("Steps")}</TableHead>
               <TableHead className="text-right">{t("Ações")}</TableHead>
@@ -96,7 +90,7 @@ export function RunsTable({ agentId, active }: Props) {
           <TableBody className="max-md:block">
             {rows.length === 0 && !isLoading ? (
               <TableRow className="max-md:block">
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground max-md:block">
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground max-md:block">
                   {t("Nenhuma execução ainda.")}
                 </TableCell>
               </TableRow>
@@ -128,12 +122,9 @@ export function RunsTable({ agentId, active }: Props) {
                     <span className="text-muted-foreground">{t("produção")}</span>
                   )}
                 </TableCell>
-                <TableCell className="font-mono text-xs max-md:hidden">
+                <TableCell className="font-mono text-xs max-md:p-0 max-md:before:mr-1 max-md:before:font-sans max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]" data-rotulo={t("Tokens")}>
                   {(r.tokens_in ?? 0).toLocaleString()} /{" "}
                   {(r.tokens_out ?? 0).toLocaleString()}
-                </TableCell>
-                <TableCell className="font-mono text-xs max-md:p-0 max-md:before:mr-1 max-md:before:font-sans max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]" data-rotulo={t("Custo")}>
-                  {fmtCost(r.cost_cents)}
                 </TableCell>
                 <TableCell className="font-mono text-xs max-md:p-0 max-md:before:mr-1 max-md:before:font-sans max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]" data-rotulo={t("Latência")}>
                   {fmtLatency(r.latency_ms)}
