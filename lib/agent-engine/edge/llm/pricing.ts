@@ -435,6 +435,33 @@ export function custoDeVozCents(caracteres: number): number {
   return Math.max(0, caracteres) * USD_POR_CREDITO_ELEVENLABS * 100;
 }
 
+/**
+ * Transcrição de áudio pela API da OpenAI é cobrada por MINUTO de áudio, não
+ * por token — mesma razão da voz acima para ter função própria. Só o
+ * `whisper-1` entra: é o único modelo de transcrição da OpenAI cobrado só por
+ * duração (os `gpt-*-transcribe` cobram por token e devolvem `usage` em
+ * tokens). Fonte: https://openai.com/api/pricing (US$ 0,006 por minuto).
+ *
+ * ⚠️ Vale só para a API da própria OpenAI. O mesmo id servido por outro
+ * endereço (serviço próprio da instalação, Groq…) tem outra tarifa — quem
+ * chama decide se o preço se aplica; aqui só a conta.
+ */
+const USD_POR_MINUTO_DE_TRANSCRICAO: Readonly<Record<string, number>> = {
+  'whisper-1': 0.006,
+};
+
+/**
+ * Custo em CENTS de transcrever `segundos` de áudio com `model`, ou null quando
+ * o modelo não tem tarifa por minuto conhecida ou a duração não é um número
+ * válido — null é "preço desconhecido", nunca "de graça".
+ */
+export function custoDeTranscricaoCents(model: string, segundos: number): number | null {
+  const usdPorMinuto = USD_POR_MINUTO_DE_TRANSCRICAO[model];
+  if (usdPorMinuto === undefined) return null;
+  if (!Number.isFinite(segundos) || segundos < 0) return null;
+  return (segundos / 60) * usdPorMinuto * 100;
+}
+
 /** Uso de token mínimo para o resolvedor com catálogo, cache é opcional aqui. */
 export interface UsoDeTokensParaCusto {
   inputTokens: number;

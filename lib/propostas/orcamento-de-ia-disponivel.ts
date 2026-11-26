@@ -87,7 +87,7 @@ export async function orcamentoDeIaDisponivel(
       return {
         disponivel: false,
         motivo:
-          "O orçamento mensal de IA desta organização foi atingido. Ajuste o limite em Uso de IA › Orçamento, ou aguarde a virada do mês.",
+          "O limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliá-lo.",
       };
     }
     return { disponivel: true, motivo: null };

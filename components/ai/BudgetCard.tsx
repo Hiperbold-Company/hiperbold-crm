@@ -5,6 +5,10 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 /**
  * O card de orçamento de IA — a peça que, até a 0159, mentia POR DEFAULT.
  *
+ * Desde 25/11/2026 mora só no painel da plataforma (aba Plano da empresa,
+ * `/admin/tenants/[id]/plano`): o teto em dólar é trava de segurança que o
+ * cliente não vê nem ajusta (decisão do dono do produto).
+ *
  * ═══ O QUE ESTAVA ERRADO ═══
  *
  * 1. A frase "a IA pausa ao chegar no limite" era falsa para 100% das
@@ -54,8 +58,11 @@ import { useAiBudget, useUpdateBudget, type BudgetStatus } from "@/hooks/ai/useA
 import { useT } from "@/hooks/i18n/useT";
 
 interface Props {
+  /** A empresa cujo teto se mostra — vem do path do painel da plataforma. */
+  organizationId: string;
   initialData?: BudgetStatus;
-  isAdmin: boolean;
+  /** Escopo `full` do admin da plataforma; sem ele o card é só leitura. */
+  podeEditar: boolean;
 }
 
 type Modo = BudgetStatus["enforcement_mode"];
@@ -160,10 +167,10 @@ const AVISO_DE_MEDICAO =
   "parada no limite pode não acontecer. Enquanto isso, acompanhe o gasto direto no " +
   "painel do seu provedor de IA.";
 
-export function BudgetCard({ initialData, isAdmin }: Props) {
+export function BudgetCard({ organizationId, initialData, podeEditar }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
-  const q = useAiBudget({ initialData });
+  const q = useAiBudget(organizationId, { initialData });
   const status = q.data;
 
   if (!status) {
@@ -197,7 +204,7 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
           {!status.blocked_now && overLimit && limit > 0 && (
             <Badge variant="secondary">{t("Passou do limite")}</Badge>
           )}
-          {isAdmin && <EditBudgetDialog status={status} />}
+          {podeEditar && <EditBudgetDialog organizationId={organizationId} status={status} />}
         </div>
       </div>
 
@@ -302,10 +309,10 @@ function OpcaoDeModo({
   );
 }
 
-function EditBudgetDialog({ status }: { status: BudgetStatus }) {
+function EditBudgetDialog({ organizationId, status }: { organizationId: string; status: BudgetStatus }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const update = useUpdateBudget();
+  const update = useUpdateBudget(organizationId);
   const [limitUsd, setLimitUsd] = useState<string>(
     (status.monthly_limit_cents / 100).toFixed(2),
   );

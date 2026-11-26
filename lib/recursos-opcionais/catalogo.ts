@@ -36,6 +36,7 @@ import { vendaPeloCanalLigada } from "@/lib/conversoes/venda-pelo-canal";
 import { lerConfigDoJev } from "@/lib/ai/decisao/config";
 import { capacidadesLigadas, type CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
 import { conversaFicaComQuemAtendeu } from "@/lib/schemas/routing";
+import { transcreverAudiosLigado } from "@/lib/schemas/settings";
 import { configAssinatura } from "@/lib/messaging/assinatura";
 
 /** Quem decide: o servidor inteiro, a empresa, cada agente, ou o arquivo do servidor. */
@@ -394,6 +395,16 @@ const DA_EMPRESA: RecursoOpcional[] = [
     ler: peloSettings((s) => conversaFicaComQuemAtendeu(s)),
   },
   {
+    id: "transcrever_audios",
+    nome: "Transcrever áudios",
+    oQueFaz: "Os áudios recebidos viram texto na conversa, e o agente de IA lê a transcrição. Desligado, o áudio fica sem texto e não gasta tokens.",
+    nivel: "organizacao",
+    padrao: "ligado",
+    quemDecide: "manager",
+    href: "/app/settings/atendimento",
+    ler: peloSettings((s) => transcreverAudiosLigado(s)),
+  },
+  {
     id: "ia_volta_sozinha",
     nome: "A IA volta sozinha sem resposta da equipe",
     oQueFaz: "Devolve a conversa ao agente depois de um tempo sem resposta de uma pessoa.",
@@ -617,15 +628,9 @@ const DA_EMPRESA: RecursoOpcional[] = [
     // A chave mora em `map_provider_credentials`, e esta lista não lê chave: o estado fica na tela.
     href: "/app/ai/providers",
   },
-  {
-    id: "teto_de_gasto",
-    nome: "Teto de gasto de IA",
-    oQueFaz: "Teto mensal, aviso, e se a IA para ao chegar nele.",
-    nivel: "organizacao",
-    padrao: "varia",
-    quemDecide: "manager",
-    href: "/app/ai/usage",
-  },
+  // "teto_de_gasto" saiu em 25/11/2026: o teto de gasto de IA virou trava de
+  // segurança que só o admin da plataforma ajusta, na aba Plano de cada empresa
+  // (`/admin/tenants/[id]/plano`). A empresa não decide nada sobre ele.
   {
     id: "interface",
     nome: "Quais menus aparecem",

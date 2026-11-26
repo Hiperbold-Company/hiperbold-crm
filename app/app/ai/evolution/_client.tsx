@@ -34,9 +34,6 @@ import { useT } from "@/hooks/i18n/useT";
  * "casos que precisaram de uma pessoa". A tela é escrita para o segundo.
  */
 
-// DÓLAR: `outcome.cost_cents` vem de `llm_calls`, que `pricing.ts` grava em centavo de USD.
-const usd = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" });
-
 /**
  * O bloco se chama "o que MUDOU", mas o payload traz um período só — não há
  * comparação embutida. Em vez de prometer uma variação que a tela não calcula,
@@ -597,11 +594,6 @@ function Conteudo({ payload }: { payload: NonNullable<ReturnType<typeof useEvolu
             rotulo={t("Casos que precisaram de uma pessoa")}
             valor={taxaDeAjuda(outcome.handoff_rate, t)}
             significa={t(SIGNIFICA_AJUDA)}
-          />
-          <StatCard
-            rotulo={t("Custo da IA no período")}
-            valor={usd.format(outcome.cost_cents / 100)}
-            significa={t("O que você pagou aos provedores de IA para tudo isto acontecer.")}
           />
         </div>
       </Bloco>

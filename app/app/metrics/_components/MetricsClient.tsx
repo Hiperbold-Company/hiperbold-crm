@@ -30,12 +30,14 @@ import {
 import { AbaAtendimento } from "./AbaAtendimento";
 import { AbaNegocios } from "./AbaNegocios";
 import { AbaOrigens } from "./AbaOrigens";
+import { AgentesDeIaPanel } from "./AgentesDeIaPanel";
 import { AtritoPanel } from "./AtritoPanel";
 import { FiltrosDeDesempenho, type FunilDoFiltro } from "./FiltrosDeDesempenho";
 import { CanaisPanel } from "./CanaisPanel";
 import { MetaDoMesPanel, type EstadoDaMeta } from "./MetaDoMesPanel";
 import { SeriePanel } from "./SeriePanel";
 import { useMetasDoMes } from "@/hooks/metrics/useMetasDoMes";
+import type { UsageFiltersAgent } from "@/components/ai/UsageFilters";
 import { janelaDoMes, mesLocal } from "@/lib/metas/periodo";
 
 interface Props {
@@ -44,15 +46,31 @@ interface Props {
   podeVerPerdas?: boolean;
   currentUserId: string;
   funis?: FunilDoFiltro[];
+  /**
+   * Agentes do filtro da aba "Agentes de IA". A aba só existe quando `canCompare`
+   * (gerente para cima), o mesmo piso de `GET /api/v1/ai/usage`.
+   */
+  agentesDeIa?: UsageFiltersAgent[];
 }
 
-export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentUserId, funis = [] }: Props) {
+export function MetricsClient({
+  canCompare,
+  podeVerPerdas = canCompare,
+  currentUserId,
+  funis = [],
+  agentesDeIa = [],
+}: Props) {
   const t = useT();
   const rd = useMarcaDasMetricas();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const filtros = useMemo(() => lerFiltrosDaUrl(searchParams), [searchParams]);
+  const lidos = useMemo(() => lerFiltrosDaUrl(searchParams), [searchParams]);
+  // A aba "Agentes de IA" é de gerente para cima (a rota responde 403 abaixo
+  // disso): quem chega com ela na URL sem o papel cai na primeira aba, sem a
+  // consulta sair.
+  const filtros: FiltrosDaTela =
+    lidos.aba === "agentes_de_ia" && !canCompare ? { ...lidos, aba: "negocios" } : lidos;
   // O atendente comum não escolhe pessoa: a RLS já o escopa (ver FiltrosDeDesempenho).
   const efetivos: FiltrosDaTela = canCompare ? filtros : { ...filtros, atendente: null };
   // A janela é recalculada quando o filtro muda, não a cada render: a query
@@ -77,7 +95,20 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
         ? "vazio"
         : "ok";
 
-  const mudar = (f: FiltrosDaTela) => router.replace(`${pathname}${filtrosParaUrl(f)}`, { scroll: false });
+  // Na aba "Agentes de IA" os filtros PRÓPRIOS dela (agente, tipo de uso, datas)
+  // moram na URL ao lado dos globais: reconstruir a URL só com os globais os
+  // apagaria enquanto os seletores da aba continuam mostrando o filtro.
+  const mudar = (f: FiltrosDaTela) => {
+    const p = new URLSearchParams(filtrosParaUrl(f).replace(/^\?/, ""));
+    if (f.aba === "agentes_de_ia") {
+      for (const chave of ["agent_id", "invocation_kind", "from", "to"]) {
+        const valor = searchParams.get(chave);
+        if (valor) p.set(chave, valor);
+      }
+    }
+    const qs = p.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,6 +126,7 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
           <TabsTrigger value="origens">{t("Origens")}</TabsTrigger>
           <TabsTrigger value="atendimento">{t("Atendimento")}</TabsTrigger>
           <TabsTrigger value="atrito">{t("Atrito")}</TabsTrigger>
+          {canCompare ? <TabsTrigger value="agentes_de_ia">{t("Agentes de IA")}</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="negocios" className="mt-4">
@@ -150,6 +182,21 @@ export function MetricsClient({ canCompare, podeVerPerdas = canCompare, currentU
             </div>
           ) : null}
         </TabsContent>
+        {canCompare ? (
+          <TabsContent value="agentes_de_ia" className="mt-4">
+            {filtros.aba === "agentes_de_ia" ? (
+              <AgentesDeIaPanel
+                agents={agentesDeIa}
+                initial={{
+                  agent_id: searchParams.get("agent_id") ?? undefined,
+                  invocation_kind: searchParams.get("invocation_kind") ?? undefined,
+                  from: searchParams.get("from") ?? undefined,
+                  to: searchParams.get("to") ?? undefined,
+                }}
+              />
+            ) : null}
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

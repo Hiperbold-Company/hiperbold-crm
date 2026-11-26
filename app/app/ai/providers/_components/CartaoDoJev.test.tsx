@@ -365,13 +365,14 @@ describe("CartaoDoJev — (5) ligado, decidindo", () => {
   /** O valor que acompanha o rótulo na grade de números. */
   const numero = (rotulo: string) => screen.getByText(rotulo).nextElementSibling?.textContent;
 
-  it("mostra os números da semana, com o custo em casas que não viram zero", () => {
+  it("mostra os números da semana, sem custo em dólar", () => {
     montar(decidindo());
     expect(cartao()).toHaveAttribute("data-estado", "decidindo");
     const numeros = screen.getByTestId("jev-numeros");
     expect(numeros).toHaveTextContent(/1\.200/);
-    // 0,21 centavo de dólar = US$ 0,0021 — com 2 casas seria "US$ 0,00".
-    expect(numeros).toHaveTextContent(/US\$\s?0,0021/);
+    // A empresa é cobrada em tokens: nenhum valor em dólar no cartão.
+    expect(numeros).not.toHaveTextContent(/US\$/);
+    expect(screen.queryByText("Custo")).toBeNull();
     expect(numeros).toHaveTextContent(/0,4\s?s/);
     expect(numero("Vezes que a IA de sempre cobriu o Jev")).toBe("2");
     // O número que mostra o valor do Jev: quantos clientes irritados ele percebeu.
@@ -403,7 +404,7 @@ describe("CartaoDoJev — (5) ligado, decidindo", () => {
   });
 
   it("a grade de números acompanha a largura do cartão, não a da tela", () => {
-    // A 375 px, duas colunas punham "US$ 0,000049" fora do cartão; num tablet
+    // A 375 px, duas colunas punham o número mais largo fora do cartão; num tablet
     // com a barra lateral aberta, três colunas de 117 px o partiam em duas
     // linhas. Colunas por breakpoint de TELA erram nos dois casos; jsdom não
     // mede layout, então a garantia aqui é a classe e a medida é da prova em tela.
@@ -466,13 +467,13 @@ describe("CartaoDoJev — (5) ligado, decidindo", () => {
     expect(screen.getByText(/Ligado, mas parado/)).toBeInTheDocument();
   });
 
-  it("custo sem preço conhecido: traço, e o aviso de conta parcial", () => {
+  it("custo parcial ou ausente não aparece: o cartão não mostra dólar nem aviso de custo", () => {
     montar({
       ...decidindo(),
       numeros: { ...decidindo().numeros, custo_cents: null, custo_incompleto: true },
     });
-    expect(screen.getByTestId("jev-numeros")).not.toHaveTextContent(/US\$\s?0,00/);
-    expect(screen.getByTestId("jev-custo-parcial")).toBeInTheDocument();
+    expect(screen.getByTestId("jev-numeros")).not.toHaveTextContent(/US\$/);
+    expect(screen.queryByTestId("jev-custo-parcial")).toBeNull();
   });
 
   it("ligado sem chave ativa (desativada em Credenciais) não finge que mede", () => {

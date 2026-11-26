@@ -79,7 +79,7 @@ describe("orcamentoDeIaDisponivel", () => {
     const db = montarDb({ orcamento: ORCAMENTO_HARD, gasto: 15000, avisadoNesteMes: true });
     const r = await orcamentoDeIaDisponivel(db, "org-1");
     expect(r.disponivel).toBe(false);
-    expect(r.motivo).toContain("orçamento mensal de IA");
+    expect(r.motivo).toContain("limite de segurança de IA");
   });
 
   it("acima do teto mas SEM aviso no mês: disponível (ninguém é bloqueado sem ter sido avisado)", async () => {

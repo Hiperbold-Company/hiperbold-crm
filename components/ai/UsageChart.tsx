@@ -12,7 +12,6 @@ import {
   Legend,
 } from "recharts";
 import type { UsagePayload } from "@/lib/ai/usage/aggregate";
-import { formatCentsUSD } from "@/lib/money";
 import { useT } from "@/hooks/i18n/useT";
 
 interface Props {
@@ -26,16 +25,6 @@ function formatDateTick(s: string, idioma: string): string {
     month: "2-digit",
     timeZone: "UTC",
   });
-}
-
-function formatNumber(n: number): string {
-  return n.toLocaleString("pt-BR");
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
 }
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -80,97 +69,17 @@ export function UsageChart({ payload }: Props) {
     pct: Number((p.value * 100).toFixed(2)),
   }));
 
-  const hasCost = series.cost_cents.some((p) => p.value > 0);
-  const hasTokens = series.total_tokens.some((p) => p.value > 0);
   const hasLatency = latencyData.some((p) => p.p50 > 0 || p.p95 > 0);
   const hasHandoff = handoffData.some((p) => p.pct > 0);
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <ChartCard title={t("Quanto gastou por dia (US$)")}>
-        {!hasCost ? (
-          <EmptyChart />
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart
-              data={series.cost_cents}
-              margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-              <XAxis
-                dataKey="day"
-                tickFormatter={(v) => formatDateTick(v, tagDoIdioma)}
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => formatCentsUSD(v)}
-                width={70}
-              />
-              <Tooltip
-                formatter={(value) => [formatCentsUSD(Number(value)), t("Custo")]}
-                labelFormatter={(label) => formatDateTick(String(label), tagDoIdioma)}
-                contentStyle={tooltipStyle}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="hsl(142 76% 36%)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-
-      <ChartCard title={t("Volume de texto processado por dia")}>
-        {!hasTokens ? (
-          <EmptyChart />
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart
-              data={series.total_tokens}
-              margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-              <XAxis
-                dataKey="day"
-                tickFormatter={(v) => formatDateTick(v, tagDoIdioma)}
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={formatTokens}
-                width={50}
-              />
-              <Tooltip
-                formatter={(value) => [formatNumber(Number(value)), t("Tokens")]}
-                labelFormatter={(label) => formatDateTick(String(label), tagDoIdioma)}
-                contentStyle={tooltipStyle}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="hsl(262 83% 58%)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-
+      {/*
+        Sem gráfico em dólar e sem o de tokens crus (25/11/2026): o consumo que o
+        cliente paga é em tokens PONDERADOS e mora em Meu plano e consumo de IA;
+        os tokens crus de `llm_calls` contariam outro número para a mesma pergunta.
+        O custo em dólar fica só no painel da plataforma.
+      */}
       <ChartCard title={t("Tempo de uma chamada à IA por dia (segundos)")}>
         {!hasLatency ? (
           <EmptyChart />

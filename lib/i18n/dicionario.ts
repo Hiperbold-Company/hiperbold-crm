@@ -61,6 +61,13 @@ export const DICIONARIO: Traducoes = {
   "Trocar de empresa": { es: "Cambiar de empresa", en: "Switch company" },
   "Todas as telas que você pode abrir, por área.": { es: "Todas las pantallas que puede abrir, por área.", en: "Every screen you can open, by area." },
   "Sua conta, todas as seções, ajuda, tema e idioma.": { es: "Su cuenta, todas las secciones, ayuda, tema e idioma.", en: "Your account, all sections, help, theme and language." },
+  // Interruptor "Transcrever áudios" da empresa e o desconto da transcrição no plano (migration 1025, 25/11/2026).
+  "Transcrever áudios": { es: "Transcribir audios", en: "Transcribe audio messages" },
+  "Os áudios recebidos viram texto na conversa, e o agente de IA lê a transcrição. Desligado, o áudio fica sem texto e não gasta tokens.": { es: "Los audios recibidos se convierten en texto en la conversación, y el agente de IA lee la transcripción. Desactivado, el audio queda sin texto y no consume tokens.", en: "Received audio messages become text in the conversation, and the AI agent reads the transcript. When off, the audio stays without text and uses no tokens." },
+  "Cada minuto de áudio transcrito pela chave da plataforma desconta 6.000 tokens do plano, e cada áudio conta no máximo 10 minutos. Vale também para a fala dos vídeos. Com a chave da própria empresa em Provedores de IA, nada é descontado do plano.": { es: "Cada minuto de audio transcrito con la clave de la plataforma descuenta 6.000 tokens del plan, y cada audio cuenta como máximo 10 minutos. Vale también para el habla de los videos. Con la clave propia de la empresa en Proveedores de IA, no se descuenta nada del plan.", en: "Each minute of audio transcribed with the platform key deducts 6,000 tokens from the plan, and each audio counts for at most 10 minutes. This also applies to speech in videos. With the company's own key in AI Providers, nothing is deducted from the plan." },
+  "Ligado: os áudios recebidos e a fala dos vídeos viram texto na conversa, e o agente de IA lê a transcrição.": { es: "Activado: los audios recibidos y el habla de los videos se convierten en texto en la conversación, y el agente de IA lee la transcripción.", en: "On: received audio messages and the speech in videos become text in the conversation, and the AI agent reads the transcript." },
+  "Desligado: o áudio e a fala dos vídeos ficam na conversa sem texto, e o agente de IA não recebe a transcrição (os vídeos ainda são lidos pelas imagens).": { es: "Desactivado: el audio y el habla de los videos quedan en la conversación sin texto, y el agente de IA no recibe la transcripción (los videos aún se leen por las imágenes).", en: "Off: the audio and the speech in videos stay in the conversation without text, and the AI agent does not receive a transcript (videos are still read through their frames)." },
+  "Só um gerente ou administrador pode mudar esta opção.": { es: "Solo un gerente o administrador puede cambiar esta opción.", en: "Only a manager or administrator can change this option." },
   // Motivos de perda da organização e campos visíveis por funil (migration 1021, 24/11/2026).
   "Motivos de perda": { es: "Motivos de pérdida", en: "Loss reasons" },
   "Os motivos que a equipe escolhe ao marcar um negócio como perdido. A lista é da empresa e vale para todos os funis; a categoria agrupa o relatório de perdas.": { es: "Los motivos que el equipo elige al marcar un negocio como perdido. La lista es de la empresa y vale para todos los embudos; la categoría agrupa el informe de pérdidas.", en: "The reasons the team picks when marking a deal as lost. The list belongs to the company and applies to every pipeline; the category groups the loss report." },
@@ -6429,6 +6436,12 @@ export const DICIONARIO: Traducoes = {
       es: "Todos los números de esta página corresponden solo a este intervalo. Cambia las fechas para comparar un mes con otro.",
     },
   Tokens: { es: "Tokens" },
+  "O consumo de IA chegou perto do limite de segurança desta empresa": { es: "El consumo de IA llegó cerca del límite de seguridad de esta empresa" },
+  "O limite de segurança de IA desta empresa foi atingido": { es: "Se alcanzó el límite de seguridad de IA de esta empresa" },
+  "A IA parou porque o limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliar o limite.": { es: "La IA se detuvo porque se alcanzó el límite de seguridad de IA de esta empresa. Habla con soporte para ampliar el límite." },
+  "O limite de segurança de IA desta empresa foi atingido, então a prévia não foi gerada. Fale com o suporte.": { es: "Se alcanzó el límite de seguridad de IA de esta empresa, así que no se generó la vista previa. Habla con soporte." },
+  "O limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliá-lo.": { es: "Se alcanzó el límite de seguridad de IA de esta empresa. Habla con soporte para ampliarlo." },
+  "Limite de segurança de IA atingido — assumir a conversa": { es: "Límite de seguridad de IA alcanzado: asumir la conversación" },
   "Tudo o que entrou na cabeça dele neste período, e de onde veio.": {
     es: "Todo lo que entró en su cabeza en este período, y de dónde vino.",
   },
@@ -15609,9 +15622,6 @@ export const DICIONARIO: Traducoes = {
   },
   "Uma informação que o assistente ouviu de um cliente venceu sem ninguém conferir": {
     es: "Una información que el asistente escuchó de un cliente venció sin que nadie la revisara",
-  },
-  "O gasto de IA passou do aviso que você definiu": {
-    es: "El gasto de IA superó el aviso que definiste",
   },
   "Um material que você enviou não entrou na base de conhecimento": {
     es: "Un material que enviaste no entró en la base de conocimiento",
@@ -26349,6 +26359,23 @@ export const DICIONARIO: Traducoes = {
   // organização (app/app/settings/plano) ───
   "Plano e uso": { es: "Plan y uso" },
   "Meu plano": { es: "Mi plan" },
+  // 25/11/2026: "Meu plano" virou "Meu plano e consumo de IA", o lugar único do consumo de IA,
+  // e as métricas técnicas do agente foram para Desempenho › Agentes de IA.
+  "Meu plano e consumo de IA": {
+    es: "Mi plan y consumo de IA",
+  },
+  "Plano contratado, pagamento, consumo de tokens de IA e cancelamento.": {
+    es: "Plan contratado, pago, consumo de tokens de IA y cancelación.",
+  },
+  "Quanto sua organização usa de cada item do plano contratado, e quantos tokens de IA já consumiu no mês.": {
+    es: "Cuánto usa tu organización de cada elemento del plan contratado, y cuántos tokens de IA ya consumió en el mes.",
+  },
+  "Tokens por dia": {
+    es: "Tokens por día",
+  },
+  "Esta aba tem filtros próprios (agente, tipo de uso e datas): não segue período, funil nem atendente do topo. O consumo de tokens do plano fica em Meu plano e consumo de IA.": {
+    es: "Esta pestaña tiene filtros propios (agente, tipo de uso y fechas): no sigue el período, el embudo ni el agente de arriba. El consumo de tokens del plan está en Mi plan y consumo de IA.",
+  },
   "Plano contratado, pagamento, uso e cancelamento.": {
     es: "Plan contratado, pago, uso y cancelación.",
   },
@@ -26466,6 +26493,18 @@ export const DICIONARIO: Traducoes = {
   "Plano sem limite (Ilimitado)": { es: "Plan sin límite (Ilimitado)" },
   Creditado: { es: "Acreditado" },
   "Painel de margem": { es: "Panel de margen" },
+  "O limite de segurança de IA é ajustado pelo suporte da plataforma. Fale com o suporte se precisar mudá-lo.": {
+    es: "El límite de seguridad de IA lo ajusta el soporte de la plataforma. Habla con el soporte si necesitas cambiarlo.",
+  },
+  "O limite de segurança de IA desta empresa foi atingido e a IA parou de responder. Fale com o suporte para liberar.": {
+    es: "Se alcanzó el límite de seguridad de IA de esta empresa y la IA dejó de responder. Habla con el soporte para liberarla.",
+  },
+  "A IA desta empresa está perto do limite de segurança de gasto. Se precisar de mais folga, fale com o suporte.": {
+    es: "La IA de esta empresa está cerca del límite de seguridad de gasto. Si necesitas más margen, habla con el soporte.",
+  },
+  "Trava de segurança: a empresa não vê este valor nem o ajusta. Quando o limite é atingido com a parada ligada, a IA da empresa para de responder e a Central avisa a equipe para falar com o suporte.": {
+    es: "Traba de seguridad: la empresa no ve este valor ni lo ajusta. Cuando se alcanza el límite con la parada activada, la IA de la empresa deja de responder y la Central avisa al equipo que hable con el soporte.",
+  },
   "Receita em reais e custo em dólar, lado a lado, sem conversão de câmbio: câmbio não se inventa.":
     {
       es: "Ingresos en reales y costo en dólares, lado a lado, sin conversión de cambio: el cambio no se inventa.",

@@ -68,8 +68,12 @@ export const POLITICAS_DE_AVISO = {
   event_dead: { refs: [], orientacao: "Peça a quem administra para conferir o processamento descrito neste aviso." },
   // `plano` é o teto de IA do plano de cobrança (spec cobrança §5): a IA parou
   // porque o uso incluído acabou, e quem resolve é o admin, na tela do plano.
-  budget_exceeded: { refs: ["ai_budget", "plano"], orientacao: "Peça ao gestor para revisar o limite e o uso de IA." },
-  budget_warning: { refs: ["ai_budget"], orientacao: "Peça ao gestor para revisar o limite e o uso de IA." },
+  // O teto de gasto de IA (`ai_budget`) é trava de segurança que só o suporte
+  // da plataforma ajusta (decisão do dono do produto, 25/11/2026): o aviso não
+  // leva a tela nenhuma da empresa e não fala em dólar — diz o que aconteceu e
+  // manda falar com o suporte. Ver o ramo `ai_budget` de `resolverDestinosDosAvisos`.
+  budget_exceeded: { refs: ["ai_budget", "plano"], orientacao: "O limite de segurança de IA desta empresa foi atingido e a IA parou de responder. Fale com o suporte para liberar." },
+  budget_warning: { refs: ["ai_budget"], orientacao: "A IA desta empresa está perto do limite de segurança de gasto. Se precisar de mais folga, fale com o suporte." },
   // `conversation` primeiro porque é o que o produtor grava hoje (o corpo do
   // aviso ficou CURTO e o contexto foi para dentro da conversa, onde a RLS o
   // protege). `contact` continua na lista por causa dos itens de clone antigo,
@@ -338,11 +342,16 @@ export async function resolverDestinosDosAvisos<T extends ReferenciaDoAviso>(
           // régua de `billing_limite`: mesmo destino (Plano e uso), mesmo
           // papel mínimo (manager para cima): é o gate de tokens ANTES de
           // responder, com `ref_id = organization_id` também.
-          const href = item.ref_kind === "ai_budget" ? "/app/ai/usage" : item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "/app/settings/plano" : "/app/radar";
-          const rotulo = item.ref_kind === "ai_budget" ? "Abrir uso de IA" : item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "Abrir Plano e uso" : "Abrir Radar";
+          //
+          // `ai_budget` (25/11/2026): o teto de gasto de IA virou trava de
+          // segurança que só o admin da plataforma ajusta, no painel. A empresa
+          // não tem tela para ele: o aviso fica SEM destino, com a orientação
+          // de falar com o suporte, para qualquer papel.
+          const href = item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "/app/settings/plano" : "/app/radar";
+          const rotulo = item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "Abrir Plano e uso" : "Abrir Radar";
           destination = item.ref_id !== organizationId ? INDISPONIVEL
-            : item.kind === "contact_proposal_expired" ? { estado: "sem_destino", orientacao: p.orientacao }
-            : !permite(papel, item.ref_kind === "ai_budget" || item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "manager" : "agent") ? semPermissao("manager")
+            : item.kind === "contact_proposal_expired" || item.ref_kind === "ai_budget" ? { estado: "sem_destino", orientacao: p.orientacao }
+            : !permite(papel, item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "manager" : "agent") ? semPermissao("manager")
             : { estado: "disponivel", href, rotulo };
         } else if (item.ref_kind === "plano") {
           // Plano é assunto do ADMIN (a entrada de Configurações é `minRole: "admin"`).

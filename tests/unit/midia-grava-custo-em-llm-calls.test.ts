@@ -35,6 +35,8 @@ const BINDING = {
   base_url: null as string | null,
 };
 let bindingDaVez: typeof BINDING | null = BINDING;
+/** `organizations.settings` da empresa: o interruptor "Transcrever áudios" mora aqui. */
+let settingsDaOrg: Record<string, unknown> = {};
 
 let linhaDaMensagem = {
   id: "msg1",
@@ -49,7 +51,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (tabela: string) => {
       const linha =
-        tabela === "ai_purpose_bindings" ? bindingDaVez : tabela === "agent_inbox_items" ? null : linhaDaMensagem;
+        tabela === "ai_purpose_bindings"
+          ? bindingDaVez
+          : tabela === "agent_inbox_items"
+            ? null
+            : tabela === "organizations"
+              ? { settings: settingsDaOrg }
+              : linhaDaMensagem;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const terminais: any = {
         maybeSingle: async () => ({ data: linha, error: null }),
@@ -76,6 +84,26 @@ vi.mock("@/lib/supabase/admin", () => ({
     storage: { from: () => ({ download: downloadMock }) },
   }),
 }));
+
+// ffmpeg falso: o módulo de vídeo é o REAL, só o binário é trocado — o falso
+// escreve no diretório de trabalho o que o comando pediria (a faixa de som ou
+// os quadros) e termina com sucesso.
+vi.mock("@/lib/messaging/media/video-derive", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/messaging/media/video-derive")>();
+  const { writeFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  return {
+    ...real,
+    deriveVideoText: (buffer: Buffer, deps: Parameters<typeof real.deriveVideoText>[1]) =>
+      real.deriveVideoText(buffer, {
+        ...deps,
+        runFfmpeg: async (args: string[], cwd: string) => {
+          if (args.includes("audio.ogg")) await writeFile(join(cwd, "audio.ogg"), Buffer.from([1, 2, 3]));
+          else await writeFile(join(cwd, "frame-01.jpg"), Buffer.from([1]));
+        },
+      }),
+  };
+});
 
 vi.mock("@/lib/messaging/media/derive", () => ({
   deriveMediaText: vi.fn(async () => "derivado de mentira"),
@@ -208,6 +236,7 @@ beforeEach(() => {
   credencial.falhaUpdate = false;
   credencial.rejeitaUpdate = false;
   bindingDaVez = BINDING;
+  settingsDaOrg = {};
   transcricaoDoEnv.apiKey = "";
   transcricaoDoEnv.baseUrl = "";
   linhaDaMensagem = {
@@ -311,6 +340,34 @@ describe("worker de mídia: chamada paga grava em llm_calls", () => {
       output_tokens: 0,
       cost_cents: 0.0508,
     });
+  });
+
+  it("grava a duração do áudio que o serviço informou, que é a base do débito no plano", async () => {
+    comAudio();
+    credencial.conversaOpenRouter = true;
+    bindingDaVez = null;
+    transcribeMedindoDoSvcMock.mockResolvedValueOnce({
+      texto: "transcrição de mentira", uso: null, custoCents: 0.0508, segundos: 12.5,
+    } as Awaited<ReturnType<typeof transcribeMedindoDoSvcMock>>);
+
+    await deriveMessageMedia(eventRow());
+    await depsDaChamada().transcriber.transcribe(Buffer.from("controle"), "audio/ogg");
+
+    expect(llmCallsInsertMock.mock.calls[0]![0]).toMatchObject({ purpose: PONTO_TRANSCRICAO_DE_AUDIO, audio_seconds: 12.5 });
+  });
+
+  it("transcrição que voltou vazia não leva duração, então não desconta do plano", async () => {
+    comAudio();
+    credencial.conversaOpenRouter = true;
+    bindingDaVez = null;
+    transcribeMedindoDoSvcMock.mockResolvedValueOnce({
+      texto: "  ", uso: null, custoCents: 0.0508, segundos: 12.5,
+    } as Awaited<ReturnType<typeof transcribeMedindoDoSvcMock>>);
+
+    await deriveMessageMedia(eventRow());
+    await depsDaChamada().transcriber.transcribe(Buffer.from("controle"), "audio/ogg");
+
+    expect(llmCallsInsertMock.mock.calls[0]![0]).toMatchObject({ audio_seconds: null });
   });
 
   it("o limite conhecido termina em failed já na primeira tentativa, sem chamada de custo", async () => {
@@ -442,6 +499,61 @@ describe("worker de mídia: chamada paga grava em llm_calls", () => {
       cost_cents: null,
       http_status: 401,
     });
+  });
+});
+
+describe("interruptor da empresa \"Transcrever áudios\"", () => {
+  it("desligado: o áudio não é baixado nem transcrito, e a mídia fica pulada (terminal)", async () => {
+    comAudio();
+    settingsDaOrg = { crm: { transcrever_audios: false } };
+
+    const r = await deriveMessageMedia(eventRow());
+
+    expect(r).toMatchObject({ status: "skipped", detail: "transcricao_desligada" });
+    expect(downloadMock).not.toHaveBeenCalled();
+    expect(deriveMediaText).not.toHaveBeenCalled();
+    expect(transcribeDoSvcMock).not.toHaveBeenCalled();
+    expect(llmCallsInsertMock).not.toHaveBeenCalled();
+    expect(atualizacoesDaMensagem).toHaveBeenCalledWith({ media_derived_status: "skipped" });
+  });
+
+  it("sem a configuração, a empresa transcreve (padrão ligado)", async () => {
+    comAudio();
+
+    await deriveMessageMedia(eventRow());
+    await depsDaChamada().transcriber.transcribe(Buffer.from("ogg"), "audio/ogg");
+
+    expect(transcribeDoSvcMock).toHaveBeenCalled();
+  });
+
+  it("vídeo com o interruptor desligado lê os quadros e NÃO transcreve a fala", async () => {
+    linhaDaMensagem = { ...linhaDaMensagem, type: "video", media_mime: "video/mp4", media_storage_path: "org1/conv1/msg1.mp4" };
+    settingsDaOrg = { crm: { transcrever_audios: false } };
+
+    await deriveMessageMedia(eventRow());
+    const texto = await depsDaChamada().deriveVideo!(Buffer.from("mp4"), "video/mp4");
+
+    expect(transcribeDoSvcMock).not.toHaveBeenCalled();
+    expect(texto).toContain("Cenas do vídeo:");
+    expect(texto).not.toContain("Transcrição do áudio do vídeo");
+  });
+
+  it("vídeo com o interruptor ligado transcreve a fala", async () => {
+    linhaDaMensagem = { ...linhaDaMensagem, type: "video", media_mime: "video/mp4", media_storage_path: "org1/conv1/msg1.mp4" };
+
+    await deriveMessageMedia(eventRow());
+    const texto = await depsDaChamada().deriveVideo!(Buffer.from("mp4"), "video/mp4");
+
+    expect(transcribeDoSvcMock).toHaveBeenCalledTimes(1);
+    expect(texto).toContain("Transcrição do áudio do vídeo: transcrição de mentira");
+  });
+
+  it("desligado não alcança a imagem: a visão continua", async () => {
+    settingsDaOrg = { crm: { transcrever_audios: false } };
+
+    await deriveMessageMedia(eventRow());
+
+    expect(deriveMediaText).toHaveBeenCalled();
   });
 });
 

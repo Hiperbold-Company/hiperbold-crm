@@ -81,10 +81,23 @@ describe("destinos da Central", () => {
     const [item] = await resolverDestinosDosAvisos(leitor().client, ORG, "manager", [aviso("qr_rescan", "channel_session")]);
     expect(item?.destination).toMatchObject({ estado: "disponivel", href: "/app/connections" });
   });
-  it("manager recebe uso/acervo e agent apenas orientação", async () => {
+  it("manager recebe o acervo e agent apenas orientação", async () => {
     for (const role of ["agent", "manager"] as const) {
-      const items = await resolverDestinosDosAvisos(leitor().client, ORG, role, [aviso("budget_warning", "ai_budget", ORG), aviso("conhecimento_nao_indexado", "ai_knowledge_source")]);
-      expect(items.map(i => i.destination.estado)).toEqual(Array(2).fill(role === "agent" ? "sem_permissao" : "disponivel"));
+      const [item] = await resolverDestinosDosAvisos(leitor().client, ORG, role, [aviso("conhecimento_nao_indexado", "ai_knowledge_source")]);
+      expect(item?.destination.estado).toBe(role === "agent" ? "sem_permissao" : "disponivel");
+    }
+  });
+  // 25/11/2026: o teto de gasto de IA é trava de segurança que só o suporte da
+  // plataforma ajusta. O aviso não leva a tela da empresa nenhuma (a antiga
+  // /app/ai/usage virou redirect) e não fala em dólar.
+  it.each(["budget_warning", "budget_exceeded"])("%s do teto de IA: sem link, manda falar com o suporte, para todo papel", async kind => {
+    for (const role of ["agent", "manager", "admin"] as const) {
+      const [item] = await resolverDestinosDosAvisos(leitor().client, ORG, role, [aviso(kind, "ai_budget", ORG)]);
+      expect(item?.destination.estado).toBe("sem_destino");
+      expect(item?.destination).not.toHaveProperty("href");
+      expect(item?.destination.orientacao).toMatch(/limite de segurança/u);
+      expect(item?.destination.orientacao).toMatch(/suporte/u);
+      expect(item?.destination.orientacao).not.toMatch(/US\$|dólar/u);
     }
   });
   it.each([null, "not-a-uuid", missing])("ref %s não vira URL", async id => {
@@ -100,7 +113,8 @@ describe("destinos da Central", () => {
   it.each(["budget_exceeded", "risk_backlog_seeded", "reactivation_expired"])("%s aceita apenas org ativa", async kind => {
     const ref = kind === "budget_exceeded" ? "ai_budget" : "organization";
     const items = await resolverDestinosDosAvisos(leitor().client, ORG, "admin", [aviso(kind, ref, ORG), aviso(kind, ref, ID)]);
-    expect(items[0]?.destination.estado).toBe("disponivel"); expect(items[1]?.destination.estado).toBe("indisponivel");
+    // O do teto de IA não tem tela na empresa: fica sem destino, com orientação.
+    expect(items[0]?.destination.estado).toBe(ref === "ai_budget" ? "sem_destino" : "disponivel"); expect(items[1]?.destination.estado).toBe("indisponivel");
   });
   // Tarefa 2b (fase F2-B, fork Hiperbold): o aviso de carteira de tokens
   // (kind "other", ref_kind "billing_limite") nasce SEMPRE com

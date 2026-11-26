@@ -31,7 +31,12 @@ export const ENTRADA_DE_VIDEO = [
 ] as const;
 
 export interface VideoDeriveDeps {
-  transcriber: TranscriptionProvider;
+  /**
+   * Ausente/nulo = não transcrever a fala (interruptor "Transcrever áudios" da
+   * empresa desligado): a faixa de som nem é extraída e o vídeo segue só pelos
+   * quadros.
+   */
+  transcriber?: TranscriptionProvider | null;
   describeImage(buffer: Buffer, mime: string): Promise<string>;
   /** Executa ffmpeg com os args dados no cwd; rejeita em exit != 0. Injetável p/ teste. */
   runFfmpeg?: (args: string[], cwd: string) => Promise<void>;
@@ -64,11 +69,13 @@ export async function deriveVideoText(buffer: Buffer, deps: VideoDeriveDeps): Pr
     await writeFile(join(dir, "in.mp4"), buffer);
 
     // 1) faixa de áudio → ogg/opus mono 16k (ideal p/ Whisper). Pode falhar se sem áudio.
+    //    Sem transcriber (interruptor desligado) a trilha inteira é pulada.
     let transcript = "";
-    try {
+    const transcriber = deps.transcriber;
+    if (transcriber) try {
       await run([...ENTRADA_DE_VIDEO, "-i", "in.mp4", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "audio.ogg"], dir);
       const audio = await readFile(join(dir, "audio.ogg"));
-      if (audio.byteLength > 0) transcript = await deps.transcriber.transcribe(audio, "audio/ogg");
+      if (audio.byteLength > 0) transcript = await transcriber.transcribe(audio, "audio/ogg");
     } catch {
       transcript = "";
     }
