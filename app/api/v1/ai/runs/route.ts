@@ -53,7 +53,7 @@ const O_QUE_FAZER: Record<string, string> = {
   // a tela que nasceu para explicar o silêncio da IA nunca mostrava o único
   // caso em que o silêncio é intencional.
   orcamento_esgotado:
-    "A IA parou porque o gasto do mês atingiu o limite que você definiu. Ajuste o limite (ou desligue a parada) em Uso de IA › Orçamento.",
+    "A IA parou porque o limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliar o limite.",
   // Revisão da F3 (achado baixo 6): a carteira de TOKENS (decisão 7 da fase,
   // `LlmCarteiraEsgotadaError`) é um veto DIFERENTE do orçamento em dólar
   // acima, dono diferente (o plano contratado, não um teto que a própria

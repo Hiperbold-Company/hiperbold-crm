@@ -76,7 +76,7 @@ export const KIND_LABEL = {
   // `budget_exceeded` ("foi atingido"). Quem lê este aviso ainda tem a IA
   // respondendo; confundir os dois faria o dono do negócio correr atrás de uma
   // parada que não houve, ou ignorar a que houve.
-  budget_warning: "O gasto de IA passou do aviso que você definiu",
+  budget_warning: "O consumo de IA chegou perto do limite de segurança desta empresa",
   // Diz o que ACONTECEU com o material, e nunca "a indexação falhou": quem
   // subiu um PDF quer saber que o agente ainda não sabe o que está nele.
   conhecimento_nao_indexado: "Um material que você enviou não entrou na base de conhecimento",

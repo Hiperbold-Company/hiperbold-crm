@@ -110,7 +110,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (err instanceof LlmBudgetExceededError) {
       return fail(
         "budget_exceeded",
-        t("O orçamento de IA deste mês acabou, então a prévia não foi gerada. Ajuste o limite em Uso de IA › Orçamento."),
+        t("O limite de segurança de IA desta empresa foi atingido, então a prévia não foi gerada. Fale com o suporte."),
         402,
         { requestId },
       );

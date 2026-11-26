@@ -233,17 +233,16 @@ describe("o gate de orçamento lê ai_budgets e executa o veredito", () => {
     it("o texto do aviso fala com um leigo, não com o schema", async () => {
       const r = await chamar({});
       const [, titulo, corpo] = r.inboxInserts[0] as [string, string, string];
-      expect(titulo).toBe("O limite de gasto com IA foi atingido");
+      expect(titulo).toBe("O limite de segurança de IA desta empresa foi atingido");
       // O corpo anterior era, verbatim: "o teto configurado em
       // organizations.settings.llm.monthly_budget_cents; aumente o teto ou
       // aguarde a virada do mês" — um caminho de coluna jsonb renderizado CRU
       // para o dono do negócio na Central, mandando aumentar um teto na única
       // tela que edita OUTRO campo.
       expect(corpo).not.toMatch(/settings|jsonb|monthly_budget_cents|org\b/i);
-      // E diz os números, na unidade real: `cost_cents` é centavo de DÓLAR.
-      expect(corpo).toContain("US$ 15,00");
-      expect(corpo).toContain("US$ 10,00");
-      expect(corpo).toContain("Uso de IA");
+      // A empresa não vê dólar: o texto manda falar com o suporte.
+      expect(corpo).not.toContain("US$");
+      expect(corpo).toContain("suporte");
     });
 
     it("a recusa vira linha de ERRO em llm_calls — a tela de Execuções a mostra", async () => {

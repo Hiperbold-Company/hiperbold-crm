@@ -6408,6 +6408,12 @@ export const DICIONARIO: Traducoes = {
       es: "Todos los números de esta página corresponden solo a este intervalo. Cambia las fechas para comparar un mes con otro.",
     },
   Tokens: { es: "Tokens" },
+  "O consumo de IA chegou perto do limite de segurança desta empresa": { es: "El consumo de IA llegó cerca del límite de seguridad de esta empresa" },
+  "O limite de segurança de IA desta empresa foi atingido": { es: "Se alcanzó el límite de seguridad de IA de esta empresa" },
+  "A IA parou porque o limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliar o limite.": { es: "La IA se detuvo porque se alcanzó el límite de seguridad de IA de esta empresa. Habla con soporte para ampliar el límite." },
+  "O limite de segurança de IA desta empresa foi atingido, então a prévia não foi gerada. Fale com o suporte.": { es: "Se alcanzó el límite de seguridad de IA de esta empresa, así que no se generó la vista previa. Habla con soporte." },
+  "O limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliá-lo.": { es: "Se alcanzó el límite de seguridad de IA de esta empresa. Habla con soporte para ampliarlo." },
+  "Limite de segurança de IA atingido — assumir a conversa": { es: "Límite de seguridad de IA alcanzado: asumir la conversación" },
   "Tudo o que entrou na cabeça dele neste período, e de onde veio.": {
     es: "Todo lo que entró en su cabeza en este período, y de dónde vino.",
   },
@@ -15567,9 +15573,6 @@ export const DICIONARIO: Traducoes = {
   },
   "Uma informação que o assistente ouviu de um cliente venceu sem ninguém conferir": {
     es: "Una información que el asistente escuchó de un cliente venció sin que nadie la revisara",
-  },
-  "O gasto de IA passou do aviso que você definiu": {
-    es: "El gasto de IA superó el aviso que definiste",
   },
   "Um material que você enviou não entrou na base de conhecimento": {
     es: "Un material que enviaste no entró en la base de conocimiento",
