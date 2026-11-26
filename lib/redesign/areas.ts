@@ -81,7 +81,6 @@ const GRUPOS_DA_IA: readonly GrupoDaIA[] = [
       "/app/ai/cases/avisos",
       "/app/ai/proposals",
       "/app/ai/runs",
-      "/app/ai/usage",
     ],
   },
 ];

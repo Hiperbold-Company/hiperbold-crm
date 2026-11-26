@@ -190,7 +190,7 @@ describe("gruposDaIA — a coluna lateral da IA (Montar, Ensinar, Acompanhar)", 
       "/app/ai/mcp",
     ]);
     expect(hrefs(grupos[2]!.itens)).toEqual(
-      expect.arrayContaining(["/app/ai/cases", "/app/ai/inbox", "/app/ai/proposals", "/app/ai/runs", "/app/ai/usage"]),
+      expect.arrayContaining(["/app/ai/cases", "/app/ai/inbox", "/app/ai/proposals", "/app/ai/runs"]),
     );
   });
 
