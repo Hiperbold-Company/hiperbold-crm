@@ -60,12 +60,12 @@ const O_QUE_FAZER: Record<string, string> = {
   // organização escolhe), e sem esta linha o operador via o código cru
   // `carteira_de_tokens_esgotada` na tela sem nenhuma orientação do que fazer.
   carteira_de_tokens_esgotada:
-    "Os tokens de IA do plano acabaram neste ciclo. As conversas foram para a fila de atendimento humano. Para a IA voltar a responder ainda neste mês, contrate mais tokens em Configurações › Plano e uso.",
+    "Os tokens de IA do plano acabaram neste ciclo. As conversas foram para a fila de atendimento humano. Para a IA voltar a responder ainda neste mês, contrate mais tokens em Configurações › Meu plano e consumo de IA.",
   // Fase F4, decisão 6 (Tarefa 6): a assinatura está suspensa (pagamento em
   // atraso além da carência) — veto de negócio diferente do orçamento em dólar
   // e da carteira de tokens acima, mesmo racional da linha de cima.
   assinatura_suspensa:
-    "A assinatura desta organização está suspensa por falta de pagamento. A IA e as automações estão paradas e as conversas foram para a fila de atendimento humano. Regularize o pagamento em Configurações › Plano e uso para a IA voltar a responder.",
+    "A assinatura desta organização está suspensa por falta de pagamento. A IA e as automações estão paradas e as conversas foram para a fila de atendimento humano. Regularize o pagamento em Configurações › Meu plano e consumo de IA para a IA voltar a responder.",
   // A outra recusa deliberada: o ponto aponta para um endereço escolhido pela
   // empresa, e a chave que ia junto era a da instalação (decisão 22-a).
   endereco_exige_chave_da_empresa:

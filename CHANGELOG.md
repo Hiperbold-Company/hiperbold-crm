@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.7.1] — 2026-11-26
+
+### Corrigido
+
+- **Avisos e botões apontam para "Meu plano e consumo de IA", e o dólar sai do agente na chave do plano** Os avisos de tokens esgotados e de assinatura suspensa, o botão da Central e o lembrete de renovação diziam "Plano e uso", nome antigo da tela; agora dizem "Meu plano e consumo de IA". O botão de ajuda da antiga tela de uso leva ao artigo de Meu plano. No agente que usa os modelos do plano, o preço em dólar por modelo e o campo "Custo máximo por atendimento (centavos)" deixam de aparecer, porque o consumo sai dos tokens do plano; quem usa chave própria continua vendo os dois. Não é preciso mudar nada para atualizar.
+
 ## [2.7.0] — 2026-11-26
 
 ### Adicionado
@@ -14915,7 +14921,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.1...v2.6.0
 [2.5.1]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.0...v2.5.1

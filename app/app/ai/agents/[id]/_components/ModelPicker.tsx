@@ -354,7 +354,8 @@ export function ModelPicker({
                               ? ` · ${t("default")}`
                               : ""}
                         </span>
-                        <PrecoDoModelo modelo={m} />
+                        {/* Na chave da instalação o consumo sai dos tokens do plano: preço em dólar não diz nada a quem usa. */}
+                        {!restritoAoPlano && <PrecoDoModelo modelo={m} />}
                       </div>
                     );
                   })

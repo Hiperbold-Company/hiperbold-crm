@@ -163,7 +163,7 @@ describe("o gate da assinatura suspensa (modo leitura) lê fn_billing_modo_leitu
       expect(sqlDoInsert).toMatch(/status\s*=\s*'open'/);
       const [, titulo, corpo] = r.inboxInserts[0] as [string, string, string];
       expect(titulo).toBe(TITULO_ASSINATURA_SUSPENSA);
-      expect(corpo).toMatch(/Plano e uso/);
+      expect(corpo).toMatch(/Meu plano e consumo de IA/);
     });
 
     it("a recusa vira linha de ERRO em llm_calls, com error_code PRÓPRIO", async () => {

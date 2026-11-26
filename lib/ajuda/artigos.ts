@@ -42,7 +42,7 @@ export const ARTIGOS_POR_ROTA: Readonly<Record<string, string>> = {
   "/app/ai/jev": "/crm/agente-de-ia/decisoes-rapidas-jev/",
   "/app/ai/credentials": "/crm/agente-de-ia/modelos-do-plano-e-chave-propria/",
   "/app/ai/providers": "/crm/agente-de-ia/modelos-do-plano-e-chave-propria/",
-  "/app/ai/usage": "/crm/agente-de-ia/modelos-do-plano-e-chave-propria/",
+  "/app/ai/usage": "/crm/assinatura/meu-plano/",
 
   // Agenda
   "/app/agenda": "/crm/agenda/google-agenda/",
