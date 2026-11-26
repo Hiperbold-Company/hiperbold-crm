@@ -136,6 +136,7 @@ import { documentoValido } from "./documento";
 import { calcularParcelamento, parcelasValidas, type ParametrosDeParcelamento } from "./parcelamento";
 import { ErroAsaasException } from "./erros";
 import { MENSAGEM_PIX_INDISPONIVEL } from "./pix-mensagem";
+import { removerFaturasDePedidosVencidos, type PedidoVencidoComFatura } from "./remover-fatura-vencida";
 import { impressaoDoPagador, mensagemDoErroDeCupom, mesmoCodigoDeCupom } from "./cupom";
 
 // ─── Tipos de entrada/saída ─────────────────────────────────────────────
@@ -371,6 +372,17 @@ export interface DbCompra {
     pedidoId: string,
     asaasInstallmentId: string,
   ): Promise<RpcResultado<{ jaRegistrado: boolean }>>;
+
+  /**
+   * 1026 (cobrança em dobro): leitura pura dos pedidos de ASSINATURA `vencido` da organização, no ambiente dado,
+   * com o que ainda existe no Asaas. A fatura deles sai antes de o pedido novo ganhar cobrança
+   * (`removerFaturasDePedidosVencidos`). Opcional só para os dublês de teste antigos; a implementação real
+   * (`db-compra-supabase.ts`) sempre tem.
+   */
+  listarPedidosDeAssinaturaVencidos?(
+    org: string,
+    ambiente: AmbienteAsaas,
+  ): Promise<RpcResultado<PedidoVencidoComFatura[]>>;
 
   /** Leitura pura: pedido aberto (`criado`/`aguardando_pagamento`/`inconclusivo`/`processando`) do mesmo tipo, se houver (M9). */
   buscarPedidoAbertoPorTipo(org: string, tipo: TipoPedido): Promise<RpcResultado<PedidoLinha | null>>;
@@ -1471,6 +1483,20 @@ export async function iniciarCompra(deps: DepsCompra, entrada: EntradaIniciarCom
     return comCupomDoPedido(await resolverRespostaPeloEstado(deps, entrada.organizationId, leitura1.data), leitura1.data);
   }
   const estadoAntesDeTomar = leitura1.data.status;
+
+  // 1026 (cobrança em dobro): o pedido de assinatura vai ganhar cobrança agora; a fatura de um pedido de assinatura
+  // anterior que venceu sem pagar (ela fica no Asaas para a régua de cobrança) sai antes, para o cliente não pagar
+  // as duas. Antes de tomar a posse: uma falha aqui não deixa o pedido novo preso em `processando`.
+  if (leitura1.data.tipo === "assinatura" && deps.db.listarPedidosDeAssinaturaVencidos) {
+    const vencidos = await deps.db.listarPedidosDeAssinaturaVencidos(entrada.organizationId, ambiente);
+    if (vencidos.error) {
+      deps.logger.error("asaas_compra_listar_pedidos_vencidos_falhou", { org: entrada.organizationId, codigo: vencidos.error.code });
+      return { tipo: "erro", mensagem: MENSAGEM_TENTE_NOVAMENTE };
+    }
+    const remocao = await removerFaturasDePedidosVencidos(deps.asaas, vencidos.data ?? [], deps.logger);
+    if (remocao === "pago") return { tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO };
+    if (remocao === "falhou") return { tipo: "erro", mensagem: MENSAGEM_TENTE_NOVAMENTE };
+  }
 
   const posse = await deps.db.tomarPedido(entrada.organizationId, resolucao.pedidoId);
   if (posse.error || !posse.data) {

@@ -533,35 +533,36 @@ describe("conciliarAsaas", () => {
   });
 });
 
-describe("B6 (D-177): a listagem dos pedidos vencidos inclui o que só tem o id do parcelamento", () => {
-  function adminFalso(linhas: unknown[]) {
-    const filtros: Array<[string, ...unknown[]]> = [];
-    const builder: Record<string, unknown> = {};
-    for (const metodo of ["select", "eq", "or", "limit"]) {
-      builder[metodo] = (...args: unknown[]) => {
-        filtros.push([metodo, ...args]);
-        return builder;
-      };
-    }
-    builder.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
-      Promise.resolve({ data: linhas, error: null }).then(resolve, reject);
-    return { admin: { from: () => builder } as never, filtros };
-  }
-
-  it("o filtro aceita pedido com asaas_installment_id e o mapeamento devolve o id do parcelamento", async () => {
-    const { admin, filtros } = adminFalso([
-      {
-        id: "p-1",
-        organization_id: "org-1",
-        tipo: "assinatura",
-        asaas_payment_id: null,
-        asaas_subscription_id: null,
-        asaas_installment_id: "7315c152-a55f-4727-aa6c-d48249df28d4",
+describe("B6 (D-177) e 1026: a listagem dos pedidos vencidos vem do banco, com o prazo da régua", () => {
+  // O FILTRO (quem tem id do Asaas, e o prazo do pedido de assinatura) é do banco:
+  // fn_billing_pedidos_vencidos_para_remocao, provado em tests/invariants/regua-de-cobranca-do-pedido.test.ts.
+  it("chama fn_billing_pedidos_vencidos_para_remocao e o mapeamento devolve o id do parcelamento", async () => {
+    const chamadas: Array<[string, unknown]> = [];
+    const admin = {
+      rpc: async (nome: string, args: unknown) => {
+        chamadas.push([nome, args]);
+        return {
+          data: [
+            {
+              pedido_id: "p-1",
+              organization_id: "org-1",
+              tipo: "assinatura",
+              asaas_payment_id: null,
+              asaas_subscription_id: null,
+              asaas_installment_id: "7315c152-a55f-4727-aa6c-d48249df28d4",
+            },
+          ],
+          error: null,
+        };
       },
-    ]);
+      from: () => {
+        throw new Error("a listagem não lê a tabela direto: o prazo é do banco");
+      },
+    } as never;
     const r = await criarDbConciliarAsaasSobre(admin).listarPedidosVencidosParaRemocao(50);
 
     expect(r.error).toBeNull();
+    expect(chamadas).toEqual([["fn_billing_pedidos_vencidos_para_remocao", { p_limite: 50 }]]);
     expect(r.data).toEqual([
       {
         id: "p-1",
@@ -572,10 +573,6 @@ describe("B6 (D-177): a listagem dos pedidos vencidos inclui o que só tem o id 
         asaasInstallmentId: "7315c152-a55f-4727-aa6c-d48249df28d4",
       },
     ]);
-    const filtroOr = filtros.find((f) => f[0] === "or")?.[1] as string;
-    expect(filtroOr).toContain("asaas_payment_id.not.is.null");
-    expect(filtroOr).toContain("asaas_subscription_id.not.is.null");
-    expect(filtroOr).toContain("asaas_installment_id.not.is.null");
   });
 });
 

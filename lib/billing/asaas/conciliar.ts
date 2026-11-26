@@ -45,11 +45,17 @@ import "server-only";
  *      GET da rodada, e no máximo `limitePedidosParcelados` pedidos por rodada, em janela que gira
  *      por dia sobre a lista ordenada por id (todo pedido é visitado em poucos dias, sem estado).
  *   3. Pedido `vencido` com `asaas_payment_id` ou `asaas_subscription_id`
- *      ainda gravado: refaz `removerCobranca` (pedido avulso) ou
+ *      ainda gravado, na lista de `fn_billing_pedidos_vencidos_para_remocao`
+ *      (migration 1026): remove com `removerCobranca` (pedido avulso) ou
  *      `removerAssinatura` (pedido de tipo `assinatura` com
  *      `asaas_subscription_id`, decisão 4/10) - idempotente (um recurso já
- *      removido não lança), para quando a tentativa do processador tiver
- *      falhado antes.
+ *      removido não lança). Pacote de tokens entra no dia seguinte ao
+ *      vencimento (refaz a tentativa do processador). Pedido de ASSINATURA
+ *      só entra no prazo da régua de cobrança
+ *      (`fn_billing_pedidos_de_assinatura_em_aberto`): com o contrato já
+ *      `suspensa` (o pedido o mantinha) ou, sem suspensão a caminho, em
+ *      vencimento + carência do plano do pedido. Até lá a fatura fica no
+ *      Asaas para o cliente pagar.
  *   3b. Contratos cortados por estorno total (D-086), `cancelada` com a assinatura
  *      ainda sem o marcador de encerramento, no ambiente da instalação: refaz
  *      `removerAssinatura` e grava o marcador. Contrato cancelado por outro caminho
@@ -926,16 +932,14 @@ export function criarDbConciliarAsaasSobre(admin: SupabaseClient): DbConciliarAs
     },
 
     async listarPedidosVencidosParaRemocao(limite) {
-      const { data, error } = await admin
-        .from("billing_orders")
-        .select("id, organization_id, tipo, asaas_payment_id, asaas_subscription_id, asaas_installment_id")
-        .eq("status", "vencido")
-        // D-177 B6: pedido parcelado cuja cobrança não chegou a ser registrada só tem o id do parcelamento.
-        .or("asaas_payment_id.not.is.null,asaas_subscription_id.not.is.null,asaas_installment_id.not.is.null")
-        .limit(limite);
+      // 1026: o PRAZO da remoção é do banco (fn_billing_pedidos_de_assinatura_em_aberto): pacote de tokens
+      // vencido entra como antes; pedido de assinatura só na suspensão do contrato ou em vencimento + carência.
+      const { data, error } = await admin.rpc("fn_billing_pedidos_vencidos_para_remocao" as never, {
+        p_limite: limite,
+      } as never);
       if (error) return { data: null, error: { code: error.code, message: error.message } };
       const linhas = (data ?? []) as unknown as Array<{
-        id: string;
+        pedido_id: string;
         organization_id: string;
         tipo: string;
         asaas_payment_id: string | null;
@@ -944,7 +948,7 @@ export function criarDbConciliarAsaasSobre(admin: SupabaseClient): DbConciliarAs
       }>;
       return {
         data: linhas.map((l) => ({
-          id: l.id,
+          id: l.pedido_id,
           organizationId: l.organization_id,
           tipo: l.tipo,
           asaasPaymentId: l.asaas_payment_id,

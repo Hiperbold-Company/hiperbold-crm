@@ -260,6 +260,12 @@ CRONS="
 # 3 dias antes da cobrança. Varredura de banco que só ENFILEIRA o aviso (o envio é do cron enviar-emails-de-conta,
 # abaixo), sem chamada ao Asaas; orçamento interno de 45s dentro do teto de 60s.
 5 11 * * *|60|api/v1/cron/avisar-renovacao-no-cartao
+# A RÉGUA DE COBRANÇA DO PEDIDO NÃO PAGO (COB-05 com o link da fatura, migration 1026). Uma vez ao dia, 11:10 UTC
+# (08:10 em América/São_Paulo), logo depois do aviso acima. Pedido de assinatura que ainda não foi pago: avisa 2 dias
+# antes do vencimento, no dia, 2 dias depois e 1 dia antes da suspensão (ou do último dia da fatura no Asaas), só o
+# marco mais recente. Um GET no Asaas por pedido com marco a enfileirar (paga ou removida não recebe aviso); só
+# ENFILEIRA (o envio é do cron enviar-emails-de-conta). Orçamento interno de 90s dentro do teto de 120s.
+10 11 * * *|120|api/v1/cron/avisar-fatura-em-aberto
 # O AVISO DE TOKENS DE IA ACABANDO (IA-02, e-mail). A cada 15 minutos: o 100% é urgente e a rodada vazia é uma
 # consulta curta. Quem detecta o cruzamento de 80% e 100% é o banco, no débito de cada chamada
 # (fn_billing_avisar_carteira); este cron só lê as linhas das últimas 48h e ENFILEIRA o aviso, uma vez por nível por

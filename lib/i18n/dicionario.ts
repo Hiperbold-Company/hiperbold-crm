@@ -27153,6 +27153,33 @@ export const DICIONARIO: Traducoes = {
   "Sua assinatura precisa ser renovada": {
     es: "Tu suscripción necesita renovarse",
   },
+  "Sua fatura vence em {data}": {
+    es: "Tu factura vence el {data}",
+  },
+  "Sua fatura venceu em {data}": {
+    es: "Tu factura venció el {data}",
+  },
+  "Sua assinatura será suspensa em {data}": {
+    es: "Tu suscripción será suspendida el {data}",
+  },
+  "Último dia para pagar sua fatura": {
+    es: "Último día para pagar tu factura",
+  },
+  "A fatura de {valor} do plano {plano} ainda não foi paga. Pague pelo botão abaixo para concluir sua assinatura.": {
+    es: "La factura de {valor} del plan {plano} todavía no fue pagada. Paga con el botón de abajo para completar tu suscripción.",
+  },
+  "A fatura de {valor} do plano {plano} ainda não foi paga. Pague pelo botão abaixo para manter seu plano.": {
+    es: "La factura de {valor} del plan {plano} todavía no fue pagada. Paga con el botón de abajo para mantener tu plan.",
+  },
+  "Sem o pagamento, a assinatura é suspensa em {data}.": {
+    es: "Sin el pago, la suscripción será suspendida el {data}.",
+  },
+  "A fatura fica disponível até {data}.": {
+    es: "La factura estará disponible hasta el {data}.",
+  },
+  "A cobrança de {valor} do plano {plano} ainda não foi paga. Pague pela fatura para concluir sua assinatura.": {
+    es: "El cobro de {valor} del plan {plano} todavía no fue pagado. Paga la factura para completar tu suscripción.",
+  },
   "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos.":
     {
       es: "El cobro de {valor} del plan {plano} no se pagó a tiempo. Para seguir usando el CRM, suscríbete de nuevo desde los Planes.",

@@ -25,12 +25,12 @@
     "caixa"
   ],
   "nodes": [
-    { "id": "asaas", "lane": "gatilhos", "col": 0, "type": "api", "label": "app/api/v1/cron/processar-eventos-asaas/route.ts", "sublabel": "passa `avisos` ao processador: pagamento aplicado, vencido, estorno total e pacote de tokens (COB-02, 03, 05, 08, 09); recusa de cartão e estorno parcial NÃO disparam" },
+    { "id": "asaas", "lane": "gatilhos", "col": 0, "type": "api", "label": "app/api/v1/cron/processar-eventos-asaas/route.ts", "sublabel": "passa `avisos` ao processador: pagamento aplicado, renovação vencida da assinatura viva, estorno total e pacote de tokens (COB-02, 03, 05, 08, 09); pedido vencido, recusa de cartão e estorno parcial NÃO disparam" },
     { "id": "vencimentos", "lane": "gatilhos", "col": 1, "type": "api", "label": "app/api/v1/cron/conferir-vencimentos/route.ts", "sublabel": "organização que passa a suspensa enfileira o aviso de suspensão (COB-06); a só atrasada não" },
     { "id": "cancelar", "lane": "gatilhos", "col": 2, "type": "api", "label": "app/actions/settings/compraDoPlano.ts + app/actions/admin/cobrancaAsaas.ts", "sublabel": "cancelar a assinatura (cliente ou admin da plataforma) enfileira COB-07" },
     { "id": "reembolso", "lane": "gatilhos", "col": 3, "type": "api", "label": "app/actions/settings/reembolso.ts", "sublabel": "pedido de reembolso (COB-11): destino `financeiro`, só quem cuida do financeiro da instalação" },
     { "id": "provision", "lane": "gatilhos", "col": 4, "type": "service", "label": "lib/auth/provision.ts", "sublabel": "empresa nova criada: avisarBoasVindas() ao criador (CONTA-06)" },
-    { "id": "cronscadastro", "lane": "gatilhos", "col": 5, "type": "api", "label": "crons avisar-tokens-acabando e avisar-renovacao-no-cartao", "sublabel": "varredura de banco que só ENFILEIRA (IA-02 por ciclo; COB-04, renovação no cartão chegando); nada é comparado no caminho quente" },
+    { "id": "cronscadastro", "lane": "gatilhos", "col": 5, "type": "api", "label": "crons avisar-tokens-acabando, avisar-renovacao-no-cartao e avisar-fatura-em-aberto", "sublabel": "varredura de banco que só ENFILEIRA (IA-02 por ciclo; COB-04, renovação no cartão chegando; COB-05, régua do pedido não pago, com GET no Asaas antes de cada marco); nada é comparado no caminho quente" },
     { "id": "exclusaorodada", "lane": "gatilhos", "col": 6, "type": "service", "label": "lib/retencao/exclusao-de-organizacao/rodada.ts", "sublabel": "enfileirarAvisosDevidos(): aviso de exclusão programada dos dados (COB-12, D-30 e D-7)" },
 
     { "id": "fila", "lane": "fila", "col": 0, "type": "service", "label": "lib/email/conta-e-cobranca/fila.ts", "sublabel": "enfileirarEmailDeConta(): insert on conflict do nothing com os DADOS DO MOMENTO · nunca lança · log sem endereço" },
@@ -61,7 +61,7 @@
     { "id": "e3", "from": "cancelar", "to": "gatilhosts", "label": "avisoDeCancelamento: COB-07" },
     { "id": "e4", "from": "reembolso", "to": "gatilhosts", "label": "pedido de reembolso: COB-11 ao financeiro" },
     { "id": "e5", "from": "provision", "to": "fila", "label": "avisarBoasVindas: CONTA-06 ao criador" },
-    { "id": "e6", "from": "cronscadastro", "to": "fila", "label": "IA-02 e COB-04: enfileiram, não enviam" },
+    { "id": "e6", "from": "cronscadastro", "to": "fila", "label": "IA-02, COB-04 e COB-05 da régua: enfileiram, não enviam" },
     { "id": "e7", "from": "exclusaorodada", "to": "gatilhosts", "label": "aviso de exclusão programada" },
     { "id": "e8", "from": "gatilhosts", "to": "fila", "label": "entrega (emailId, chave, destino, dados) ao enfileirador" },
     { "id": "e9", "from": "fila", "to": "tabela", "label": "insert on conflict do nothing: o mesmo fato repetido não enfileira de novo" },

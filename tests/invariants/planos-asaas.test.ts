@@ -1714,7 +1714,7 @@ describe("0909 Tarefa 6: PAYMENT_OVERDUE vence o pedido, alarme por asaas_subscr
   // teste passa a registrar um sub_ de verdade; o caso que a versão antiga
   // testava por engano (assinatura sem asaas_subscription_id) é o Pix anual,
   // coberto no describe seguinte.
-  it("pedido de ASSINATURA por CREDIT_CARD (com asaas_subscription_id gravado) aguardando pagamento, confirmado OVERDUE: status vencido, alarme remover_assinatura_pendente", () => {
+  it("pedido de ASSINATURA por CREDIT_CARD (com asaas_subscription_id gravado) aguardando pagamento, confirmado OVERDUE: status vencido, SEM alarme de remoção (1026: a fatura fica para a régua)", () => {
     sql(
       `select public.fn_billing_criar_pedido('${ORG_T6_OVERDUE}'::uuid, 'assinatura', 'pro', 'monthly', null, 'CREDIT_CARD', 'sandbox', gen_random_uuid(), null);`,
     );
@@ -1724,7 +1724,8 @@ describe("0909 Tarefa 6: PAYMENT_OVERDUE vence o pedido, alarme por asaas_subscr
     const conf = `jsonb_build_object('id','pay_t6_009','status','OVERDUE','externalReference','HC:ord:${pedidoId}')`;
     const resultado = registrarEAplicarTipo("evt-t6-009", "PAYMENT_OVERDUE", "pay_t6_009", conf);
     expect(resultado).toContain('"resultado": "aplicado"');
-    expect(resultado).toContain('"alarme": "remover_assinatura_pendente"');
+    expect(resultado).toContain('"alarme": null');
+    expect(resultado).not.toContain("remover_");
     expect(sql(`select status from public.billing_orders where id = '${pedidoId}';`).trim()).toBe("vencido");
     // não mexe no contrato (decisão 10).
     expect(sql(`select status from public.billing_contracts where organization_id = '${ORG_T6_OVERDUE}';`).trim()).toBe("ativa");
@@ -1803,7 +1804,7 @@ describe("0909 PARTE 8, item 2: Pix anual (tipo=assinatura, SEM asaas_subscripti
     `);
   });
 
-  it("pedido de ASSINATURA por Pix anual (decisão 2: sem assinatura no Asaas) aguardando pagamento, confirmado OVERDUE: alarme remover_cobranca_pendente, NÃO remover_assinatura_pendente", () => {
+  it("pedido de ASSINATURA por Pix anual (decisão 2: sem assinatura no Asaas) aguardando pagamento, confirmado OVERDUE: vencido SEM alarme de remoção (1026)", () => {
     sql(
       `select public.fn_billing_criar_pedido('${ORG_T8_PIX_OVERDUE}'::uuid, 'assinatura', 'max', 'yearly', null, 'PIX', 'sandbox', gen_random_uuid(), null);`,
     );
@@ -1813,7 +1814,8 @@ describe("0909 PARTE 8, item 2: Pix anual (tipo=assinatura, SEM asaas_subscripti
     const conf = `jsonb_build_object('id','pay_t8_pix_001','status','OVERDUE','externalReference','HC:ord:${pedidoId}')`;
     const resultado = registrarEAplicarTipo("evt-t8-pix-001", "PAYMENT_OVERDUE", "pay_t8_pix_001", conf);
     expect(resultado).toContain('"resultado": "aplicado"');
-    expect(resultado).toContain('"alarme": "remover_cobranca_pendente"');
+    expect(resultado).toContain('"alarme": null');
+    expect(resultado).not.toContain("remover_");
     expect(sql(`select status from public.billing_orders where id = '${pedidoId}';`).trim()).toBe("vencido");
   });
 });
