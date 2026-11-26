@@ -1,5 +1,6 @@
 "use client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { apiClient } from "@/lib/api/client";
 
 /**
@@ -18,5 +19,7 @@ export function useMarkAsUnread() {
       qc.invalidateQueries({ queryKey: ["conversation", id] });
       qc.invalidateQueries({ queryKey: ["conversation-counts"] });
     },
+    // A conversa já fechou ao clicar: sem aviso, a recusa passaria em silêncio.
+    onError: (err) => showApiError(err),
   });
 }

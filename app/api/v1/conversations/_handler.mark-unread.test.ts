@@ -15,7 +15,7 @@ const ORG_B = "bbbbbbbb-0000-4000-8000-000000000002";
 
 type Linha = Record<string, unknown>;
 
-function clienteFalso(linhas: Linha[]) {
+function clienteFalso(linhas: Linha[], escritaRecusada = false) {
   return {
     from: () => {
       const filtros: Array<[string, unknown]> = [];
@@ -33,6 +33,7 @@ function clienteFalso(linhas: Linha[]) {
         },
         maybeSingle: async () => {
           const alvo = linhas.find(casa) ?? null;
+          if (patch && escritaRecusada) return { data: null, error: null };
           if (patch && alvo) Object.assign(alvo, patch);
           return { data: alvo, error: null };
         },
@@ -67,6 +68,16 @@ describe("markConversationUnreadHandler", () => {
   it("conversa de outra organização não é alterada e devolve 404", async () => {
     const linhas = [{ id: "c1", organization_id: ORG_B, unread_count_for_assignee: 0 }];
     const falha = await markConversationUnreadHandler(clienteFalso(linhas), ctx(ORG_A), "c1").catch(
+      (e: unknown) => e,
+    );
+    expect(falha).toBeInstanceOf(ApiError);
+    expect(falha).toMatchObject({ status: 404 });
+    expect(linhas[0]?.unread_count_for_assignee).toBe(0);
+  });
+
+  it("escrita recusada pela RLS (0 linhas) não responde feito: 404", async () => {
+    const linhas = [{ id: "c1", organization_id: ORG_A, unread_count_for_assignee: 0 }];
+    const falha = await markConversationUnreadHandler(clienteFalso(linhas, true), ctx(ORG_A), "c1").catch(
       (e: unknown) => e,
     );
     expect(falha).toBeInstanceOf(ApiError);

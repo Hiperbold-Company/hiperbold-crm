@@ -1090,7 +1090,7 @@ export function InboxLayout({
               key={selectedConversation.id}
               conversation={selectedConversation}
               onAbrirConversa={handleSelect}
-              onMarcarComoNaoLida={marcarAbertaComoNaoLida}
+              onMarcarComoNaoLida={podeAgirEmLote ? marcarAbertaComoNaoLida : undefined}
               onBuscar={() =>
                 buscaAberta
                   ? fecharBusca()
