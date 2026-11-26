@@ -26441,6 +26441,18 @@ export const DICIONARIO: Traducoes = {
   "Plano sem limite (Ilimitado)": { es: "Plan sin límite (Ilimitado)" },
   Creditado: { es: "Acreditado" },
   "Painel de margem": { es: "Panel de margen" },
+  "O limite de segurança de IA é ajustado pelo suporte da plataforma. Fale com o suporte se precisar mudá-lo.": {
+    es: "El límite de seguridad de IA lo ajusta el soporte de la plataforma. Habla con el soporte si necesitas cambiarlo.",
+  },
+  "O limite de segurança de IA desta empresa foi atingido e a IA parou de responder. Fale com o suporte para liberar.": {
+    es: "Se alcanzó el límite de seguridad de IA de esta empresa y la IA dejó de responder. Habla con el soporte para liberarla.",
+  },
+  "A IA desta empresa está perto do limite de segurança de gasto. Se precisar de mais folga, fale com o suporte.": {
+    es: "La IA de esta empresa está cerca del límite de seguridad de gasto. Si necesitas más margen, habla con el soporte.",
+  },
+  "Trava de segurança: a empresa não vê este valor nem o ajusta. Quando o limite é atingido com a parada ligada, a IA da empresa para de responder e a Central avisa a equipe para falar com o suporte.": {
+    es: "Traba de seguridad: la empresa no ve este valor ni lo ajusta. Cuando se alcanza el límite con la parada activada, la IA de la empresa deja de responder y la Central avisa al equipo que hable con el soporte.",
+  },
   "Receita em reais e custo em dólar, lado a lado, sem conversão de câmbio: câmbio não se inventa.":
     {
       es: "Ingresos en reales y costo en dólares, lado a lado, sin conversión de cambio: el cambio no se inventa.",

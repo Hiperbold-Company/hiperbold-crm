@@ -261,6 +261,7 @@ export default async function TenantPlanoPage({ params }: TenantPlanoPageProps) 
     <TenantPlanoClient
       organizationId={id}
       podeEscrever={podeEscreverNaAba(platformAdmin.scope, leituras)}
+      podeAjustarTetoDeIa={platformAdmin.scope === "full"}
       plano={resultado.plano}
       contrato={resultado.contrato}
       assinatura={assinatura}

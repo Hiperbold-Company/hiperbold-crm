@@ -14808,5 +14808,9 @@
   "Plano contratado, pagamento, consumo de tokens de IA e cancelamento.": "Contracted plan, payment, AI token usage, and cancellation.",
   "Quanto sua organização usa de cada item do plano contratado, e quantos tokens de IA já consumiu no mês.": "How much your organization uses of each item in the contracted plan, and how many AI tokens it has used this month.",
   "Tokens por dia": "Tokens per day",
-  "Esta aba tem filtros próprios (agente, tipo de uso e datas): não segue período, funil nem atendente do topo. O consumo de tokens do plano fica em Meu plano e consumo de IA.": "This tab has its own filters (agent, usage type, and dates): it doesn't follow the period, pipeline, or agent at the top. The plan's token usage is in My plan and AI usage."
+  "Esta aba tem filtros próprios (agente, tipo de uso e datas): não segue período, funil nem atendente do topo. O consumo de tokens do plano fica em Meu plano e consumo de IA.": "This tab has its own filters (agent, usage type, and dates): it doesn't follow the period, pipeline, or agent at the top. The plan's token usage is in My plan and AI usage.",
+  "O limite de segurança de IA é ajustado pelo suporte da plataforma. Fale com o suporte se precisar mudá-lo.": "The AI safety limit is set by platform support. Contact support if you need to change it.",
+  "O limite de segurança de IA desta empresa foi atingido e a IA parou de responder. Fale com o suporte para liberar.": "This company's AI safety limit was reached and the AI stopped replying. Contact support to release it.",
+  "A IA desta empresa está perto do limite de segurança de gasto. Se precisar de mais folga, fale com o suporte.": "This company's AI is close to its spending safety limit. If you need more room, contact support.",
+  "Trava de segurança: a empresa não vê este valor nem o ajusta. Quando o limite é atingido com a parada ligada, a IA da empresa para de responder e a Central avisa a equipe para falar com o suporte.": "Safety lock: the company does not see or change this value. When the limit is reached with the stop turned on, the company's AI stops replying and the Alerts center tells the team to contact support."
 }

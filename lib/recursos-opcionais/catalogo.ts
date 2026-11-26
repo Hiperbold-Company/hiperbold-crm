@@ -617,15 +617,9 @@ const DA_EMPRESA: RecursoOpcional[] = [
     // A chave mora em `map_provider_credentials`, e esta lista não lê chave: o estado fica na tela.
     href: "/app/ai/providers",
   },
-  {
-    id: "teto_de_gasto",
-    nome: "Teto de gasto de IA",
-    oQueFaz: "Teto mensal, aviso, e se a IA para ao chegar nele.",
-    nivel: "organizacao",
-    padrao: "varia",
-    quemDecide: "manager",
-    href: "/app/ai/usage",
-  },
+  // "teto_de_gasto" saiu em 25/11/2026: o teto de gasto de IA virou trava de
+  // segurança que só o admin da plataforma ajusta, na aba Plano de cada empresa
+  // (`/admin/tenants/[id]/plano`). A empresa não decide nada sobre ele.
   {
     id: "interface",
     nome: "Quais menus aparecem",

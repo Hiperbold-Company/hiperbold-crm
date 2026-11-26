@@ -25,14 +25,26 @@ interface SingleResponse {
   data: BudgetStatus;
 }
 
-export const aiBudgetQueryKey = ["ai", "budget"] as const;
+/**
+ * O teto de gasto de IA é ajustado só pelo administrador da plataforma, no
+ * painel de cada empresa (decisão do dono do produto, 25/11/2026). A rota é a
+ * do admin, com a organização no PATH; a chave do cache leva a organização
+ * para o estado de uma empresa nunca aparecer na tela de outra.
+ */
+function rotaDoOrcamento(organizationId: string): string {
+  return `/api/v1/admin/tenants/${encodeURIComponent(organizationId)}/ai-budget`;
+}
 
-export function useAiBudget(opts?: { initialData?: BudgetStatus }) {
+export function aiBudgetQueryKey(organizationId: string) {
+  return ["admin", "tenants", organizationId, "ai-budget"] as const;
+}
+
+export function useAiBudget(organizationId: string, opts?: { initialData?: BudgetStatus }) {
   return useQuery({
-    queryKey: aiBudgetQueryKey,
+    queryKey: aiBudgetQueryKey(organizationId),
     queryFn: async () => {
       try {
-        const res = await apiClient.get<SingleResponse>("/api/v1/ai/budget");
+        const res = await apiClient.get<SingleResponse>(rotaDoOrcamento(organizationId));
         return res.data;
       } catch (err) {
         showApiError(err);
@@ -44,18 +56,19 @@ export function useAiBudget(opts?: { initialData?: BudgetStatus }) {
   });
 }
 
-export function useUpdateBudget() {
+export function useUpdateBudget(organizationId: string) {
   const qc = useQueryClient();
   const t = useT();
+  const queryKey = aiBudgetQueryKey(organizationId);
   return useMutation({
-    mutationKey: ["ai", "budget", "update"],
+    mutationKey: [...queryKey, "update"],
     mutationFn: async (patch: BudgetPatch) => {
-      const res = await apiClient.patch<SingleResponse>("/api/v1/ai/budget", patch);
+      const res = await apiClient.patch<SingleResponse>(rotaDoOrcamento(organizationId), patch);
       return res.data;
     },
     onMutate: async (patch) => {
-      await qc.cancelQueries({ queryKey: aiBudgetQueryKey });
-      const previous = qc.getQueryData<BudgetStatus>(aiBudgetQueryKey);
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<BudgetStatus>(queryKey);
       if (previous) {
         const optimistic: BudgetStatus = {
           ...previous,
@@ -72,18 +85,18 @@ export function useUpdateBudget() {
             ? { enforcement_mode: patch.enforcement_mode }
             : {}),
         };
-        qc.setQueryData(aiBudgetQueryKey, optimistic);
+        qc.setQueryData(queryKey, optimistic);
       }
       return { previous };
     },
     onError: (err, _patch, context) => {
       if (context?.previous) {
-        qc.setQueryData(aiBudgetQueryKey, context.previous);
+        qc.setQueryData(queryKey, context.previous);
       }
       showApiError(err);
     },
     onSuccess: (data) => {
-      qc.setQueryData(aiBudgetQueryKey, data);
+      qc.setQueryData(queryKey, data);
       toast.success(t("Orçamento atualizado"));
     },
   });
