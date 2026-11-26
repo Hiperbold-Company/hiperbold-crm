@@ -1,7 +1,11 @@
 ---
-impacto: nada_mudou
-secao: corrigido
-titulo: Transcrição de áudio pelo whisper-1 passa a ter custo no Uso de IA
+impacto: capacidade_nova
+secao: adicionado
+titulo: Transcrição de áudio com interruptor por empresa e desconto de tokens do plano
 ---
 
-A transcrição de áudio feita pela API da OpenAI com o modelo `whisper-1` aparecia no Uso de IA com custo vazio, porque o Whisper cobra por minuto de áudio e nada media a duração. Agora a duração vem na resposta da OpenAI e o custo é gravado pela tarifa de US$ 0,006 por minuto, e o teto de gasto de IA da empresa passa a contar esses áudios. Transcrição por outro endereço ou outro modelo continua sem custo calculado, como antes. Não é preciso mudar nada à mão.
+Em Configurações › Atendimento há uma nova opção, "Transcrever áudios", que gerente ou administrador liga e desliga. Ela vem ligada: empresa que não mexer continua transcrevendo como antes. Desligada, o áudio recebido fica na conversa sem texto, o agente de IA não recebe transcrição e nada é gasto com ela.
+
+A transcrição feita com a chave da plataforma passa a descontar tokens do plano: 6.000 tokens por minuto de áudio, proporcional aos segundos e arredondado para cima. Aparece no extrato do mês em Meu plano, no dia da transcrição e na linha sem agente. Transcrição que falhou, que voltou vazia ou cuja duração o serviço não informou não desconta. Com a chave da própria empresa em Provedores de IA, nada sai do plano.
+
+A transcrição de áudio pela API da OpenAI com o modelo `whisper-1` também passa a ter custo no Uso de IA (US$ 0,006 por minuto), e o teto de gasto de IA da empresa passa a contar esses áudios. Não é preciso mudar nada à mão.

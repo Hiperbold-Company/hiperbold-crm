@@ -18,6 +18,12 @@ export interface TranscriptionProvider {
     texto: string;
     uso: TokenUsage | null;
     custoCents?: number | null;
+    /**
+     * Duração do áudio em segundos, quando o serviço a informa. É a base do
+     * débito no plano (6.000 tokens por minuto com a chave da instalação,
+     * migration 1025). null = desconhecida, e aí a transcrição não debita.
+     */
+    segundos?: number | null;
   }>;
 }
 
@@ -144,6 +150,11 @@ export function extFor(mime: string): string {
   return "bin";
 }
 
+/** Duração em segundos aceita só como número finito e positivo; o resto é desconhecido. */
+function duracaoValida(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+}
+
 export function apiTranscriptionProvider(
   creds: TranscriptionCreds,
   fetchImpl: typeof fetch = fetch,
@@ -183,7 +194,8 @@ export function apiTranscriptionProvider(
       const custoEmUsd = json.usage?.cost;
       const custoCents = typeof custoEmUsd === "number" && Number.isFinite(custoEmUsd) && custoEmUsd >= 0
         && Number.isFinite(custoEmUsd * 100) ? custoEmUsd * 100 : null;
-      return { texto: json.text ?? "", uso: null, custoCents };
+      // A OpenRouter informa a duração em `usage.seconds`, ao lado do custo.
+      return { texto: json.text ?? "", uso: null, custoCents, segundos: duracaoValida(json.usage?.seconds) };
     }
     // `usage: { type: "duration", seconds }` é o que a OpenAI documenta para o
     // `whisper-1`; `duration` no topo é o do `verbose_json`. Sem nenhum dos
@@ -195,7 +207,7 @@ export function apiTranscriptionProvider(
           ? json.duration
           : null;
     const custoCents = cobraPorMinuto && segundos !== null ? custoDeTranscricaoCents(model, segundos) : null;
-    return { texto: json.text ?? "", uso: null, custoCents };
+    return { texto: json.text ?? "", uso: null, custoCents, segundos: duracaoValida(segundos) };
   };
   // A tarifa por minuto (`custoDeTranscricaoCents`) é a da API da PRÓPRIA
   // OpenAI: o mesmo `whisper-1` num endereço configurado (serviço próprio da

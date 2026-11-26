@@ -1623,6 +1623,9 @@ export const AUDIT_ACTIONS = [
   // O admin ligou/desligou o aviso das transferências para atendimento humano
   // (#3784) — o mesmo número e o mesmo teto diário do Aviso de caso.
   "crm.aviso_de_transferencia_alterado",
+  // O gerente ligou/desligou a transcrição dos áudios recebidos da empresa
+  // (25/11/2026): desligada, o áudio fica sem texto e não gasta tokens.
+  "crm.transcrever_audios_alterado",
   // O admin da plataforma exportou o INVENTÁRIO das instalações em CSV (#2777).
   // É leitura, mas é leitura EM ESCALA DE PLATAFORMA: grava quem, quando, QUANTO
   // saiu, se o teto cortou e QUE filtros valiam — nunca o texto da busca, que é
