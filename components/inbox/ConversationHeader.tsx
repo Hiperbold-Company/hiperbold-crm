@@ -65,6 +65,12 @@ interface Props {
   botaoBuscaRef?: RefObject<HTMLButtonElement | null>;
   /** Seleciona outra conversa no Inbox — a aba Número do Transferir abre a do outro número. */
   onAbrirConversa?: (id: string) => void;
+  /**
+   * "Marcar como não lida": quem monta a Inbox faz a marcação E fecha a conversa
+   * (volta à lista) — senão a leitura automática de 1,5s a zeraria de novo. Sem
+   * a prop o botão não existe (cabeçalho fora da Inbox).
+   */
+  onMarcarComoNaoLida?: () => void;
 }
 
 /**
@@ -96,6 +102,7 @@ const STATUS_LABEL: Record<string, string> = {
 export function ConversationHeader({
   conversation,
   onAbrirConversa,
+  onMarcarComoNaoLida,
   onBuscar,
   buscaAberta,
   botaoBuscaRef,
@@ -634,6 +641,17 @@ export function ConversationHeader({
                   onClick={() => setConfirmArquivarOpen(true)}
                 >
                   {arquivar.isPending ? t("Arquivando...") : t("Arquivar")}
+                </Button>
+              )}
+              {onMarcarComoNaoLida && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="marcar-como-nao-lida"
+                  title={t("Volta a conversa para a lista com o selo de não lida, para você retomar depois.")}
+                  onClick={onMarcarComoNaoLida}
+                >
+                  {t("Marcar como não lida")}
                 </Button>
               )}
               {/* PESSOAL (spec 21, etapa 15): marcar tira a conversa do inbox na

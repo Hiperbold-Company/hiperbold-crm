@@ -3305,6 +3305,10 @@ export const DICIONARIO: Traducoes = {
   "1 conversa selecionada": { es: "1 conversación seleccionada" },
   "conversas selecionadas": { es: "conversaciones seleccionadas" },
   "Marcar como lida": { es: "Marcar como leída" },
+  "Marcar como não lida": { es: "Marcar como no leída" },
+  "Volta a conversa para a lista com o selo de não lida, para você retomar depois.": {
+    es: "Devuelve la conversación a la lista con el indicador de no leída, para retomarla después.",
+  },
   "Mais ações": { es: "Más acciones" },
   "Pausar IA": { es: "Pausar IA" },
   "Transferir para…": { es: "Transferir a…" },

@@ -34,6 +34,7 @@ function mao() {
     onFechar: vi.fn(),
     onArquivar: vi.fn(),
     onMarcarComoLida: vi.fn(),
+    onMarcarComoNaoLida: vi.fn(),
     onPausarIa: vi.fn(),
     onDevolverAoAutomatico: vi.fn(),
     onTransferir: vi.fn(),
@@ -107,6 +108,20 @@ describe("BarraDeAcoesEmLote", () => {
     await user.click(screen.getByRole("button", { name: "Mais ações" }));
     await user.click(screen.getByTestId("lote-devolver-ao-automatico"));
     expect(h.onDevolverAoAutomatico).toHaveBeenCalledTimes(1);
+  });
+
+  it("Marcar como não lida mora no Mais ações, delega, e o botão da frente segue sendo Marcar como lida", async () => {
+    const user = userEvent.setup();
+    const h = mao();
+    render(<BarraDeAcoesEmLote quantidade={2} pendente={false} {...h} />);
+
+    expect(screen.getByTestId("lote-marcar-como-lida")).toHaveTextContent("Marcar como lida");
+    expect(screen.queryByTestId("lote-marcar-como-nao-lida")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Mais ações" }));
+    await user.click(screen.getByRole("menuitem", { name: "Marcar como não lida" }));
+    expect(h.onMarcarComoNaoLida).toHaveBeenCalledTimes(1);
+    expect(h.onMarcarComoLida).not.toHaveBeenCalled();
   });
 
   it("transferir em lote escolhe o destino e devolve (to_user_id, reason)", async () => {
