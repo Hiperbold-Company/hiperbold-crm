@@ -1196,6 +1196,8 @@ export function AgentForm(props: Props) {
                   disabled={disabled}
                 />
               </div>
+              {/* Teto em centavos de dólar: só faz sentido com chave própria. Na chave da instalação o freio é o saldo de tokens do plano; o valor salvo segue intacto. */}
+              {!naChaveDaInstalacao && (
               <div className="space-y-1">
                 <Label htmlFor="cost_budget_cents">{t("Custo máximo por atendimento (centavos)")}</Label>
                 <Input
@@ -1208,6 +1210,7 @@ export function AgentForm(props: Props) {
                   disabled={disabled}
                 />
               </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="history_message_window">{t("Mensagens anteriores que ele lê")}</Label>
                 <Input

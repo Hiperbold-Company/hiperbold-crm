@@ -193,6 +193,6 @@ export function corpoDoBloqueioDaCarteira(saldoTokens: number | null): string {
     `A carteira de tokens de IA desta organização chegou a zero neste ciclo${saldoTexto}. ` +
     'As conversas que estavam sendo atendidas pela IA foram para a FILA DE ATENDIMENTO HUMANO, ' +
     'ninguém ficou sem próximo passo, mas alguém precisa responder. ' +
-    'Para a IA voltar a responder ainda neste mês, contrate mais tokens em Configurações › Plano e uso.'
+    'Para a IA voltar a responder ainda neste mês, contrate mais tokens em Configurações › Meu plano e consumo de IA.'
   );
 }

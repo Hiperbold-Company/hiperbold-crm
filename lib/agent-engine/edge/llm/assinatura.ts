@@ -87,7 +87,7 @@ export function corpoDaSuspensaoDeAssinatura(): string {
     'O pagamento desta organização não foi regularizado dentro da carência, e o acesso está em ' +
     'modo leitura: a IA e as automações pararam de responder aos clientes. As conversas que estavam ' +
     'sendo atendidas pela IA foram para a fila de atendimento humano. Para a IA voltar a responder, ' +
-    'regularize o pagamento em Configurações › Plano e uso.'
+    'regularize o pagamento em Configurações › Meu plano e consumo de IA.'
   );
 }
 

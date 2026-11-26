@@ -884,12 +884,12 @@ export const TITULO_DO_HANDOFF_POR_ORCAMENTO = 'Limite de segurança de IA ating
  * `comHandoffSeOrcamentoAcabar` cai no MESMO `catch`: o que muda é só a redação,
  * quem assume não pode ler "teto de gasto" quando o que acabou foi a carteira de
  * tokens do plano, e ir procurar o conserto em Uso de IA › Orçamento em vez de
- * Configurações › Plano e uso.
+ * Configurações › Meu plano e consumo de IA.
  */
 export const RESUMO_DO_HANDOFF_POR_CARTEIRA =
   'A IA parou de responder porque a carteira de tokens de IA desta organização esgotou ' +
   'neste ciclo: o lead NÃO pediu atendimento humano. Assuma a conversa; para a IA voltar a ' +
-  'responder ainda neste mês, contrate mais tokens em Configurações › Plano e uso.';
+  'responder ainda neste mês, contrate mais tokens em Configurações › Meu plano e consumo de IA.';
 
 export const TITULO_DO_HANDOFF_POR_CARTEIRA = 'Carteira de tokens de IA esgotada: assumir a conversa';
 
@@ -900,12 +900,12 @@ export const TITULO_DO_HANDOFF_POR_CARTEIRA = 'Carteira de tokens de IA esgotada
  * dela), então `comHandoffSeOrcamentoAcabar` cai no MESMO `catch`: quem assume
  * não pode ler "teto de gasto" nem "carteira de tokens do plano" quando o que
  * parou foi a MENSALIDADE em atraso — e ir procurar o conserto em Uso de IA ›
- * Orçamento em vez de Configurações › Plano e uso › Assinatura.
+ * Orçamento em vez de Configurações › Meu plano e consumo de IA › Assinatura.
  */
 export const RESUMO_DO_HANDOFF_POR_ASSINATURA =
   'A IA parou de responder porque a assinatura desta organização está suspensa (pagamento em atraso ' +
   'além da carência): o lead NÃO pediu atendimento humano. Assuma a conversa; para a IA voltar a ' +
-  'responder, regularize o pagamento em Configurações › Plano e uso.';
+  'responder, regularize o pagamento em Configurações › Meu plano e consumo de IA.';
 
 export const TITULO_DO_HANDOFF_POR_ASSINATURA = 'Conta suspensa: assumir a conversa';
 

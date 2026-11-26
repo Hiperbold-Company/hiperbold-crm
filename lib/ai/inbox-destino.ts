@@ -348,7 +348,7 @@ export async function resolverDestinosDosAvisos<T extends ReferenciaDoAviso>(
           // não tem tela para ele: o aviso fica SEM destino, com a orientação
           // de falar com o suporte, para qualquer papel.
           const href = item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "/app/settings/plano" : "/app/radar";
-          const rotulo = item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "Abrir Plano e uso" : "Abrir Radar";
+          const rotulo = item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "Abrir Meu plano e consumo de IA" : "Abrir Radar";
           destination = item.ref_id !== organizationId ? INDISPONIVEL
             : item.kind === "contact_proposal_expired" || item.ref_kind === "ai_budget" ? { estado: "sem_destino", orientacao: p.orientacao }
             : !permite(papel, item.ref_kind === "billing_limite" || item.ref_kind === "billing_carteira" || item.ref_kind === "billing_assinatura" ? "manager" : "agent") ? semPermissao("manager")
