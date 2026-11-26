@@ -6,7 +6,7 @@
  * usado aqui é uma chave real, só literais óbvios de teste com o prefixo
  * certo (`$aact_hmlg_teste...`).
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ConfigAsaas } from "@/lib/billing/asaas/config";
 import {
@@ -483,6 +483,33 @@ describe("cliente Asaas: notificationDisabled (D-087)", () => {
     expect(chamadas[0]!.init.method).toBe("PUT");
     expect(chamadas[0]!.url).toBe("https://api-sandbox.asaas.com/v3/customers/cus_123");
     expect(JSON.parse(String(chamadas[0]!.init.body))).toEqual({ notificationDisabled: true });
+  });
+
+  it("atualizarCliente com tetoMs curto arma o AbortSignal com esse teto; sem ele, usa o de 60s", async () => {
+    const espiao = vi.spyOn(AbortSignal, "timeout");
+    try {
+      const { deps } = montarDeps([
+        respostaJson(200, { id: "cus_123" }),
+        respostaJson(200, { id: "cus_123" }),
+        respostaJson(200, { id: "cus_123" }),
+      ]);
+      const cliente = criarClienteAsaas(deps);
+      await cliente.atualizarCliente("cus_123", { notificationDisabled: true }, { tetoMs: 8_000 });
+      await cliente.atualizarCliente("cus_123", { notificationDisabled: true });
+      await cliente.atualizarCliente("cus_123", { notificationDisabled: true }, { tetoMs: 999_000 });
+      expect(espiao.mock.calls.map((c) => c[0])).toEqual([8_000, 60_000, 60_000]);
+    } finally {
+      espiao.mockRestore();
+    }
+  });
+
+  it("PUT com teto curto que estoura não repete e vira inconclusivo", async () => {
+    const { deps, chamadas } = montarDeps(["timeout"]);
+    const cliente = criarClienteAsaas(deps);
+    await expect(
+      cliente.atualizarCliente("cus_123", { notificationDisabled: true }, { tetoMs: 8_000 }),
+    ).rejects.toMatchObject({ erro: { tipo: "tempo_esgotado" } });
+    expect(chamadas).toHaveLength(1);
   });
 
   it("atualizarCliente devolve o cliente já com o campo confirmado", async () => {

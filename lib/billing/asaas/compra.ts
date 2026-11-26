@@ -885,13 +885,18 @@ async function resolverRespostaPeloEstado(deps: DepsCompra, org: string, pedido:
 
 // ─── Passo 3: cliente Asaas (vínculo local, depois referência, depois criar) ─
 
+/** Teto do PUT que completa a ficha (e do mínimo que desliga as notificações): melhor esforço, sem retry. */
+const TETO_COMPLETAR_FICHA_MS = 8_000;
+
 type ResultadoCliente =
   | { ok: true; asaasCustomerId: string }
   | { ok: false; mensagem: string; motivoInterno: string };
 
 function tratarErroAsaasComoFalhaDeCliente(deps: DepsCompra, err: unknown): ResultadoCliente {
   const tipoErro = err instanceof ErroAsaasException ? err.erro.tipo : "desconhecido";
-  deps.logger.error("asaas_compra_cliente_falhou", { tipoErro });
+  // Só os códigos do envelope de erro do Asaas (nunca descrição nem dado do pagador).
+  const codigos = err instanceof ErroAsaasException && err.erro.tipo === "validacao" ? err.erro.codigos : undefined;
+  deps.logger.error("asaas_compra_cliente_falhou", codigos ? { tipoErro, codigos } : { tipoErro });
   return { ok: false, mensagem: MENSAGEM_GENERICA, motivoInterno: `cliente_asaas_${tipoErro}` };
 }
 
@@ -902,7 +907,7 @@ function tratarErroAsaasComoFalhaDeCliente(deps: DepsCompra, err: unknown): Resu
  */
 async function desligarNotificacoesDoAsaas(deps: DepsCompra, asaasCustomerId: string): Promise<void> {
   try {
-    await deps.asaas.atualizarCliente(asaasCustomerId, { notificationDisabled: true });
+    await deps.asaas.atualizarCliente(asaasCustomerId, { notificationDisabled: true }, { tetoMs: TETO_COMPLETAR_FICHA_MS });
   } catch (err) {
     const tipoErro = err instanceof ErroAsaasException ? err.erro.tipo : "desconhecido";
     deps.logger.warn("asaas_compra_desligar_notificacoes_falhou", { tipoErro });
@@ -965,10 +970,13 @@ async function completarFichaDoAsaas(
   dados: NonNullable<ReturnType<typeof contatoEEnderecoParaOAsaas>>,
 ): Promise<void> {
   try {
-    await deps.asaas.atualizarCliente(asaasCustomerId, { ...dados, notificationDisabled: true });
+    // Teto curto próprio: o PUT é acessório e não pode segurar a compra pelos 60s do padrão.
+    await deps.asaas.atualizarCliente(asaasCustomerId, { ...dados, notificationDisabled: true }, { tetoMs: TETO_COMPLETAR_FICHA_MS });
   } catch (err) {
     const tipoErro = err instanceof ErroAsaasException ? err.erro.tipo : "desconhecido";
     deps.logger.warn("asaas_compra_completar_ficha_falhou", { tipoErro });
+    // O PUT completo pode ter falhado antes de desligar as notificações: o mínimo garante o D-087.
+    await desligarNotificacoesDoAsaas(deps, asaasCustomerId);
   }
 }
 

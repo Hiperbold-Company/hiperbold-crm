@@ -568,7 +568,7 @@ describe("iniciarCompra: cliente Asaas (decisão 16)", () => {
     await iniciarCompra(deps, ENTRADA_BASE);
 
     expect(asaas.atualizarCliente).toHaveBeenCalledTimes(1);
-    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_por_referencia", { notificationDisabled: true });
+    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_por_referencia", { notificationDisabled: true }, { tetoMs: 8_000 });
     expect(asaas.criarCliente).not.toHaveBeenCalled();
   });
 
@@ -713,7 +713,7 @@ describe("iniciarCompra: cadastro completo do pagador vai à ficha do Asaas", ()
     expect(resultado.tipo).toBe("redirecionar");
     expect(asaas.criarCliente).not.toHaveBeenCalled();
     expect(asaas.atualizarCliente).toHaveBeenCalledTimes(1);
-    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_vinculado123", { ...FICHA_ESPERADA, notificationDisabled: true });
+    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_vinculado123", { ...FICHA_ESPERADA, notificationDisabled: true }, { tetoMs: 8_000 });
     const corpo = (asaas.atualizarCliente as ReturnType<typeof vi.fn>).mock.calls[0]![1];
     // Nome e documento não são reescritos num cliente que já tem cobranças.
     expect(corpo).not.toHaveProperty("name");
@@ -730,7 +730,7 @@ describe("iniciarCompra: cadastro completo do pagador vai à ficha do Asaas", ()
     await iniciarCompra(deps, ENTRADA_COMPLETA);
 
     expect(asaas.atualizarCliente).toHaveBeenCalledTimes(1);
-    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_por_referencia", { ...FICHA_ESPERADA, notificationDisabled: true });
+    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_por_referencia", { ...FICHA_ESPERADA, notificationDisabled: true }, { tetoMs: 8_000 });
     expect(db.vincularClienteAsaas).toHaveBeenCalledWith("org-1", "sandbox", "cus_por_referencia");
   });
 
@@ -748,6 +748,48 @@ describe("iniciarCompra: cadastro completo do pagador vai à ficha do Asaas", ()
     expect(resultado.tipo).toBe("redirecionar");
     const aviso = linhas.find((l) => l.msg === "asaas_compra_completar_ficha_falhou");
     expect(aviso?.ctx).toEqual({ tipoErro: "indisponivel" });
+    const log = JSON.stringify(linhas);
+    for (const dado of ["01310", "Paulista", "fulano@example.com", "99999", CPF_VALIDO]) expect(log).not.toContain(dado);
+  });
+
+  it("PUT completo falha: o PUT mínimo com notificationDisabled sai em seguida, nos dois ramos", async () => {
+    for (const ramo of ["vinculado", "referencia"] as const) {
+      const { db } = dbFalso(pedidoBase(), ramo === "vinculado" ? { vinculo: "cus_x" } : undefined);
+      const atualizarCliente = vi.fn(async (_id: string, dados: Record<string, unknown>) => {
+        if ("email" in dados) throw erroTempoEsgotado(true);
+        return clienteFake({ id: "cus_x", notificationDisabled: true });
+      });
+      const asaas = asaasFalso({
+        atualizarCliente,
+        ...(ramo === "referencia"
+          ? { buscarClientePorReferencia: vi.fn(async () => clienteFake({ id: "cus_x", notificationDisabled: false })) }
+          : {}),
+      });
+      const { deps } = montarDeps(db, asaas);
+
+      const resultado = await iniciarCompra(deps, ENTRADA_COMPLETA);
+
+      expect(resultado.tipo).toBe("redirecionar");
+      expect(atualizarCliente).toHaveBeenCalledTimes(2);
+      expect(atualizarCliente.mock.calls[0]![1]).toMatchObject({ email: "fulano@example.com", notificationDisabled: true });
+      expect(atualizarCliente.mock.calls[1]).toEqual(["cus_x", { notificationDisabled: true }, { tetoMs: 8_000 }]);
+    }
+  });
+
+  it("falha de cliente por validação do Asaas loga os codigos, sem descrição nem dado do pagador", async () => {
+    const { db } = dbFalso(pedidoBase());
+    const asaas = asaasFalso({
+      buscarClientePorReferencia: vi.fn(async () => null),
+      criarCliente: vi.fn(async () => {
+        throw erroValidacao(400, ["invalid_object"]);
+      }),
+    });
+    const { deps, linhas } = montarDeps(db, asaas);
+
+    await iniciarCompra(deps, ENTRADA_COMPLETA);
+
+    const aviso = linhas.find((l) => l.msg === "asaas_compra_cliente_falhou");
+    expect(aviso?.ctx).toEqual({ tipoErro: "validacao", codigos: ["invalid_object"] });
     const log = JSON.stringify(linhas);
     for (const dado of ["01310", "Paulista", "fulano@example.com", "99999", CPF_VALIDO]) expect(log).not.toContain(dado);
   });
