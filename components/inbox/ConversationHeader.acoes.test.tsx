@@ -418,11 +418,13 @@ describe("Marcar como não lida no cabeçalho", () => {
   } as unknown as ConversationWithContact;
 
   it("com o callback, o botão existe, tem guia e delega ao clicar", () => {
+    // No redesign o botão mora no "Mais ações" recolhido (`<details>` fechado), fora da árvore acessível até abrir: `hidden: true`.
+
     estado.auth = { user: { id: "u1", support: null, is_platform_admin: true } };
     const aoMarcar = vi.fn();
     render(<ConversationHeader conversation={conversa} onMarcarComoNaoLida={aoMarcar} />);
 
-    const botao = screen.getByRole("button", { name: "Marcar como não lida" });
+    const botao = screen.getByRole("button", { name: "Marcar como não lida", hidden: true });
     expect((botao.getAttribute("title") ?? "").trim()).not.toBe("");
     fireEvent.click(botao);
     expect(aoMarcar).toHaveBeenCalledTimes(1);
@@ -431,6 +433,6 @@ describe("Marcar como não lida no cabeçalho", () => {
   it("sem o callback, o botão não existe", () => {
     estado.auth = { user: { id: "u1", support: null, is_platform_admin: true } };
     render(<ConversationHeader conversation={conversa} />);
-    expect(screen.queryByRole("button", { name: "Marcar como não lida" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Marcar como não lida", hidden: true })).toBeNull();
   });
 });

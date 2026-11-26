@@ -927,6 +927,17 @@ export function ConversationHeader({
                 {arquivar.isPending ? t("Arquivando...") : t("Arquivar")}
               </Button>
             )}
+            {onMarcarComoNaoLida && (
+              <Button
+                size="sm"
+                variant="ghost"
+                data-testid="marcar-como-nao-lida"
+                title={t("Volta a conversa para a lista com o selo de não lida, para você retomar depois.")}
+                onClick={onMarcarComoNaoLida}
+              >
+                {t("Marcar como não lida")}
+              </Button>
+            )}
             {/* PESSOAL (spec 21, etapa 15): marcar tira a conversa do inbox na
                 hora; desmarcar relista. O `data-testid` é contrato do e2e da
                 spec (`contato-pessoal-sai-da-operacao.spec.ts`). */}
