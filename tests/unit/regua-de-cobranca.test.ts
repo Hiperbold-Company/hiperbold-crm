@@ -66,6 +66,7 @@ function adminFalso(opts: {
       if (nome === "fn_billing_regua_de_cobranca_pendentes") return { data: opts.pendentes, error: null };
       if (nome === "fn_billing_pedido_gravar_vencimento") return { data: true, error: null };
       if (nome === "fn_billing_pedidos_de_assinatura_em_aberto") return { data: opts.relido ?? [], error: null };
+      if (nome === "fn_billing_asaas_registrar_evento") return { data: { novo: true }, error: null };
       return { data: null, error: { message: `rpc inesperada ${nome}` } };
     }),
     from: (tabela: string) => {
@@ -194,13 +195,36 @@ describe("régua de cobrança: o marco vigente vira COB-05 com o link da fatura"
     expect(renderizar(enviadas[0]!, "es").subject).toBe("Tu factura venció el 13/11/2026");
   });
 
-  it("cobrança já paga no Asaas (o evento ainda não chegou): não enfileira", async () => {
-    for (const status of ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]) {
-      const { admin } = adminFalso({ pendentes: [linha()] });
-      const { resumo, enviadas } = await rodar(admin, asaasFalso(cobranca({ status })));
+  it("cobrança já paga no Asaas (o aviso se perdeu): não enfileira e registra o evento sintético de pago", async () => {
+    const eventos: Record<string, string> = {
+      RECEIVED: "PAYMENT_RECEIVED",
+      CONFIRMED: "PAYMENT_CONFIRMED",
+      RECEIVED_IN_CASH: "PAYMENT_RECEIVED_IN_CASH",
+    };
+    for (const [status, evento] of Object.entries(eventos)) {
+      const { admin, rpcs } = adminFalso({ pendentes: [linha()] });
+      const c = cobranca({ status });
+      const { resumo, enviadas } = await rodar(admin, asaasFalso(c));
       expect(enviadas).toEqual([]);
       expect(resumo.pagos).toBe(1);
+      expect(resumo.pagamentosRegistrados).toBe(1);
+      expect(rpcs.find(([n]) => n === "fn_billing_asaas_registrar_evento")?.[1]).toEqual({
+        p_event_id: `conc:${c.id}:${status}`,
+        p_event_type: evento,
+        p_resource_id: c.id,
+        p_ambiente: "producao",
+        p_origem: "conciliacao",
+        p_payload: { id: `conc:${c.id}:${status}`, event: evento, payment: c },
+      });
     }
+  });
+
+  it("cartão em análise antifraude: não enfileira e não inventa evento", async () => {
+    const { admin, rpcs } = adminFalso({ pendentes: [linha()] });
+    const { resumo, enviadas } = await rodar(admin, asaasFalso(cobranca({ status: "AWAITING_RISK_ANALYSIS" })));
+    expect(enviadas).toEqual([]);
+    expect(resumo.pagos).toBe(1);
+    expect(rpcs.some(([n]) => n === "fn_billing_asaas_registrar_evento")).toBe(false);
   });
 
   it("cobrança removida, fora de aberto ou sem link válido: não manda link morto", async () => {

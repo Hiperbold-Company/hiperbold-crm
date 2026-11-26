@@ -20,7 +20,7 @@
  * ─── O GET antes de enfileirar ──────────────────────────────────────────────
  *
  * Um GET no Asaas por pedido, só quando há marco a enfileirar (ou vencimento a gravar): a cobrança paga (o evento
- * ainda não chegou) não recebe aviso, a removida também não, e o link que vai no e-mail é o que o Asaas devolve
+ * ainda não chegou) não recebe aviso e vira o evento sintético de pagamento da conciliação, a removida também não, e o link que vai no e-mail é o que o Asaas devolve
  * agora, conferido por `FATURA_DO_ASAAS`. O `dueDate` lido vence o gravado (`fn_billing_pedido_gravar_vencimento`)
  * e o marco é recalculado com ele. Pedido anterior à 1026 (sem `vence_em`) ganha a data aqui.
  *
@@ -46,7 +46,13 @@ const TAMANHO_DO_LOTE = 300;
 /** Quanto a rodada trabalha antes de parar (teto do curl no scheduler: 120 s). */
 export const ORCAMENTO_DA_RODADA_MS = 90_000;
 
-const STATUS_PAGO = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]);
+const STATUS_PAGO = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "AWAITING_RISK_ANALYSIS"]);
+/** O evento que o webhook mandaria para cada status pago (em análise antifraude não tem: espera o Asaas decidir). */
+const EVENTO_DO_PAGAMENTO: Record<string, string> = {
+  CONFIRMED: "PAYMENT_CONFIRMED",
+  RECEIVED: "PAYMENT_RECEIVED",
+  RECEIVED_IN_CASH: "PAYMENT_RECEIVED_IN_CASH",
+};
 const STATUS_EM_ABERTO = new Set(["PENDING", "OVERDUE"]);
 
 export type MarcoDaRegua = "antes" | "no_dia" | "depois" | "ultimo_dia";
@@ -88,8 +94,13 @@ export interface ResumoDaRegua {
   enfileirados: number;
   /** A chave já estava na fila: nada novo. */
   jaAvisados: number;
-  /** A cobrança já foi paga no Asaas (o evento ainda vai chegar): sem aviso. */
+  /**
+   * A cobrança já foi paga no Asaas (ou está em análise antifraude): sem aviso. O pagamento cujo aviso se perdeu
+   * vira o evento sintético da conciliação (`conc:<id>:<status>`), aplicado pelo processador como o do webhook.
+   */
   pagos: number;
+  /** Eventos sintéticos de pagamento registrados agora (o mesmo `fn_billing_asaas_registrar_evento` do webhook). */
+  pagamentosRegistrados: number;
   /** A cobrança não existe mais, não está em aberto ou não tem link válido: sem aviso. */
   semFatura: number;
   /** Depois de gravar o vencimento lido no Asaas, nenhum marco vale hoje. */
@@ -142,6 +153,7 @@ export async function avisarFaturasEmAberto(admin: SupabaseClient, deps: DepsDaR
     enfileirados: 0,
     jaAvisados: 0,
     pagos: 0,
+    pagamentosRegistrados: 0,
     semFatura: 0,
     foraDoMarco: 0,
     vencimentosGravados: 0,
@@ -199,6 +211,21 @@ export async function avisarFaturasEmAberto(admin: SupabaseClient, deps: DepsDaR
       const cobranca = await lerCobrancaDoPedido(deps.asaas, inicial);
       if (cobranca && STATUS_PAGO.has(cobranca.status)) {
         resumo.pagos++;
+        const eventType = EVENTO_DO_PAGAMENTO[cobranca.status];
+        if (eventType) {
+          // Mesmo evento sintético da conciliação (`conciliar.ts`): o processador confirma por GET e aplica.
+          const eventId = `conc:${cobranca.id}:${cobranca.status}`;
+          const registrado = await admin.rpc("fn_billing_asaas_registrar_evento" as never, {
+            p_event_id: eventId,
+            p_event_type: eventType,
+            p_resource_id: cobranca.id,
+            p_ambiente: inicial.ambiente,
+            p_origem: "conciliacao",
+            p_payload: { id: eventId, event: eventType, payment: cobranca },
+          } as never);
+          if (registrado.error) throw new Error(`fn_billing_asaas_registrar_evento: ${registrado.error.message}`);
+          if ((registrado.data as { novo?: boolean } | null)?.novo) resumo.pagamentosRegistrados++;
+        }
         continue;
       }
       if (!cobranca || !STATUS_EM_ABERTO.has(cobranca.status)) {

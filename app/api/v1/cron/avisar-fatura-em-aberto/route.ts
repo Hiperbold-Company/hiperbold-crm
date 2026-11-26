@@ -38,6 +38,7 @@ const RESUMO_DESLIGADO: ResumoDaRegua = {
   enfileirados: 0,
   jaAvisados: 0,
   pagos: 0,
+  pagamentosRegistrados: 0,
   semFatura: 0,
   foraDoMarco: 0,
   vencimentosGravados: 0,

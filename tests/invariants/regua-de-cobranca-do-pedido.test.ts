@@ -11,7 +11,9 @@
  *   5. pago para a régua; pacote de tokens vencido continua saindo no dia seguinte;
  *   6. a régua: marco já enfileirado sai da lista, só da organização dona; outra organização não é afetada;
  *      organização inativa não recebe; `fn_billing_pedido_gravar_vencimento` só mexe no pedido da organização dada;
- *   7. as funções são só do servidor: anon e authenticated barrados.
+ *   7. as funções são só do servidor: anon e authenticated barrados;
+ *   8. pedido superado (o contrato ganhou cancelamento, ou entrou pagamento por outro caminho, DEPOIS do pedido):
+ *      sai já, sem marco; cancelamento anterior ao pedido e pagamento estornado não contam.
  *
  * Roda via `pnpm test:db tests/invariants/regua-de-cobranca-do-pedido.test.ts`.
  */
@@ -30,9 +32,12 @@ const ORG_FILA_A = U(7);
 const ORG_FILA_B = U(8);
 const ORG_INATIVA = U(9);
 const ORG_GATILHO = U(10);
+const ORG_CANCELOU = U(11);
+const ORG_PAGOU_POR_FORA = U(12);
+const ORG_CANCELADA_ANTES = U(13);
 const ORGS = [
   ORG_REAL, ORG_JA_SUSPENSA, ORG_SEM_PERIODO, ORG_PIX_ADIANTADO, ORG_ANTIGO, ORG_PACOTE, ORG_FILA_A, ORG_FILA_B,
-  ORG_INATIVA, ORG_GATILHO,
+  ORG_INATIVA, ORG_GATILHO, ORG_CANCELOU, ORG_PAGOU_POR_FORA, ORG_CANCELADA_ANTES,
 ];
 
 /** O horário do job (08:10 em São Paulo) num dia de novembro de 2026. */
@@ -280,6 +285,63 @@ describe("1026: a lista da régua e o isolamento entre organizações", () => {
     expect(naRegua(id, dia(13))).toBe("no_dia");
     sql(`update public.organizations set status = 'suspended' where id = '${ORG_INATIVA}';`);
     expect(naRegua(id, dia(13))).toBe("-");
+  });
+});
+
+describe("1026 (M3): pedido superado por cancelamento ou por pagamento de outro caminho sai já, sem marco", () => {
+  function cancelarNoFim(org: string, quando: string): void {
+    sql(`
+      update public.billing_contracts set cancel_at_period_end = true where organization_id = '${org}';
+      insert into public.billing_contract_eventos (organization_id, contract_id, tipo, de, para, motivo, actor, criado_em)
+      select '${org}', id, 'cancelar_no_fim', 'false', 'true', 'teste_1026', null, '${quando}'::timestamptz
+        from public.billing_contracts where organization_id = '${org}';
+    `);
+  }
+
+  it("cancelamento no fim do período DEPOIS do pedido: remover já, em qualquer status, sem e-mail", () => {
+    contrato(ORG_CANCELOU, { status: "avaliacao", fim: "2026-11-13 00:00:00-03" });
+    const id = pedido(ORG_CANCELOU, { criadoEm: "2026-11-10 10:00:00-03", venceEm: "2026-11-13", sub: "sub_cancelou" });
+    expect(prazo(id, dia(11)).split("|")[3]).toBe("antes");
+    cancelarNoFim(ORG_CANCELOU, "2026-11-11 15:00:00-03");
+    expect(prazo(id, dia(12))).toBe("superado|2026-11-12|true|-");
+    expect(naRemocao(id, dia(12))).toBe(true);
+    expect(naRegua(id, dia(13))).toBe("-");
+  });
+
+  it("cancelamento ANTES do pedido (quem cancelou e voltou a assinar): segue a régua", () => {
+    contrato(ORG_CANCELADA_ANTES, { status: "avaliacao", fim: "2026-11-13 00:00:00-03" });
+    cancelarNoFim(ORG_CANCELADA_ANTES, "2026-11-05 15:00:00-03");
+    const id = pedido(ORG_CANCELADA_ANTES, { criadoEm: "2026-11-10 10:00:00-03", venceEm: "2026-11-13", sub: "sub_antes" });
+    expect(prazo(id, dia(13)).split("|")[0]).not.toBe("superado");
+    expect(naRegua(id, dia(13))).toBe("no_dia");
+    expect(naRemocao(id, dia(13))).toBe(false);
+  });
+
+  it("pagamento por outro caminho depois do pedido: remover já; estornado ou sem período não conta", () => {
+    contrato(ORG_PAGOU_POR_FORA, { status: "atrasada", fim: "2026-11-13 00:00:00-03" });
+    const id = pedido(ORG_PAGOU_POR_FORA, { criadoEm: "2026-11-10 10:00:00-03", venceEm: "2026-11-13", status: "vencido", sub: "sub_fora" });
+    const pagar = (status: string, estorna: string | null, comPeriodo = true): string =>
+      sql(`
+        insert into public.billing_payments
+          (organization_id, contract_id, gross_cents, status, paid_at, billing_period_start, billing_period_end, chave, origem, estorna_pagamento_id)
+        select '${ORG_PAGOU_POR_FORA}', c.id, 19900, '${status}', '2026-11-14 12:00:00-03',
+               ${comPeriodo ? "'2026-11-13 00:00:00-03'" : "null"}, ${comPeriodo ? "'2026-12-13 00:00:00-03'" : "null"},
+               gen_random_uuid(), '${comPeriodo ? "manual" : "asaas"}', ${estorna ? `'${estorna}'::uuid` : "null"}
+          from public.billing_contracts c where c.organization_id = '${ORG_PAGOU_POR_FORA}'
+        returning id;
+      `).split("\n")[0]!;
+    expect(prazo(id, dia(15)).split("|")[3]).toBe("depois");
+    // Pagamento que já foi estornado (com a linha de estorno apontando para ele): não supera.
+    const estornado = pagar("RECEIVED_IN_CASH", null);
+    pagar("REFUNDED", estornado);
+    expect(prazo(id, dia(15)).split("|")[3]).toBe("depois");
+    // Pacote de tokens ou parcela seguinte de parcelado pago (sem período concedido): não supera.
+    pagar("RECEIVED", null, false);
+    expect(prazo(id, dia(15)).split("|")[3]).toBe("depois");
+    pagar("RECEIVED_IN_CASH", null);
+    expect(prazo(id, dia(15))).toBe("superado|2026-11-15|true|-");
+    expect(naRemocao(id, dia(15))).toBe(true);
+    expect(naRegua(id, dia(15))).toBe("-");
   });
 });
 

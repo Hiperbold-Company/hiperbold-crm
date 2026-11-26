@@ -25,7 +25,8 @@ import "server-only";
  *
  *   1. Pedidos `aguardando_pagamento` ou `inconclusivo`, mais os `processando`
  *      travados há mais de 15 minutos (posse atômica que nunca terminou o
- *      POST, decisão 25): compara o que o Asaas mostra com o banco e injeta
+ *      POST, decisão 25), e depois deles os de assinatura `vencido` recentes
+ *      (1026: a fatura segue viva até o prazo da régua): compara o que o Asaas mostra com o banco e injeta
  *      um evento SINTÉTICO (`event_id = 'conc:<id>:<status>'`,
  *      `origem = 'conciliacao'`) por `fn_billing_asaas_registrar_evento` - a
  *      MESMA função que o webhook usa. O processador (Tarefa 13) é quem
@@ -69,8 +70,9 @@ import "server-only";
  *
  * ═══ Teto de 200 GET por rodada (decisão 21) ═══
  *
- * Só os passos 1 e 2 gastam `GET` no Asaas (o passo 3 é `DELETE`, e não entra
- * no teto: é idempotente e a chamada isolada é barata). `podeGastarGet` conta
+ * Só os passos 1 e 2 gastam `GET` do teto (o passo 3 é `DELETE`, idempotente,
+ * e a conferência que o precede desde a 1026 também fica fora do teto: são
+ * poucas por rodada e não remover sem conferir vale mais que o teto). `podeGastarGet` conta
  * TODO `GET` feito nos passos 1 e 2; ao esgotar o teto, a rodada para de
  * consultar o Asaas (o que sobrou fica para a rodada seguinte) mas ainda
  * roda os passos 3 a 5.
@@ -87,6 +89,7 @@ import type { AmbienteAsaas, ConfigAsaas } from "./config";
 import type { CobrancaAsaas } from "./contratos";
 import { ErroAsaasException } from "./erros";
 import { contadoresDeAlarmeAsaas, type ContadoresDeAlarmeAsaas } from "./leitura";
+import { removerFaturaDoPedidoVencido } from "./remover-fatura-vencida";
 
 // ─── A interface estreita do banco ─────────────────────────────────────────
 
@@ -170,7 +173,11 @@ export interface RegistrarEventoSinteticoInput {
 }
 
 export interface DbConciliarAsaas {
-  /** Pedidos `aguardando_pagamento`/`inconclusivo`/`processando` travado (decisão 21). */
+  /**
+   * Pedidos `aguardando_pagamento`/`inconclusivo`/`processando` travado (decisão 21), e DEPOIS deles os pedidos
+   * de assinatura `vencido` dos últimos `DIAS_DO_VENCIDO_NA_CONCILIACAO` dias (1026: a fatura fica viva no Asaas
+   * até o prazo da régua, e um pagamento dela cujo aviso se perdeu precisa ser aplicado).
+   */
   listarPedidosPendentes(limite: number): Promise<RpcResultado<PedidoParaConciliar[]>>;
   /** Pedidos `vencido` com `asaas_payment_id` ainda gravado (decisão 10, A1). */
   listarPedidosVencidosParaRemocao(limite: number): Promise<RpcResultado<PedidoVencidoParaRemocao[]>>;
@@ -260,6 +267,11 @@ export const LIMITE_PARCELADOS_PADRAO = 50;
 /** D-177: o pedido parcelado pago entra na reconciliação por este tempo (a última parcela vence em até 12 meses). */
 export const DIAS_DO_PARCELADO_PAGO = 400;
 export const DIAS_DE_PODA_PADRAO = 180;
+/**
+ * 1026: o pedido de assinatura `vencido` entra no passo 1 por este tempo desde a última mudança (o vencimento, em
+ * geral). Cobre o prazo da régua (vencimento + carência, ou a suspensão do contrato) com folga.
+ */
+export const DIAS_DO_VENCIDO_NA_CONCILIACAO = 60;
 
 const CONTADORES_ZERADOS: ContadoresDeAlarmeAsaas = {
   pendenteHaMaisDeUmaHora: 0,
@@ -681,39 +693,75 @@ async function refazerRemocaoDeCobrancaVencida(
   }
 
   for (const pedido of vencidos.data ?? []) {
-    // Pedido de assinatura vencido remove a ASSINATURA inteira, nunca só a
-    // cobrança avulsa do ciclo (decisão 4/10, correção item 4): removerCobranca
-    // deixaria a assinatura viva no Asaas, cobrando de novo no ciclo seguinte.
+    // Pedido de assinatura vencido remove a ASSINATURA inteira, nunca só a cobrança avulsa do ciclo (decisão
+    // 4/10, correção item 4): removerCobranca deixaria a assinatura viva no Asaas, cobrando de novo no ciclo
+    // seguinte. 1026: antes de remover, a conferência de `removerFaturaDoPedidoVencido` lista todas as cobranças
+    // do pedido; paga (ou em análise) não é removida, e o pagamento vira o mesmo evento sintético do passo 1.
     const usaAssinatura = pedido.tipo === "assinatura" && Boolean(pedido.asaasSubscriptionId);
     if (!usaAssinatura && !pedido.asaasPaymentId && !pedido.asaasInstallmentId) continue;
 
-    try {
-      if (usaAssinatura) {
-        await deps.asaas.removerAssinatura(pedido.asaasSubscriptionId as string);
-      } else if (pedido.asaasInstallmentId) {
-        await deps.asaas.removerParcelamento(pedido.asaasInstallmentId);
-      } else {
-        await deps.asaas.removerCobranca(pedido.asaasPaymentId as string);
-      }
+    const r = await removerFaturaDoPedidoVencido(
+      deps.asaas,
+      {
+        id: pedido.id,
+        asaasPaymentId: pedido.asaasPaymentId,
+        asaasSubscriptionId: usaAssinatura ? pedido.asaasSubscriptionId : null,
+        asaasInstallmentId: pedido.asaasInstallmentId ?? null,
+      },
+      deps.logger,
+    );
+
+    if (r.desfecho === "removido") {
       resumo.cobrancasRemovidas++;
-    } catch (err) {
-      if (ehErroDeConfiguracao(err)) {
-        deps.logger.error("asaas_conciliar_erro_de_configuracao_abortando", { pedidoId: pedido.id });
-        estado.configInvalida = true;
-        return;
-      }
-      // Alarme com o MESMO código que `fn_billing_asaas_aplicar_evento`
-      // devolve (correção A1/4): a remoção continua pendente.
-      deps.logger.error(
-        usaAssinatura ? "alarme_asaas_remover_assinatura_pendente" : "alarme_asaas_remover_cobranca_pendente",
-        {
-          pedidoId: pedido.id,
-          organizationId: pedido.organizationId,
-          tipoErro: tipoDoErro(err),
-        },
-      );
-      resumo.falhas++;
+      continue;
     }
+
+    if (r.desfecho === "pago") {
+      deps.logger.warn("asaas_conciliar_vencido_pago_nao_removido", {
+        pedidoId: pedido.id,
+        organizationId: pedido.organizationId,
+        status: r.cobranca.status,
+      });
+      // Em análise antifraude não vira evento: a rodada seguinte confere de novo.
+      const eventType = eventoSinteticoDaCobranca("vencido", r.cobranca);
+      if (!eventType) continue;
+      const eventId = `conc:${r.cobranca.id}:${r.cobranca.status}`;
+      const registrado = await deps.db.registrarEventoSintetico({
+        eventId,
+        eventType,
+        idDoRecurso: r.cobranca.id,
+        // Mesma doutrina do passo 2: o cliente Asaas desta rodada só alcança o ambiente da configuração.
+        ambiente: deps.config.ambiente,
+        payload: { id: eventId, event: eventType, payment: r.cobranca },
+      });
+      if (registrado.error) {
+        deps.logger.error("asaas_conciliar_registrar_evento_falhou", {
+          pedidoId: pedido.id,
+          codigo: registrado.error.code,
+        });
+        resumo.falhas++;
+      } else if (registrado.data?.novo) {
+        resumo.eventosSinteticos++;
+      }
+      continue;
+    }
+
+    if (ehErroDeConfiguracao(r.erro)) {
+      deps.logger.error("asaas_conciliar_erro_de_configuracao_abortando", { pedidoId: pedido.id });
+      estado.configInvalida = true;
+      return;
+    }
+    // Alarme com o MESMO código que `fn_billing_asaas_aplicar_evento`
+    // devolve (correção A1/4): a remoção continua pendente.
+    deps.logger.error(
+      usaAssinatura ? "alarme_asaas_remover_assinatura_pendente" : "alarme_asaas_remover_cobranca_pendente",
+      {
+        pedidoId: pedido.id,
+        organizationId: pedido.organizationId,
+        tipoErro: tipoDoErro(r.erro),
+      },
+    );
+    resumo.falhas++;
   }
 }
 
@@ -915,7 +963,18 @@ export function criarDbConciliarAsaasSobre(admin: SupabaseClient): DbConciliarAs
         .order("updated_at", { ascending: true })
         .limit(limite);
       if (error) return { data: null, error: { code: error.code, message: error.message } };
-      const linhas = (data ?? []) as unknown as LinhaDePedidoCru[];
+      // 1026: os de assinatura `vencido` recentes vêm DEPOIS, para não tomarem o teto de GET dos pendentes.
+      const desde = new Date(Date.now() - DIAS_DO_VENCIDO_NA_CONCILIACAO * 24 * 60 * 60 * 1000).toISOString();
+      const vencidos = await admin
+        .from("billing_orders")
+        .select("id, organization_id, ambiente, tipo, status, external_reference, asaas_payment_id, asaas_subscription_id")
+        .eq("tipo", "assinatura")
+        .eq("status", "vencido")
+        .gt("updated_at", desde)
+        .order("updated_at", { ascending: true })
+        .limit(limite);
+      if (vencidos.error) return { data: null, error: { code: vencidos.error.code, message: vencidos.error.message } };
+      const linhas = [...((data ?? []) as unknown as LinhaDePedidoCru[]), ...((vencidos.data ?? []) as unknown as LinhaDePedidoCru[])];
       return {
         data: linhas.map((l) => ({
           id: l.id,

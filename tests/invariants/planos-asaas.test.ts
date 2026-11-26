@@ -1090,10 +1090,11 @@ const ORG_T5_VENCIDO = "09090005-a5aa-4000-8000-000000000005";
 const ORG_T5_CARENCIA = "09090005-a5aa-4000-8000-000000000006";
 const ORG_T5_CORRIDA = "09090005-a5aa-4000-8000-000000000007";
 const ORG_T5_CONFERIDOR = "09090005-a5aa-4000-8000-000000000008";
+const ORG_T5_VENCIDO_NO_PRAZO = "09090005-a5aa-4000-8000-000000000009";
 
 const ORGS_T5 = [
   ORG_T5_PRIMEIRO, ORG_T5_PACOTE, ORG_T5_RENOVACAO, ORG_T5_DIVERGENTE,
-  ORG_T5_VENCIDO, ORG_T5_CARENCIA, ORG_T5_CORRIDA, ORG_T5_CONFERIDOR,
+  ORG_T5_VENCIDO, ORG_T5_CARENCIA, ORG_T5_CORRIDA, ORG_T5_CONFERIDOR, ORG_T5_VENCIDO_NO_PRAZO,
 ];
 
 describe("0909 Tarefa 5: setup comum (organizações, compra ligada, pro à venda, pacote de teste)", () => {
@@ -1274,6 +1275,28 @@ describe("0909 Tarefa 5: cliente trocado e valor menor dão divergente; valor ma
   });
 });
 
+describe("1026 (B2): pedido de assinatura vencido pago DENTRO do prazo da régua não é pago fora do prazo", () => {
+  it("vencido ontem, fatura ainda viva: concede sem o alarme pago_fora_do_prazo", () => {
+    sql(
+      `select public.fn_billing_criar_pedido('${ORG_T5_VENCIDO_NO_PRAZO}'::uuid, 'assinatura', 'pro', 'monthly', null, 'CREDIT_CARD', 'sandbox', gen_random_uuid(), null);`,
+    );
+    const pedidoId = sql(`select id from public.billing_orders where organization_id = '${ORG_T5_VENCIDO_NO_PRAZO}' and status = 'criado';`).trim();
+    sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T5_VENCIDO_NO_PRAZO}'::uuid, '${pedidoId}'::uuid, 'pay_t5_1026', null, null);`);
+    sql(`update public.billing_orders set status = 'vencido', vence_em = current_date - 1 where id = '${pedidoId}';`);
+    sql(`select public.fn_billing_vincular_cliente_asaas('${ORG_T5_VENCIDO_NO_PRAZO}'::uuid, 'sandbox', 'cus_t51026');`);
+    // A régua ainda o tem em aberto e sem remoção.
+    expect(
+      sql(`select pode_remover::text from public.fn_billing_pedidos_de_assinatura_em_aberto(now(), null, '${pedidoId}'::uuid);`).trim(),
+    ).toBe("false");
+
+    const conf = `jsonb_build_object('id','pay_t5_1026','status','CONFIRMED','value',149.00,'dueDate',to_char(current_date - 1,'YYYY-MM-DD'),'customer','cus_t51026')`;
+    const resultado = registrarEAplicar("evt-t5-1026", "pay_t5_1026", conf);
+    expect(resultado).toContain('"resultado": "aplicado"');
+    expect(sql(`select coalesce(alarme, '-') from public.asaas_webhook_events where event_id = 'evt-t5-1026';`).trim()).toBe("-");
+    expect(sql(`select status from public.billing_orders where id = '${pedidoId}';`).trim()).toBe("pago");
+  });
+});
+
 describe("0909 Tarefa 5: prefixo HT: dá outro_app", () => {
   it("externalReference de outro app nunca casa com pedido nenhum", () => {
     const conf = `jsonb_build_object('id','pay_t5_005','status','CONFIRMED','value',100.00,'dueDate',to_char(current_date,'YYYY-MM-DD'),'externalReference','HT:algumacoisa')`;
@@ -1289,7 +1312,8 @@ describe("0909 Tarefa 5: pago fora do prazo concede com alarme (decisão 4/A1)",
     );
     const pedidoId = sql(`select id from public.billing_orders where organization_id = '${ORG_T5_VENCIDO}' and status = 'criado';`).trim();
     sql(`select public.fn_billing_pedido_registrar_cobranca('${ORG_T5_VENCIDO}'::uuid, '${pedidoId}'::uuid, 'pay_t5_006', null, null);`);
-    sql(`update public.billing_orders set status = 'vencido' where id = '${pedidoId}';`);
+    // 1026: vencido há 60 dias, fora do prazo da régua de cobrança (vencimento + carência já passou).
+    sql(`update public.billing_orders set status = 'vencido', vence_em = current_date - 60 where id = '${pedidoId}';`);
     // contrato suspenso (nao so pedido vencido): cobre o ramo "estado" de
     // billing_contract_eventos (a organizacao T5_PRIMEIRO nasce ativa e nunca
     // exercita esse ramo).

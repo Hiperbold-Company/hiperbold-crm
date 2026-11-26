@@ -21,8 +21,12 @@ import {
 import type { ClienteAsaasHttp } from "@/lib/billing/asaas/cliente";
 import type { ConfigAsaas } from "@/lib/billing/asaas/config";
 import type { CobrancaAsaas } from "@/lib/billing/asaas/contratos";
-import { erroIndisponivel } from "@/lib/billing/asaas/erros";
-import { removerFaturasDePedidosVencidos, type PedidoVencidoComFatura } from "@/lib/billing/asaas/remover-fatura-vencida";
+import { erroIndisponivel, erroNaoEncontrado } from "@/lib/billing/asaas/erros";
+import {
+  removerFaturaDoPedidoVencido,
+  removerFaturasDePedidosVencidos,
+  type PedidoVencidoComFatura,
+} from "@/lib/billing/asaas/remover-fatura-vencida";
 
 const CONFIG: ConfigAsaas = {
   habilitado: true,
@@ -92,7 +96,7 @@ function asaasFalso(overrides: Partial<ClienteAsaasHttp> = {}): ClienteAsaasHttp
     atualizarCliente: nunca("atualizarCliente"),
     criarAssinatura: nunca("criarAssinatura"),
     buscarAssinatura: nunca("buscarAssinatura"),
-    listarCobrancasDaAssinatura: nunca("listarCobrancasDaAssinatura"),
+    listarCobrancasDaAssinatura: vi.fn(async () => [cobranca()]),
     buscarAssinaturaPorReferencia: nunca("buscarAssinaturaPorReferencia"),
     removerAssinatura: vi.fn(async () => undefined),
     criarCobranca: nunca("criarCobranca"),
@@ -103,7 +107,7 @@ function asaasFalso(overrides: Partial<ClienteAsaasHttp> = {}): ClienteAsaasHttp
     criarCobrancaParcelada: nunca("criarCobrancaParcelada"),
     buscarParcelamento: nunca("buscarParcelamento"),
     removerParcelamento: vi.fn(async () => undefined),
-    listarCobrancasDoParcelamento: nunca("listarCobrancasDoParcelamento"),
+    listarCobrancasDoParcelamento: vi.fn(async () => [] as CobrancaAsaas[]),
     qrPix: nunca("qrPix"),
     buscarWebhook: nunca("buscarWebhook"),
     ...overrides,
@@ -145,7 +149,9 @@ describe("iniciarCompra: pedido novo de assinatura remove a fatura do pedido ven
     const r = await iniciarCompra(deps(db, asaas), ENTRADA);
 
     expect(db.listarPedidosDeAssinaturaVencidos).toHaveBeenCalledWith("org-1", "sandbox");
-    expect(asaas.buscarCobranca).toHaveBeenCalledWith("pay_antigo");
+    // Confere TODAS as cobranças da assinatura (a do id gravado já vem na lista: sem GET avulso).
+    expect(asaas.listarCobrancasDaAssinatura).toHaveBeenCalledWith("sub_antigo");
+    expect(asaas.buscarCobranca).not.toHaveBeenCalled();
     expect(asaas.removerAssinatura).toHaveBeenCalledWith("sub_antigo");
     expect(asaas.removerCobranca).not.toHaveBeenCalled();
     const ordemRemocao = vi.mocked(asaas.removerAssinatura).mock.invocationCallOrder[0]!;
@@ -157,11 +163,53 @@ describe("iniciarCompra: pedido novo de assinatura remove a fatura do pedido ven
 
   it("cobrança antiga já paga (o evento ainda não chegou): não remove, não toma o pedido novo, pede para aguardar", async () => {
     const db = dbFalso(pedidoNovo(), [VENCIDO_CARTAO]);
-    const asaas = asaasFalso({ buscarCobranca: vi.fn(async () => cobranca({ status: "CONFIRMED" })) });
+    const asaas = asaasFalso({ listarCobrancasDaAssinatura: vi.fn(async () => [cobranca({ status: "CONFIRMED" })]) });
     const r = await iniciarCompra(deps(db, asaas), ENTRADA);
 
     expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO });
     expect(asaas.removerAssinatura).not.toHaveBeenCalled();
+    expect(db.tomarPedido).not.toHaveBeenCalled();
+  });
+
+  it("a cobrança paga é OUTRA da assinatura (não a do id gravado): também não remove", async () => {
+    const db = dbFalso(pedidoNovo(), [VENCIDO_CARTAO]);
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi.fn(async () => [cobranca(), cobranca({ id: "pay_segunda", status: "RECEIVED" })]),
+    });
+    const r = await iniciarCompra(deps(db, asaas), ENTRADA);
+
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO });
+    expect(asaas.removerAssinatura).not.toHaveBeenCalled();
+    expect(db.tomarPedido).not.toHaveBeenCalled();
+  });
+
+  it("cartão em análise antifraude conta como pago: não remove, pede para aguardar", async () => {
+    const db = dbFalso(pedidoNovo(), [VENCIDO_CARTAO]);
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi.fn(async () => [cobranca({ status: "AWAITING_RISK_ANALYSIS" })]),
+    });
+    const r = await iniciarCompra(deps(db, asaas), ENTRADA);
+
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO });
+    expect(asaas.removerAssinatura).not.toHaveBeenCalled();
+  });
+
+  it("remoção que falha porque o pagamento entrou no meio: reconfere e pede para aguardar", async () => {
+    const db = dbFalso(pedidoNovo(), [VENCIDO_CARTAO]);
+    const listar = vi
+      .fn<ClienteAsaasHttp["listarCobrancasDaAssinatura"]>()
+      .mockResolvedValueOnce([cobranca()])
+      .mockResolvedValueOnce([cobranca({ status: "CONFIRMED" })]);
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: listar,
+      removerAssinatura: vi.fn(async () => {
+        throw erroIndisponivel(400);
+      }),
+    });
+    const r = await iniciarCompra(deps(db, asaas), ENTRADA);
+
+    expect(r).toEqual({ tipo: "erro", mensagem: MENSAGEM_PAGAMENTO_EM_CONFIRMACAO });
+    expect(listar).toHaveBeenCalledTimes(2);
     expect(db.tomarPedido).not.toHaveBeenCalled();
   });
 
@@ -193,7 +241,10 @@ describe("removerFaturasDePedidosVencidos", () => {
   const logger = { warn: () => undefined };
 
   it("Pix (sem assinatura) remove a cobrança; parcelado remove o parcelamento inteiro", async () => {
-    const asaas = asaasFalso({ buscarCobranca: vi.fn(async () => cobranca({ status: "PENDING" })) });
+    const asaas = asaasFalso({
+      buscarCobranca: vi.fn(async () => cobranca({ id: "pay_pix", status: "PENDING" })),
+      listarCobrancasDoParcelamento: vi.fn(async () => [cobranca({ id: "pay_p1", status: "OVERDUE" })]),
+    });
     const r = await removerFaturasDePedidosVencidos(
       asaas,
       [
@@ -208,10 +259,47 @@ describe("removerFaturasDePedidosVencidos", () => {
     expect(asaas.removerCobranca).toHaveBeenCalledTimes(1);
   });
 
+  it("parcelado com UMA parcela paga: não remove o parcelamento", async () => {
+    const asaas = asaasFalso({
+      listarCobrancasDoParcelamento: vi.fn(async () => [
+        cobranca({ id: "pay_p1", status: "OVERDUE" }),
+        cobranca({ id: "pay_p2", status: "RECEIVED" }),
+      ]),
+    });
+    const r = await removerFaturaDoPedidoVencido(
+      asaas,
+      { id: "parc", asaasPaymentId: "pay_p1", asaasSubscriptionId: null, asaasInstallmentId: "inst-1" },
+      logger,
+    );
+    expect(r).toMatchObject({ desfecho: "pago", cobranca: { id: "pay_p2" } });
+    expect(asaas.removerParcelamento).not.toHaveBeenCalled();
+  });
+
   it("cobrança que já não existe no Asaas ainda remove a assinatura (idempotente)", async () => {
-    const asaas = asaasFalso({ buscarCobranca: vi.fn(async () => ({ removido: true as const })) });
+    const asaas = asaasFalso({ listarCobrancasDaAssinatura: vi.fn(async () => [] as CobrancaAsaas[]), buscarCobranca: vi.fn(async () => ({ removido: true as const })) });
     expect(await removerFaturasDePedidosVencidos(asaas, [VENCIDO_CARTAO], logger)).toBe("ok");
     expect(asaas.removerAssinatura).toHaveBeenCalledWith("sub_antigo");
+  });
+
+  it("assinatura que já saiu do Asaas (a lista dá 404): conta como removida, sem falha", async () => {
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi.fn(async () => {
+        throw erroNaoEncontrado(404);
+      }),
+      buscarCobranca: vi.fn(async () => ({ removido: true as const })),
+    });
+    expect(await removerFaturasDePedidosVencidos(asaas, [VENCIDO_CARTAO], logger)).toBe("ok");
+    expect(asaas.removerAssinatura).toHaveBeenCalledWith("sub_antigo");
+  });
+
+  it("falha de rede ao conferir: não remove às cegas", async () => {
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi.fn(async () => {
+        throw erroIndisponivel(503);
+      }),
+    });
+    expect(await removerFaturasDePedidosVencidos(asaas, [VENCIDO_CARTAO], logger)).toBe("falhou");
+    expect(asaas.removerAssinatura).not.toHaveBeenCalled();
   });
 
   it("sem pedido vencido, não chama o Asaas", async () => {

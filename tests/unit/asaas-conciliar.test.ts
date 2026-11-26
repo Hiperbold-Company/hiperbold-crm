@@ -301,7 +301,10 @@ describe("conciliarAsaas", () => {
       asaasSubscriptionId: null,
     };
     const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [vencido], error: null })) });
-    const asaas = asaasFalso({ removerCobranca: vi.fn(async () => undefined) });
+    const asaas = asaasFalso({
+      buscarCobranca: vi.fn(async () => cobrancaFake({ id: "pay_velho", status: "OVERDUE" })),
+      removerCobranca: vi.fn(async () => undefined),
+    });
     const resumo = await conciliarAsaas(deps({ db, asaas }));
 
     expect(asaas.removerCobranca).toHaveBeenCalledWith("pay_velho");
@@ -338,6 +341,7 @@ describe("conciliarAsaas", () => {
     };
     const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [vencido], error: null })) });
     const asaas = asaasFalso({
+      buscarCobranca: vi.fn(async () => cobrancaFake({ id: "pay_velho", status: "OVERDUE" })),
       removerCobranca: vi.fn(async () => {
         throw erroIndisponivel(500);
       }),
@@ -358,9 +362,13 @@ describe("conciliarAsaas", () => {
       asaasSubscriptionId: "sub_velha",
     };
     const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [vencido], error: null })) });
-    const asaas = asaasFalso({ removerAssinatura: vi.fn(async () => undefined) });
+    const asaas = asaasFalso({
+      buscarCobranca: vi.fn(async () => cobrancaFake({ id: "pay_da_assinatura", status: "OVERDUE" })),
+      removerAssinatura: vi.fn(async () => undefined),
+    });
     const resumo = await conciliarAsaas(deps({ db, asaas }));
 
+    expect(asaas.listarCobrancasDaAssinatura).toHaveBeenCalledWith("sub_velha");
     expect(asaas.removerAssinatura).toHaveBeenCalledWith("sub_velha");
     expect(asaas.removerCobranca).not.toHaveBeenCalled();
     expect(resumo.cobrancasRemovidas).toBe(1);
@@ -385,6 +393,96 @@ describe("conciliarAsaas", () => {
 
     expect(logger.error).toHaveBeenCalledWith("alarme_asaas_remover_assinatura_pendente", expect.any(Object));
     expect(resumo.falhas).toBe(1);
+  });
+
+  it("1026 (M1): pedido de assinatura vencido com cobrança PAGA no Asaas: não remove e registra o evento sintético de pago", async () => {
+    const vencido: PedidoVencidoParaRemocao = {
+      id: "pedido-4",
+      organizationId: "org-4",
+      tipo: "assinatura",
+      asaasPaymentId: "pay_da_assinatura",
+      asaasSubscriptionId: "sub_velha",
+    };
+    const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [vencido], error: null })) });
+    const asaas = asaasFalso({
+      // A paga é outra cobrança da assinatura, não a do id gravado (M2).
+      listarCobrancasDaAssinatura: vi.fn(async () => [
+        cobrancaFake({ id: "pay_da_assinatura", status: "OVERDUE" }),
+        cobrancaFake({ id: "pay_paga", status: "RECEIVED" }),
+      ]),
+    });
+    const resumo = await conciliarAsaas(deps({ db, asaas }));
+
+    expect(asaas.removerAssinatura).not.toHaveBeenCalled();
+    expect(resumo.cobrancasRemovidas).toBe(0);
+    expect(db.registrarEventoSintetico).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: "conc:pay_paga:RECEIVED",
+        eventType: "PAYMENT_RECEIVED",
+        idDoRecurso: "pay_paga",
+        ambiente: "sandbox",
+      }),
+    );
+    expect(resumo.eventosSinteticos).toBe(1);
+  });
+
+  it("1026 (M2): cobrança em análise antifraude: não remove e não inventa evento (a rodada seguinte confere)", async () => {
+    const vencido: PedidoVencidoParaRemocao = {
+      id: "pedido-4",
+      organizationId: "org-4",
+      tipo: "assinatura",
+      asaasPaymentId: null,
+      asaasSubscriptionId: "sub_velha",
+    };
+    const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [vencido], error: null })) });
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi.fn(async () => [cobrancaFake({ status: "AWAITING_RISK_ANALYSIS" })]),
+    });
+    const resumo = await conciliarAsaas(deps({ db, asaas }));
+
+    expect(asaas.removerAssinatura).not.toHaveBeenCalled();
+    expect(db.registrarEventoSintetico).not.toHaveBeenCalled();
+    expect(resumo.falhas).toBe(0);
+  });
+
+  it("1026 (B1): a remoção falha porque o pagamento entrou no meio: reconfere, registra o pago, sem alarme de remoção", async () => {
+    const vencido: PedidoVencidoParaRemocao = {
+      id: "pedido-4",
+      organizationId: "org-4",
+      tipo: "assinatura",
+      asaasPaymentId: null,
+      asaasSubscriptionId: "sub_velha",
+    };
+    const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [vencido], error: null })) });
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi
+        .fn<ClienteAsaasHttp["listarCobrancasDaAssinatura"]>()
+        .mockResolvedValueOnce([cobrancaFake({ id: "pay_x", status: "OVERDUE" })])
+        .mockResolvedValueOnce([cobrancaFake({ id: "pay_x", status: "CONFIRMED" })]),
+      removerAssinatura: vi.fn(async () => {
+        throw erroIndisponivel(400);
+      }),
+    });
+    const logger = loggerFalso();
+    const resumo = await conciliarAsaas(deps({ db, asaas, logger }));
+
+    expect(logger.error).not.toHaveBeenCalledWith("alarme_asaas_remover_assinatura_pendente", expect.any(Object));
+    expect(db.registrarEventoSintetico).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: "conc:pay_x:CONFIRMED", eventType: "PAYMENT_CONFIRMED" }),
+    );
+    expect(resumo.falhas).toBe(0);
+  });
+
+  it("1026 (M1): pedido de assinatura vencido no passo 1 com cobrança paga: evento sintético de pago", async () => {
+    const pedido = pedidoFake({ status: "vencido", tipo: "assinatura" });
+    const db = dbFalso({ listarPedidosPendentes: vi.fn(async () => ({ data: [pedido], error: null })) });
+    const asaas = asaasFalso({ buscarCobranca: vi.fn(async () => cobrancaFake({ id: "pay_fake123", status: "RECEIVED" })) });
+    const resumo = await conciliarAsaas(deps({ db, asaas }));
+
+    expect(db.registrarEventoSintetico).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: "conc:pay_fake123:RECEIVED", eventType: "PAYMENT_RECEIVED" }),
+    );
+    expect(resumo.eventosSinteticos).toBe(1);
   });
 
   it("poda é chamada com os dias configurados (padrão 180)", async () => {
@@ -530,6 +628,59 @@ describe("conciliarAsaas", () => {
       await conciliarAsaas(deps({ asaas }));
       expect(asaas.removerAssinatura).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("1026 (M1): o passo 1 lista também os pedidos de assinatura vencidos recentes, depois dos pendentes", () => {
+  it("duas consultas: pendentes primeiro; vencidos de assinatura que venceram nos últimos 60 dias depois", async () => {
+    const consultas: Array<Array<[string, ...unknown[]]>> = [];
+    const linha = (id: string, status: string) => ({
+      id,
+      organization_id: "org-1",
+      ambiente: "sandbox",
+      tipo: "assinatura",
+      status,
+      external_reference: `HC:ord:${id}`,
+      asaas_payment_id: `pay_${id}`,
+      asaas_subscription_id: null,
+    });
+    const resultados = [[linha("p-pend", "aguardando_pagamento")], [linha("p-venc", "vencido")]];
+    const admin = {
+      from(tabela: string) {
+        expect(tabela).toBe("billing_orders");
+        const filtros: Array<[string, ...unknown[]]> = [];
+        const indice = consultas.length;
+        consultas.push(filtros);
+        const builder: Record<string, unknown> = {};
+        for (const metodo of ["select", "or", "eq", "gt", "order", "limit"]) {
+          builder[metodo] = (...args: unknown[]) => {
+            filtros.push([metodo, ...args]);
+            return builder;
+          };
+        }
+        builder.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: resultados[indice], error: null }).then(resolve);
+        return builder;
+      },
+    } as never;
+    const r = await criarDbConciliarAsaasSobre(admin).listarPedidosPendentes(10);
+
+    expect(r.error).toBeNull();
+    expect(r.data?.map((p) => [p.id, p.status])).toEqual([
+      ["p-pend", "aguardando_pagamento"],
+      ["p-venc", "vencido"],
+    ]);
+    expect(consultas[1]).toEqual(
+      expect.arrayContaining([
+        ["eq", "tipo", "assinatura"],
+        ["eq", "status", "vencido"],
+        ["gt", "updated_at", expect.any(String)],
+        ["limit", 10],
+      ]),
+    );
+    const desde = Date.parse(consultas[1]!.find((f) => f[0] === "gt")![2] as string);
+    const dias = (Date.now() - desde) / 86_400_000;
+    expect(dias).toBeGreaterThan(59.9);
+    expect(dias).toBeLessThan(60.1);
   });
 });
 
