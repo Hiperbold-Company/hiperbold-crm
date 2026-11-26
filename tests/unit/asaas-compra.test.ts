@@ -646,6 +646,123 @@ describe("iniciarCompra: cliente Asaas (decisão 16)", () => {
   });
 });
 
+describe("iniciarCompra: cadastro completo do pagador vai à ficha do Asaas", () => {
+  const PAGADOR_COMPLETO = {
+    nome: "Fulano de Tal",
+    documento: CPF_VALIDO,
+    email: "fulano@example.com",
+    celular: "(11) 99999-8888",
+    cep: "01310-100",
+    rua: "Avenida Paulista",
+    numero: "1000",
+    complemento: "Sala 12",
+    bairro: "Bela Vista",
+    cidade: "São Paulo",
+    uf: "SP",
+  };
+  const ENTRADA_COMPLETA: EntradaIniciarCompra = { ...ENTRADA_BASE, pagador: PAGADOR_COMPLETO };
+  const FICHA_ESPERADA = {
+    email: "fulano@example.com",
+    mobilePhone: "11999998888",
+    postalCode: "01310100",
+    address: "Avenida Paulista",
+    addressNumber: "1000",
+    complement: "Sala 12",
+    province: "Bela Vista",
+  };
+
+  it("cliente novo: o POST /customers leva e-mail, celular e endereço, só em dígitos onde o Asaas pede", async () => {
+    const { db } = dbFalso(pedidoBase());
+    const asaas = asaasFalso();
+    const { deps } = montarDeps(db, asaas);
+
+    await iniciarCompra(deps, ENTRADA_COMPLETA);
+
+    const dados = (asaas.criarCliente as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(dados).toEqual({
+      name: "Fulano de Tal",
+      cpfCnpj: "11144477735",
+      ...FICHA_ESPERADA,
+      externalReference: "HC:org:org-1",
+      notificationDisabled: true,
+    });
+    // Cidade e UF não existem no POST /customers: o Asaas resolve pelo CEP.
+    expect(dados).not.toHaveProperty("cidade");
+    expect(dados).not.toHaveProperty("city");
+    expect(asaas.atualizarCliente).not.toHaveBeenCalled();
+  });
+
+  it("cliente novo sem complemento: o campo não vai vazio", async () => {
+    const { db } = dbFalso(pedidoBase());
+    const asaas = asaasFalso();
+    const { deps } = montarDeps(db, asaas);
+
+    await iniciarCompra(deps, { ...ENTRADA_BASE, pagador: { ...PAGADOR_COMPLETO, complemento: "  " } });
+
+    const dados = (asaas.criarCliente as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(dados).not.toHaveProperty("complement");
+  });
+
+  it("cliente já vinculado (ficha incompleta): a compra completa a ficha num PUT, com notificationDisabled", async () => {
+    const { db } = dbFalso(pedidoBase(), { vinculo: "cus_vinculado123" });
+    const asaas = asaasFalso();
+    const { deps } = montarDeps(db, asaas);
+
+    const resultado = await iniciarCompra(deps, ENTRADA_COMPLETA);
+
+    expect(resultado.tipo).toBe("redirecionar");
+    expect(asaas.criarCliente).not.toHaveBeenCalled();
+    expect(asaas.atualizarCliente).toHaveBeenCalledTimes(1);
+    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_vinculado123", { ...FICHA_ESPERADA, notificationDisabled: true });
+    const corpo = (asaas.atualizarCliente as ReturnType<typeof vi.fn>).mock.calls[0]![1];
+    // Nome e documento não são reescritos num cliente que já tem cobranças.
+    expect(corpo).not.toHaveProperty("name");
+    expect(corpo).not.toHaveProperty("cpfCnpj");
+  });
+
+  it("cliente achado pela referência: um PUT só, que completa a ficha e desliga as notificações", async () => {
+    const { db } = dbFalso(pedidoBase());
+    const asaas = asaasFalso({
+      buscarClientePorReferencia: vi.fn(async () => clienteFake({ id: "cus_por_referencia", notificationDisabled: false })),
+    });
+    const { deps } = montarDeps(db, asaas);
+
+    await iniciarCompra(deps, ENTRADA_COMPLETA);
+
+    expect(asaas.atualizarCliente).toHaveBeenCalledTimes(1);
+    expect(asaas.atualizarCliente).toHaveBeenCalledWith("cus_por_referencia", { ...FICHA_ESPERADA, notificationDisabled: true });
+    expect(db.vincularClienteAsaas).toHaveBeenCalledWith("org-1", "sandbox", "cus_por_referencia");
+  });
+
+  it("falha ao completar a ficha não derruba a venda, e o log não leva dado do pagador", async () => {
+    const { db } = dbFalso(pedidoBase(), { vinculo: "cus_vinculado123" });
+    const asaas = asaasFalso({
+      atualizarCliente: vi.fn(async () => {
+        throw erroIndisponivel(503, true);
+      }),
+    });
+    const { deps, linhas } = montarDeps(db, asaas);
+
+    const resultado = await iniciarCompra(deps, ENTRADA_COMPLETA);
+
+    expect(resultado.tipo).toBe("redirecionar");
+    const aviso = linhas.find((l) => l.msg === "asaas_compra_completar_ficha_falhou");
+    expect(aviso?.ctx).toEqual({ tipoErro: "indisponivel" });
+    const log = JSON.stringify(linhas);
+    for (const dado of ["01310", "Paulista", "fulano@example.com", "99999", CPF_VALIDO]) expect(log).not.toContain(dado);
+  });
+
+  it("pagador parcial (sem endereço) não reescreve a ficha de um cliente vinculado", async () => {
+    const { db } = dbFalso(pedidoBase(), { vinculo: "cus_vinculado123" });
+    const asaas = asaasFalso();
+    const { deps } = montarDeps(db, asaas);
+
+    await iniciarCompra(deps, ENTRADA_BASE);
+
+    expect(asaas.atualizarCliente).not.toHaveBeenCalled();
+  });
+});
+
 describe("iniciarCompra: URL de redirecionamento (risco 8/B7)", () => {
   it("invoice_url fora da lista do ambiente é recusada e o pedido é marcado", async () => {
     const { db, getPedido } = dbFalso(pedidoBase());

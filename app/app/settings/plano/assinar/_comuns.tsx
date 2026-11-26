@@ -3,7 +3,9 @@
 /**
  * Peças que o passo a passo do plano (`_passo-a-passo.tsx`) e a compra de pacote (`_client.tsx`) dividem:
  * o valor em reais, o aceite dos Termos de Uso (D-133) e o formulário de quem paga (decisão 16, nunca
- * guardado no navegador). Saíram de `_client.tsx` sem mudar uma linha de comportamento (D-180).
+ * guardado no navegador). Saíram de `_client.tsx` sem mudar uma linha de comportamento (D-180). O formulário
+ * pede nome, CPF/CNPJ, e-mail, celular e endereço completo (só o complemento é opcional) e chega já
+ * preenchido com o que o CRM sabe da empresa e de quem está logado.
  */
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
@@ -19,9 +21,7 @@ import {
   MENSAGEM_CPF_INVALIDO,
 } from "@/lib/documentos/cpf-cnpj";
 
-import type { CamposDoFormularioDoPagador } from "../_logica-compra";
-
-export const CAMPOS_VAZIOS: CamposDoFormularioDoPagador = { nome: "", documento: "", email: "", celular: "" };
+import { formatarCep, type CamposDoFormularioDoPagador } from "../_logica-compra";
 
 export function formatarReais(centavos: number, tagDoIdioma: string): string {
   return (centavos / 100).toLocaleString(tagDoIdioma, { style: "currency", currency: "BRL" });
@@ -72,9 +72,12 @@ export function FormularioDoPagador({
       <p className="text-xs text-muted-foreground">
         {t("Só usados para emitir a cobrança no Asaas. Não ficam guardados neste sistema.")}
       </p>
+      <p className="text-xs text-muted-foreground">
+        {t("Já vem com os dados da empresa e do seu perfil. Confira e complete o que faltar.")}
+      </p>
 
       <div className="space-y-1.5">
-        <Label htmlFor={`${idPrefixo}-nome`}>{t("Nome completo")}</Label>
+        <Label htmlFor={`${idPrefixo}-nome`}>{t("Nome ou razão social")}</Label>
         <Input
           id={`${idPrefixo}-nome`}
           value={pagador.nome}
@@ -110,28 +113,128 @@ export function FormularioDoPagador({
         )}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor={`${idPrefixo}-email`}>{t("E-mail (opcional)")}</Label>
-        <Input
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CampoDoPagador
           id={`${idPrefixo}-email`}
+          rotulo={t("E-mail")}
           type="email"
-          value={pagador.email}
-          onChange={(e) => onChange({ ...pagador, email: e.target.value })}
+          valor={pagador.email}
+          onChange={(v) => onChange({ ...pagador, email: v })}
           maxLength={200}
-          autoComplete="off"
+          autoComplete="email"
+        />
+        <CampoDoPagador
+          id={`${idPrefixo}-celular`}
+          rotulo={t("Celular com DDD")}
+          type="tel"
+          inputMode="tel"
+          placeholder="(11) 99999-9999"
+          valor={pagador.celular}
+          onChange={(v) => onChange({ ...pagador, celular: v })}
+          maxLength={20}
+          autoComplete="tel"
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor={`${idPrefixo}-celular`}>{t("Celular (opcional)")}</Label>
-        <Input
-          id={`${idPrefixo}-celular`}
-          value={pagador.celular}
-          onChange={(e) => onChange({ ...pagador, celular: e.target.value })}
+      <p className="pt-1 text-sm font-medium">{t("Endereço de quem paga")}</p>
+      <div className="grid gap-3 sm:grid-cols-6">
+        <CampoDoPagador
+          className="sm:col-span-2"
+          id={`${idPrefixo}-cep`}
+          rotulo={t("CEP")}
+          inputMode="numeric"
+          placeholder="00000-000"
+          valor={pagador.cep}
+          onChange={(v) => onChange({ ...pagador, cep: formatarCep(v) })}
+          maxLength={9}
+          autoComplete="postal-code"
+        />
+        <CampoDoPagador
+          className="sm:col-span-4"
+          id={`${idPrefixo}-rua`}
+          rotulo={t("Rua")}
+          valor={pagador.rua}
+          onChange={(v) => onChange({ ...pagador, rua: v })}
+          maxLength={200}
+          autoComplete="address-line1"
+        />
+        <CampoDoPagador
+          className="sm:col-span-2"
+          id={`${idPrefixo}-numero`}
+          rotulo={t("Número")}
+          valor={pagador.numero}
+          onChange={(v) => onChange({ ...pagador, numero: v })}
           maxLength={20}
           autoComplete="off"
         />
+        <CampoDoPagador
+          className="sm:col-span-4"
+          id={`${idPrefixo}-complemento`}
+          rotulo={t("Complemento (opcional)")}
+          valor={pagador.complemento}
+          onChange={(v) => onChange({ ...pagador, complemento: v })}
+          maxLength={200}
+          autoComplete="address-line2"
+          obrigatorio={false}
+        />
+        <CampoDoPagador
+          className="sm:col-span-3"
+          id={`${idPrefixo}-bairro`}
+          rotulo={t("Bairro")}
+          valor={pagador.bairro}
+          onChange={(v) => onChange({ ...pagador, bairro: v })}
+          maxLength={100}
+          autoComplete="off"
+        />
+        <CampoDoPagador
+          className="sm:col-span-2"
+          id={`${idPrefixo}-cidade`}
+          rotulo={t("Cidade")}
+          valor={pagador.cidade}
+          onChange={(v) => onChange({ ...pagador, cidade: v })}
+          maxLength={100}
+          autoComplete="address-level2"
+        />
+        <CampoDoPagador
+          className="sm:col-span-1"
+          id={`${idPrefixo}-uf`}
+          rotulo={t("UF")}
+          placeholder="SP"
+          valor={pagador.uf}
+          onChange={(v) => onChange({ ...pagador, uf: v.toUpperCase() })}
+          maxLength={2}
+          autoComplete="address-level1"
+        />
       </div>
+    </div>
+  );
+}
+
+function CampoDoPagador({
+  id,
+  rotulo,
+  valor,
+  onChange,
+  className,
+  obrigatorio = true,
+  ...resto
+}: {
+  id: string;
+  rotulo: string;
+  valor: string;
+  onChange: (valor: string) => void;
+  className?: string;
+  obrigatorio?: boolean;
+  type?: string;
+  inputMode?: "numeric" | "tel" | "email" | "text";
+  placeholder?: string;
+  maxLength: number;
+  autoComplete: string;
+}) {
+  return (
+    <div className={`space-y-1.5 ${className ?? ""}`}>
+      <Label htmlFor={id}>{rotulo}</Label>
+      <Input id={id} value={valor} onChange={(e) => onChange(e.target.value)} required={obrigatorio} {...resto} />
     </div>
   );
 }

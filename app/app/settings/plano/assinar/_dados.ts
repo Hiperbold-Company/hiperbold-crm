@@ -2,9 +2,9 @@ import "server-only";
 
 /**
  * Leituras PRÓPRIAS da tela `/app/settings/plano/assinar` (fase F5, Tarefa
- * 20): pacotes de tokens à venda e se a organização já tem cliente Asaas
- * vinculado no ambiente configurado (decide se o formulário do pagador
- * aparece, decisão 16 do plano da fase).
+ * 20): pacotes de tokens à venda e o formulário do pagador já preenchido
+ * com os dados da empresa e de quem está logado (o formulário aparece em toda
+ * compra: a ficha do Asaas sempre recebe contato e endereço).
  *
  * Mesma doutrina de `lib/billing/asaas/leitura.ts` (nunca lança, degrada
  * para vazio/neutro com `leituraFalhou`): fica FORA daquele arquivo porque o
@@ -18,7 +18,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Logger } from "@/lib/agent-engine/obs/logger";
-import type { AmbienteAsaas } from "@/lib/billing/asaas/config";
 import { planosParaVenda, type PlanoParaVenda } from "@/lib/billing/asaas/leitura";
 import { pixDisponivel } from "@/lib/billing/asaas/pix";
 import {
@@ -27,6 +26,9 @@ import {
   type ParametrosDeParcelamento,
 } from "@/lib/billing/asaas/parcelamento";
 import { planoDaOrganizacao } from "@/lib/billing/planos/plano-da-organizacao";
+import { formatarDocumento } from "@/lib/documentos/cpf-cnpj";
+
+import type { CamposDoFormularioDoPagador } from "../_logica-compra";
 
 export interface PacoteParaVenda {
   codigo: string;
@@ -86,39 +88,48 @@ export async function pacotesParaVenda(
   }
 }
 
+/** O que se sabe de quem está comprando, para pré-preencher e-mail e celular do formulário do pagador. */
+export interface QuemCompra {
+  email: string | null;
+  celular: string | null;
+}
+
 /**
- * A organização já tem cliente Asaas vinculado no ambiente configurado?
- * Decide se o formulário do pagador aparece (decisão 16: só na primeira
- * compra).
- *
- * Fail-OPEN de propósito, ao contrário de `compraLigada`
- * (`lib/billing/asaas/config.ts`): mostrar o formulário à toa não bloqueia
- * ninguém; escondê-lo por engano barraria a primeira compra com
- * `MENSAGEM_PAGADOR_OBRIGATORIO` (`lib/billing/asaas/compra.ts`) sem a
- * pessoa entender por quê.
+ * O formulário do pagador já aberto com o que o CRM sabe: nome e CPF/CNPJ da empresa
+ * (`organizations.legal_name` e `organizations.cnpj`, os da tela Configurações › Empresa) e e-mail e
+ * celular de quem está logado. O CRM não guarda endereço da empresa: ele chega em branco e a pessoa
+ * preenche. Tudo continua editável na tela. Nunca lança: na falha, só o que veio de `quemCompra`.
  */
-export async function precisaDeFormularioDoPagador(
+export async function pagadorInicial(
   admin: SupabaseClient,
   organizationId: string,
-  ambiente: AmbienteAsaas,
+  quemCompra: QuemCompra | undefined,
   log?: Logger,
-): Promise<boolean> {
+): Promise<Partial<CamposDoFormularioDoPagador>> {
+  const doUsuario: Partial<CamposDoFormularioDoPagador> = {
+    ...(quemCompra?.email ? { email: quemCompra.email } : {}),
+    ...(quemCompra?.celular ? { celular: quemCompra.celular } : {}),
+  };
   try {
     const { data, error } = await admin
-      .from("billing_customers")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("ambiente", ambiente)
+      .from("organizations")
+      .select("legal_name, cnpj")
+      .eq("id", organizationId)
       .maybeSingle();
-    if (error) throw new Error(`ler billing_customers: ${error.message}`);
-    return data === null;
+    if (error) throw new Error(`ler organizations: ${error.message}`);
+    const org = data as { legal_name: string | null; cnpj: string | null } | null;
+    return {
+      ...(org?.legal_name ? { nome: org.legal_name } : {}),
+      ...(org?.cnpj ? { documento: formatarDocumento(org.cnpj) } : {}),
+      ...doUsuario,
+    };
   } catch (err) {
     log?.error("alarme_asaas_leitura", {
-      etapa: "precisa_pagador_tela_cliente",
+      etapa: "pagador_inicial_tela_cliente",
       organization_id: organizationId,
       erro: mensagemDeErro(err),
     });
-    return true;
+    return doUsuario;
   }
 }
 
@@ -161,7 +172,8 @@ export type OpcoesDeParcelasPorPlano = Record<string, { semiannual: OpcaoDeParce
 export interface DadosDaCompraDePlano {
   planos: PlanoParaVenda[];
   pacotes: PacoteParaVenda[];
-  precisaPagador: boolean;
+  /** O formulário do pagador já preenchido com o que o CRM sabe (empresa e quem está logado). Aparece em toda compra. */
+  pagadorInicial: Partial<CamposDoFormularioDoPagador>;
   leituraFalhou: boolean;
   opcoesDeParcelas: OpcoesDeParcelasPorPlano;
   taxaMensalPercentual: number | null;
@@ -180,13 +192,13 @@ export interface DadosDaCompraDePlano {
 export async function dadosDaCompraDePlano(
   admin: SupabaseClient,
   organizationId: string,
-  ambiente: AmbienteAsaas,
   log?: Logger,
+  quemCompra?: QuemCompra,
 ): Promise<DadosDaCompraDePlano> {
-  const [planosResultado, pacotesResultado, precisaPagador, parametros, planoDaOrg, pixAtivo] = await Promise.all([
+  const [planosResultado, pacotesResultado, pagador, parametros, planoDaOrg, pixAtivo] = await Promise.all([
     planosParaVenda(admin, log),
     pacotesParaVenda(admin, log),
-    precisaDeFormularioDoPagador(admin, organizationId, ambiente, log),
+    pagadorInicial(admin, organizationId, quemCompra, log),
     parametrosDeParcelamento(admin, log),
     planoDaOrganizacao(admin, organizationId, log),
     pixDisponivel(),
@@ -214,7 +226,7 @@ export async function dadosDaCompraDePlano(
   return {
     planos,
     pacotes: pacotesResultado.pacotes,
-    precisaPagador,
+    pagadorInicial: pagador,
     leituraFalhou: planosResultado.leituraFalhou || pacotesResultado.leituraFalhou,
     opcoesDeParcelas,
     taxaMensalPercentual: parametros.taxaMensal === null ? null : Math.round(parametros.taxaMensal * 10000) / 100,

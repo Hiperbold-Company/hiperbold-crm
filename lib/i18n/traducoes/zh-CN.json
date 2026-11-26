@@ -6513,5 +6513,21 @@
   "Endereço do MCP:": "MCP 地址：",
   "Como conectar um assistente de IA": "如何连接 AI 助手",
   "Automação duplicada. A cópia está desligada.": "自动化已复制。副本处于关闭状态。",
-  "Follow-up duplicado. A cópia está desligada.": "跟进已复制。副本处于关闭状态。"
+  "Follow-up duplicado. A cópia está desligada.": "跟进已复制。副本处于关闭状态。",
+  "Nome ou razão social": "姓名或公司名称",
+  "Celular com DDD": "手机号（含区号）",
+  "Complemento (opcional)": "地址补充（选填）",
+  "Endereço de quem paga": "付款人地址",
+  "Já vem com os dados da empresa e do seu perfil. Confira e complete o que faltar.": "已预先填入公司和您个人资料中的信息。请核对并补全缺少的内容。",
+  "Informe um e-mail válido.": "请输入有效的电子邮箱。",
+  "Informe um celular com DDD.": "请输入含区号的手机号。",
+  "Informe um CEP com 8 dígitos.": "请输入 8 位 CEP（巴西邮政编码）。",
+  "Preencha o endereço completo: rua, número, bairro e cidade.": "请填写完整地址：街道、门牌号、街区和城市。",
+  "Informe a UF (sigla do estado, como SP).": "请输入州代码（两个字母，例如 SP）。",
+  "Preencha os dados de quem paga: nome, CPF ou CNPJ, e-mail, celular com DDD e endereço completo (CEP, rua, número, bairro, cidade e UF).": "请填写付款人信息：姓名、CPF 或 CNPJ、电子邮箱、含区号的手机号以及完整地址（CEP、街道、门牌号、街区、城市和州）。",
+  "CEP": "CEP（邮政编码）",
+  "Rua": "街道",
+  "Bairro": "街区",
+  "Cidade": "城市",
+  "UF": "州"
 }

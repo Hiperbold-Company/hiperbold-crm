@@ -492,3 +492,55 @@ describe("cliente Asaas: notificationDisabled (D-087)", () => {
     expect(atualizado).toMatchObject({ id: "cus_123", notificationDisabled: true });
   });
 });
+
+describe("cliente Asaas: contato e endereço do pagador na ficha", () => {
+  const ENDERECO = {
+    email: "fulano@example.com",
+    mobilePhone: "11999998888",
+    postalCode: "01310100",
+    address: "Avenida Paulista",
+    addressNumber: "1000",
+    complement: "Sala 12",
+    province: "Bela Vista",
+  };
+
+  it("criarCliente leva e-mail, celular e endereço no corpo do POST /customers", async () => {
+    const { deps, chamadas } = montarDeps([respostaJson(200, { id: "cus_123" })]);
+    const cliente = criarClienteAsaas(deps);
+    await cliente.criarCliente({ name: "x", cpfCnpj: CPF_DE_TESTE, ...ENDERECO, notificationDisabled: true });
+    expect(JSON.parse(String(chamadas[0]!.init.body))).toEqual({
+      name: "x",
+      cpfCnpj: CPF_DE_TESTE,
+      ...ENDERECO,
+      notificationDisabled: true,
+    });
+  });
+
+  it("atualizarCliente leva o endereço no PUT, junto do notificationDisabled", async () => {
+    const { deps, chamadas } = montarDeps([respostaJson(200, { id: "cus_123", notificationDisabled: true })]);
+    const cliente = criarClienteAsaas(deps);
+    await cliente.atualizarCliente("cus_123", { ...ENDERECO, notificationDisabled: true });
+    expect(chamadas[0]!.init.method).toBe("PUT");
+    expect(JSON.parse(String(chamadas[0]!.init.body))).toEqual({ ...ENDERECO, notificationDisabled: true });
+  });
+
+  it("o PUT não aceita trocar nome nem documento: o schema descarta os dois", async () => {
+    const { deps, chamadas } = montarDeps([respostaJson(200, { id: "cus_123" })]);
+    const cliente = criarClienteAsaas(deps);
+    await cliente.atualizarCliente("cus_123", {
+      notificationDisabled: true,
+      ...({ name: "Outro", cpfCnpj: "00000000000" } as object),
+    });
+    const corpo = JSON.parse(String(chamadas[0]!.init.body));
+    expect(corpo).not.toHaveProperty("name");
+    expect(corpo).not.toHaveProperty("cpfCnpj");
+  });
+
+  it("CEP fora do formato de 8 dígitos é recusado antes de sair qualquer requisição", async () => {
+    const { deps, chamadas } = montarDeps([]);
+    const cliente = criarClienteAsaas(deps);
+    await expect(cliente.criarCliente({ name: "x", cpfCnpj: CPF_DE_TESTE, postalCode: "01310-100" })).rejects.toThrow();
+    await expect(cliente.atualizarCliente("cus_123", { notificationDisabled: true, postalCode: "123" })).rejects.toThrow();
+    expect(chamadas).toHaveLength(0);
+  });
+});

@@ -99,6 +99,7 @@ import { criarAvisoDeCancelamentoSobre } from "@/lib/email/conta-e-cobranca/gati
 import { supportWriteError } from "@/lib/impersonate/support";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { erroDoDocumento } from "@/lib/documentos/cpf-cnpj";
+import { cepNormalizado, celularNormalizado, ufValida } from "@/app/app/settings/plano/_logica-compra";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -111,6 +112,8 @@ const MENSAGEM_SEM_PERMISSAO_COMPRAR = "Você não tem permissão para comprar p
 const MENSAGEM_SEM_PERMISSAO_CANCELAR = "Você não tem permissão para cancelar a assinatura desta organização.";
 const MENSAGEM_SEM_ORGANIZACAO = "Nenhuma organização ativa nesta sessão.";
 const MENSAGEM_DADOS_INVALIDOS = "Dados inválidos. Confira o formulário e tente de novo.";
+const MENSAGEM_PAGADOR_INCOMPLETO =
+  "Preencha os dados de quem paga: nome, CPF ou CNPJ, e-mail, celular com DDD e endereço completo (CEP, rua, número, bairro, cidade e UF).";
 const MENSAGEM_COMPRA_DESLIGADA = "A compra pela tela ainda não está disponível. Fale com o suporte.";
 const MENSAGEM_CANCELAMENTO_DESLIGADO =
   "O cancelamento pela tela não está disponível no momento. Fale com o suporte.";
@@ -166,9 +169,45 @@ const PAGADOR = z.object({
     .trim()
     .max(20)
     .refine((v) => erroDoDocumento(v) === null, { message: "CPF ou CNPJ inválido" }),
-  email: z.string().trim().email().max(200).optional(),
-  celular: z.string().trim().min(8).max(20).optional(),
+  // Decisão do dono do produto (26/11/2026): e-mail, celular e endereço deixam de ser opcionais. A ficha do
+  // Asaas que só tinha nome e CPF não deixa a cobrança chegar a ninguém. Complemento é o único opcional.
+  email: z.string().trim().email().max(200),
+  celular: z
+    .string()
+    .trim()
+    .max(20)
+    .transform((v) => celularNormalizado(v) ?? "")
+    .refine((v) => v.length > 0, { message: "celular inválido" }),
+  cep: z
+    .string()
+    .trim()
+    .max(9)
+    .transform((v) => cepNormalizado(v) ?? "")
+    .refine((v) => v.length > 0, { message: "CEP inválido" }),
+  rua: z.string().trim().min(1).max(200),
+  numero: z.string().trim().min(1).max(20),
+  complemento: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  bairro: z.string().trim().min(1).max(100),
+  cidade: z.string().trim().min(1).max(100),
+  uf: z
+    .string()
+    .trim()
+    .max(2)
+    .transform((v) => ufValida(v) ?? "")
+    .refine((v) => v.length > 0, { message: "UF inválida" }),
 });
+
+type EntradaDoPagador = z.input<typeof PAGADOR>;
+
+/** O defeito do formulário é do pagador? Então a frase diz o que falta preencher, e não a genérica. */
+function mensagemDaEntradaRecusada(issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey> }>): string {
+  return issues.some((i) => i.path[0] === "pagador") ? MENSAGEM_PAGADOR_INCOMPLETO : MENSAGEM_DADOS_INVALIDOS;
+}
 
 const entradaIniciarAssinatura = z.object({
   planCode: CODIGO,
@@ -178,7 +217,7 @@ const entradaIniciarAssinatura = z.object({
   // D-177: em quantas parcelas pagar (só cartão, semestral e anual). O navegador manda só o número: o
   // total com juros é calculado no servidor e conferido pelo banco.
   parcelas: z.number().int().min(1).max(12).optional(),
-  pagador: PAGADOR.optional(),
+  pagador: PAGADOR,
   // D-133: a versão dos Termos que a tela mostrou ao aceite. Opcional no schema só para a recusa ter
   // frase própria (`conferirAceiteDosTermos`).
   termosVersao: z.string().max(40).optional(),
@@ -200,7 +239,7 @@ const entradaComprarPacote = z.object({
   pacote: CODIGO,
   metodo: z.enum(["CREDIT_CARD", "PIX"]),
   chave: CHAVE,
-  pagador: PAGADOR.optional(),
+  pagador: PAGADOR,
   termosVersao: z.string().max(40).optional(),
 });
 
@@ -356,7 +395,7 @@ export async function iniciarAssinatura(input: {
   metodo: "CREDIT_CARD" | "PIX";
   chave: string;
   parcelas?: number;
-  pagador?: { nome: string; documento: string; email?: string; celular?: string };
+  pagador?: EntradaDoPagador;
   termosVersao?: string;
   /** 0955: o código do cupom de desconto digitado pelo cliente (opcional). */
   cupom?: string;
@@ -368,7 +407,7 @@ export async function iniciarAssinatura(input: {
   if (!parsed.success) {
     // Cupom mal formado tem frase própria; qualquer outro defeito segue a frase genérica.
     const soOCupomFalhou = parsed.error.issues.every((i) => i.path[0] === "cupom");
-    return { tipo: "erro", mensagem: soOCupomFalhou ? MENSAGEM_CUPOM_INVALIDO : MENSAGEM_DADOS_INVALIDOS };
+    return { tipo: "erro", mensagem: soOCupomFalhou ? MENSAGEM_CUPOM_INVALIDO : mensagemDaEntradaRecusada(parsed.error.issues) };
   }
   const recusaDosTermos = conferirAceiteDosTermos(parsed.data.termosVersao);
   if (recusaDosTermos) return { tipo: "erro", mensagem: recusaDosTermos };
@@ -482,14 +521,14 @@ export async function comprarPacote(input: {
   pacote: string;
   metodo: "CREDIT_CARD" | "PIX";
   chave: string;
-  pagador?: { nome: string; documento: string; email?: string; celular?: string };
+  pagador?: EntradaDoPagador;
   termosVersao?: string;
 }): Promise<ResultadoIniciarCompra> {
   const auth = await autorizarAdminDaOrganizacao(MENSAGEM_SEM_PERMISSAO_COMPRAR);
   if (!auth.ok) return { tipo: "erro", mensagem: auth.mensagem };
 
   const parsed = entradaComprarPacote.safeParse(input);
-  if (!parsed.success) return { tipo: "erro", mensagem: MENSAGEM_DADOS_INVALIDOS };
+  if (!parsed.success) return { tipo: "erro", mensagem: mensagemDaEntradaRecusada(parsed.error.issues) };
   const recusaDosTermos = conferirAceiteDosTermos(parsed.data.termosVersao);
   if (recusaDosTermos) return { tipo: "erro", mensagem: recusaDosTermos };
 
