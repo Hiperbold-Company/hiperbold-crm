@@ -69,7 +69,7 @@ export function tituloDaRenovacao(dados: DadosDoTextoDeRenovacao): string {
 /** O corpo do aviso e o parágrafo do e-mail. */
 export function corpoDaRenovacao(dados: DadosDoTextoDeRenovacao): string {
   return traduzir(
-    "O acesso vai até {data} e este plano não renova sozinho: nada é cobrado sem a sua confirmação. Para continuar sem interrupção, faça uma nova compra em Plano e uso. Você escolhe como pagar: à vista no cartão (com renovação automática) ou no Pix, e, nos planos semestral e anual, parcelado no cartão.",
+    "O acesso vai até {data} e este plano não renova sozinho: nada é cobrado sem a sua confirmação. Para continuar sem interrupção, faça uma nova compra em Meu plano e consumo de IA. Você escolhe como pagar: à vista no cartão (com renovação automática) ou no Pix, e, nos planos semestral e anual, parcelado no cartão.",
     dados.idioma,
   ).replace("{data}", formatarDia(dados.ultimoDia));
 }

@@ -138,7 +138,7 @@ export class LlmBudgetExceededError extends Error {
  * escolhido pela organização), e as duas tabelas que leem o erro
  * (`llm_calls.error_message`, o `job_dead` da fila) mostram o texto: confundir os
  * dois motivos mandaria quem lê consertar o campo errado (Uso de IA › Orçamento em
- * vez de Configurações › Plano e uso).
+ * vez de Configurações › Meu plano e consumo de IA).
  */
 export class LlmCarteiraEsgotadaError extends LlmBudgetExceededError {
   override readonly name = 'llm_carteira_esgotada';
@@ -148,7 +148,7 @@ export class LlmCarteiraEsgotadaError extends LlmBudgetExceededError {
       `carteira de tokens de IA da organização esgotada neste ciclo` +
       (saldoTokens === null ? '' : ` (saldo: ${saldoTokens} tokens)`) +
       ': chamada recusada antes de sair byte para o provedor; contrate mais tokens em ' +
-      'Configurações › Plano e uso (agent_inbox_items ref_kind=billing_carteira)';
+      'Configurações › Meu plano e consumo de IA (agent_inbox_items ref_kind=billing_carteira)';
   }
 }
 
@@ -171,7 +171,7 @@ export class LlmAssinaturaSuspensaError extends LlmBudgetExceededError {
     this.message =
       'a assinatura desta organização está suspensa (modo leitura, pagamento em atraso além da ' +
       'carência): chamada recusada antes de sair byte para o provedor; regularize o pagamento em ' +
-      'Configurações › Plano e uso (agent_inbox_items ref_kind=billing_assinatura)';
+      'Configurações › Meu plano e consumo de IA (agent_inbox_items ref_kind=billing_assinatura)';
   }
 }
 

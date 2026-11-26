@@ -129,7 +129,7 @@ describe("destinos da Central", () => {
       aviso("other", "billing_limite", ORG),
       aviso("other", "billing_limite", ID),
     ]);
-    expect(items[0]?.destination).toMatchObject({ estado: "disponivel", href: "/app/settings/plano", rotulo: "Abrir Plano e uso" });
+    expect(items[0]?.destination).toMatchObject({ estado: "disponivel", href: "/app/settings/plano", rotulo: "Abrir Meu plano e consumo de IA" });
     expect(items[1]?.destination.estado).toBe("indisponivel");
     expect(l.queries).toHaveLength(0);
   });

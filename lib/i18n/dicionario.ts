@@ -25649,7 +25649,7 @@ export const DICIONARIO: Traducoes = {
   "Período longo demais: escolha até 366 dias.": {
     es: "Período demasiado largo: elige hasta 366 días.",
   },
-  "Abrir Plano e uso": { es: "Abrir Plan y uso" },
+  "Abrir Meu plano e consumo de IA": { es: "Abrir Mi plan y consumo de IA" },
   "Peça a um administrador ou gerente para revisar a conexão do WhatsApp.": {
     es: "Pide a un administrador o gerente que revise la conexión de WhatsApp.",
   },
@@ -27014,9 +27014,9 @@ export const DICIONARIO: Traducoes = {
   "Faltam {dias} dias para o fim do seu plano {plano}": {
     es: "Faltan {dias} días para el fin de tu plan {plano}",
   },
-  "O acesso vai até {data} e este plano não renova sozinho: nada é cobrado sem a sua confirmação. Para continuar sem interrupção, faça uma nova compra em Plano e uso. Você escolhe como pagar: à vista no cartão (com renovação automática) ou no Pix, e, nos planos semestral e anual, parcelado no cartão.":
+  "O acesso vai até {data} e este plano não renova sozinho: nada é cobrado sem a sua confirmação. Para continuar sem interrupção, faça uma nova compra em Meu plano e consumo de IA. Você escolhe como pagar: à vista no cartão (com renovação automática) ou no Pix, e, nos planos semestral e anual, parcelado no cartão.":
     {
-      es: "El acceso llega hasta {data} y este plan no se renueva solo: no se cobra nada sin tu confirmación. Para continuar sin interrupción, haz una nueva compra en Plan y uso. Tú eliges cómo pagar: al contado con tarjeta (con renovación automática) o con Pix y, en los planes semestral y anual, en cuotas con tarjeta.",
+      es: "El acceso llega hasta {data} y este plan no se renueva solo: no se cobra nada sin tu confirmación. Para continuar sin interrupción, haz una nueva compra en Mi plan y consumo de IA. Tú eliges cómo pagar: al contado con tarjeta (con renovación automática) o con Pix y, en los planes semestral y anual, en cuotas con tarjeta.",
     },
   "Renovar meu plano": {
     es: "Renovar mi plan",

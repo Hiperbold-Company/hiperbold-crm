@@ -156,7 +156,7 @@ describe("o gate da carteira de tokens lê billing_settings e executa o veredito
       // limiar da carteira, é o que fecha a dedup por mês (ver o teste
       // dedicado abaixo, "aviso do mês passado não trava o do mês atual").
       expect(titulo).toBe("Os tokens de IA do mês acabaram (setembro de 2026)");
-      expect(corpo).toMatch(/Plano e uso/);
+      expect(corpo).toMatch(/Meu plano e consumo de IA/);
       expect(corpo).not.toMatch(/Uso de IA › Orçamento/);
     });
 

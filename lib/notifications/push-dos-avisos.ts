@@ -89,7 +89,7 @@ type Aviso = {
   para_user_id: string | null;
 };
 
-/** O plano é o destino do aviso de renovação, o mesmo botão «Abrir Plano e uso» da Central. */
+/** O plano é o destino do aviso de renovação, o mesmo botão «Abrir Meu plano e consumo de IA» da Central. */
 const PLANO_E_USO = "/app/settings/plano";
 
 /**
