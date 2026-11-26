@@ -8,6 +8,20 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.7.0] — 2026-11-26
+
+### Adicionado
+
+- **Transcrição de áudio com interruptor por empresa e desconto de tokens do plano** Em Configurações › Atendimento há uma nova opção, "Transcrever áudios", que gerente ou administrador liga e desliga. Ela vem ligada: empresa que não mexer continua transcrevendo como antes. Desligada, o áudio recebido fica na conversa sem texto, o agente de IA não recebe transcrição e nada é gasto com ela. A opção vale também para a fala dos vídeos: desligada, os vídeos continuam sendo lidos pelas imagens, mas a fala não é transcrita.
+
+  A transcrição feita com a chave da plataforma passa a descontar tokens do plano: 6.000 tokens por minuto de áudio, proporcional aos segundos e arredondado para cima, e cada áudio conta no máximo 10 minutos. Aparece no extrato do mês em Meu plano, no dia da transcrição e na linha sem agente. Transcrição que falhou, que voltou vazia ou cuja duração o serviço não informou não desconta. Com a chave da própria empresa em Provedores de IA, nada sai do plano.
+
+  A transcrição de áudio pela API da OpenAI com o modelo `whisper-1` também passa a ter custo no Uso de IA (US$ 0,006 por minuto), e o teto de gasto de IA da empresa passa a contar esses áudios. Não é preciso mudar nada à mão.
+
+### Alterado
+
+- **O consumo de IA agora fica em "Meu plano e consumo de IA", em tokens** Configurações › Meu plano passou a se chamar "Meu plano e consumo de IA" e é o lugar único do consumo de IA da empresa: consumo do mês contra a cota, saldo, extrato por dia e por agente e, agora, um gráfico de tokens por dia. A antiga tela "Uso e orçamento" saiu do menu, e o endereço dela leva para Meu plano. Os valores em dólar saíram das telas da empresa e ficam só no painel da plataforma: as telas de execuções, agentes (tabela e detalhe de execução, painel de teste), provedores (cartão do Jev) e evolução da IA mostram tokens em vez de dólar, ou deixaram de mostrar custo. O teto mensal de gasto de IA continua valendo como trava de segurança, mas agora só o administrador da plataforma o ajusta, na aba Plano de cada empresa; a empresa não consegue mais mudá-lo, nem pela API. Quando o teto é atingido, o aviso da Central diz que o limite de segurança de IA foi atingido e pede para falar com o suporte. As métricas técnicas do agente (chamadas de IA, turnos, taxa de cache, passagem para uma pessoa e tempo de uma chamada) estão na nova aba "Agentes de IA" de Desempenho, para gerente e administrador. Não é preciso mudar nada para atualizar.
+
 ## [2.6.0] — 2026-11-25
 
 ### Adicionado
@@ -14901,7 +14915,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.6.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.1...v2.6.0
 [2.5.1]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.4.0...v2.5.0
