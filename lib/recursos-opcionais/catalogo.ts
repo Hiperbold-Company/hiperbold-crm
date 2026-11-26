@@ -36,6 +36,7 @@ import { vendaPeloCanalLigada } from "@/lib/conversoes/venda-pelo-canal";
 import { lerConfigDoJev } from "@/lib/ai/decisao/config";
 import { capacidadesLigadas, type CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
 import { conversaFicaComQuemAtendeu } from "@/lib/schemas/routing";
+import { transcreverAudiosLigado } from "@/lib/schemas/settings";
 import { configAssinatura } from "@/lib/messaging/assinatura";
 
 /** Quem decide: o servidor inteiro, a empresa, cada agente, ou o arquivo do servidor. */
@@ -392,6 +393,16 @@ const DA_EMPRESA: RecursoOpcional[] = [
     quemDecide: "manager",
     href: "/app/settings/atendimento",
     ler: peloSettings((s) => conversaFicaComQuemAtendeu(s)),
+  },
+  {
+    id: "transcrever_audios",
+    nome: "Transcrever áudios",
+    oQueFaz: "Os áudios recebidos viram texto na conversa, e o agente de IA lê a transcrição. Desligado, o áudio fica sem texto e não gasta tokens.",
+    nivel: "organizacao",
+    padrao: "ligado",
+    quemDecide: "manager",
+    href: "/app/settings/atendimento",
+    ler: peloSettings((s) => transcreverAudiosLigado(s)),
   },
   {
     id: "ia_volta_sozinha",

@@ -12289,6 +12289,7 @@ export type Database = {
       llm_calls: {
         Row: {
           agent_id: string | null;
+          audio_seconds: number | null;
           cache_read_tokens: number;
           cache_write_tokens: number;
           contact_id: string | null;
@@ -12315,6 +12316,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           agent_id?: string | null;
+          audio_seconds?: number | null;
           cache_read_tokens?: number;
           cache_write_tokens?: number;
           contact_id?: string | null;
@@ -12340,6 +12342,7 @@ export type Database = {
         };
         Update: {
           agent_id?: string | null;
+          audio_seconds?: number | null;
           cache_read_tokens?: number;
           cache_write_tokens?: number;
           contact_id?: string | null;
@@ -17799,6 +17802,20 @@ export type Database = {
         }[];
       };
       fn_billing_saldo_da_carteira: { Args: { p_org: string }; Returns: Json };
+      fn_billing_ponderado_da_chamada: {
+        Args: {
+          p_audio_seconds: number;
+          p_cache_read: number;
+          p_input: number;
+          p_output: number;
+          p_peso_cache: number;
+          p_peso_proposito: number;
+          p_purpose: string;
+          p_status: string;
+        };
+        Returns: number;
+      };
+      fn_billing_tokens_por_minuto_de_audio: { Args: Record<PropertyKey, never>; Returns: number };
       fn_billing_tokens_ponderados: {
         Args: {
           p_cache_read: number;

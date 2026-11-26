@@ -781,6 +781,17 @@ export const crmSettingsSchema = z
      * de um dígito a mais.
      */
     pos_venda_dias: z.number().int().min(0).max(365).catch(0),
+    /**
+     * `transcrever_audios` (decisão do dono do produto, 25/11/2026): o áudio
+     * recebido vira texto na conversa e o agente de IA lê a transcrição.
+     *
+     * ⚠️ NASCE LIGADA, como `avisar_transferencia_no_whatsapp`: empresa que
+     * nunca abriu a tela transcreve como sempre. Só o booleano `false` desliga.
+     * Desligada, o worker de mídia (`workers/media-derive-worker.ts`) pula o
+     * áudio antes de baixar o arquivo: o áudio fica na conversa sem texto e
+     * nenhum token é gasto. Quem lê é `transcreverAudiosLigado()`.
+     */
+    transcrever_audios: z.boolean().catch(true),
   })
   .catch({
     cliente_pela_agenda: false,
@@ -791,6 +802,7 @@ export const crmSettingsSchema = z
     avisar_transferencia_no_whatsapp: true,
     cliente_pela_venda: false,
     pos_venda_dias: 0,
+    transcrever_audios: true,
   });
 
 /**
@@ -986,6 +998,13 @@ export function nomeInformadoLigado(settings: unknown): boolean {
   const crm = settings && typeof settings === 'object' && !Array.isArray(settings)
     ? (settings as Record<string, unknown>).crm : undefined;
   return crmSettingsSchema.parse(crm ?? {}).nome_informado_no_atendimento === true;
+}
+
+/** Ausente liga; só o booleano `false` desliga a transcrição dos áudios da empresa. */
+export function transcreverAudiosLigado(settings: unknown): boolean {
+  const crm = settings && typeof settings === 'object' && !Array.isArray(settings)
+    ? (settings as Record<string, unknown>).crm : undefined;
+  return crmSettingsSchema.parse(crm ?? {}).transcrever_audios;
 }
 
 /** Ausente liga; só o booleano `false` tira as transferências do Aviso no WhatsApp. */
