@@ -30,7 +30,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useT } from "@/hooks/i18n/useT";
-import { ArrowRight, Archive, Check, Pause, Robot, X } from "@/lib/ui/icons";
+import { ArrowRight, Archive, Check, EnvelopeSimple, Pause, Robot, X } from "@/lib/ui/icons";
 import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 interface Props {
@@ -40,6 +40,7 @@ interface Props {
   onFechar: () => void;
   onArquivar: () => void;
   onMarcarComoLida: () => void;
+  onMarcarComoNaoLida: () => void;
   onPausarIa: () => void;
   onDevolverAoAutomatico: () => void;
   /** Abre o diálogo de destino e devolve `(to_user_id, reason)`. */
@@ -69,6 +70,7 @@ export function BarraDeAcoesEmLote({
   onFechar,
   onArquivar,
   onMarcarComoLida,
+  onMarcarComoNaoLida,
   onPausarIa,
   onDevolverAoAutomatico,
   onTransferir,
@@ -149,6 +151,10 @@ export function BarraDeAcoesEmLote({
           >
             <Robot size={14} className="mr-2" aria-hidden />
             {t("Devolver ao automático")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onMarcarComoNaoLida} data-testid="lote-marcar-como-nao-lida">
+            <EnvelopeSimple size={14} className="mr-2" aria-hidden />
+            {t("Marcar como não lida")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

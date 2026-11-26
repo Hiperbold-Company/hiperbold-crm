@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConversationHeader } from "./ConversationHeader";
@@ -392,4 +392,45 @@ describe("#3003 — a guia de Liberar não promete o automático quando ele não
       expect(screen.getByRole("button", { name: "Liberar" }).getAttribute("title")).toBe(caso.guia);
     });
   }
+});
+
+/**
+ * "MARCAR COMO NÃO LIDA" — um botão da barra (nunca um menu "Mais ações", que o
+ * `inbox-header-nao-trava` proíbe). Só existe quando quem monta a Inbox entrega o
+ * callback, que também fecha a conversa para a leitura automática não desfazê-lo.
+ */
+describe("Marcar como não lida no cabeçalho", () => {
+  const conversa = {
+    id: "conv-1",
+    organization_id: "org-1",
+    contact_id: "contato-1",
+    status: "open",
+    assigned_to_user_id: null,
+    assigned_to_user_name: null,
+    assignee_kind: "ai",
+    bot_silenced_until: null,
+    snooze_until: null,
+    service_revision: 3,
+    is_group: false,
+    tags: [],
+    contacts: CONTATO,
+    channel_sessions: null,
+  } as unknown as ConversationWithContact;
+
+  it("com o callback, o botão existe, tem guia e delega ao clicar", () => {
+    estado.auth = { user: { id: "u1", support: null, is_platform_admin: true } };
+    const aoMarcar = vi.fn();
+    render(<ConversationHeader conversation={conversa} onMarcarComoNaoLida={aoMarcar} />);
+
+    const botao = screen.getByRole("button", { name: "Marcar como não lida" });
+    expect((botao.getAttribute("title") ?? "").trim()).not.toBe("");
+    fireEvent.click(botao);
+    expect(aoMarcar).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem o callback, o botão não existe", () => {
+    estado.auth = { user: { id: "u1", support: null, is_platform_admin: true } };
+    render(<ConversationHeader conversation={conversa} />);
+    expect(screen.queryByRole("button", { name: "Marcar como não lida" })).toBeNull();
+  });
 });

@@ -15,6 +15,7 @@ import { AvisoDeConexao, useBloqueioPelaConexao } from "@/components/inbox/Aviso
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
 import { useMarkAsRead } from "@/hooks/inbox/useMarkAsRead";
+import { useMarkAsUnread } from "@/hooks/inbox/useMarkAsUnread";
 import { gravarFiltrosLembrados, lerFiltrosLembrados } from "@/lib/inbox/filtros-lembrados";
 import {
   useConversationsRealtime,
@@ -642,6 +643,15 @@ export function InboxLayout({
       setSelectedId(id);
     }
   }, [selectedId, searchParams, pathname]);
+  // "Marcar como não lida" na conversa aberta: marca E volta para a lista. Com a
+  // conversa em foco, a leitura automática (1,5s) a zeraria de novo; trocar a
+  // seleção desarma esse timer (ver `useMarkAsRead`).
+  const { mutate: marcarNaoLida } = useMarkAsUnread();
+  const marcarAbertaComoNaoLida = useCallback(() => {
+    if (!selectedId) return;
+    marcarNaoLida(selectedId);
+    handleSelect(null);
+  }, [selectedId, marcarNaoLida, handleSelect]);
   const handleVisibleChange = useCallback((ids: string[]) => setVisibleIds(ids), []);
   const handleFocusReply = useCallback(() => composerRef.current?.focus(), []);
   const handleClaim = useCallback(() => {
@@ -979,6 +989,12 @@ export function InboxLayout({
             onFechar={() => rodarLote("close")}
             onArquivar={() => rodarLote("archive")}
             onMarcarComoLida={() => rodarLote("mark-read")}
+            onMarcarComoNaoLida={() => {
+              // A conversa aberta dentro da seleção sai da tela primeiro: com ela
+              // em foco, a leitura automática (1,5s) desfaria a marcação.
+              if (selectedId && selecao.selecionados.has(selectedId)) handleSelect(null);
+              rodarLote("mark-unread");
+            }}
             onPausarIa={() => rodarLote("pause-ai")}
             onDevolverAoAutomatico={() => rodarLote("reactivate-bot")}
             onTransferir={(toUserId, reason) => rodarLote("transfer", toUserId, reason)}
@@ -1074,6 +1090,7 @@ export function InboxLayout({
               key={selectedConversation.id}
               conversation={selectedConversation}
               onAbrirConversa={handleSelect}
+              onMarcarComoNaoLida={marcarAbertaComoNaoLida}
               onBuscar={() =>
                 buscaAberta
                   ? fecharBusca()
