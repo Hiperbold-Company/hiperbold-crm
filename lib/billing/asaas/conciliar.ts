@@ -129,6 +129,8 @@ export interface PedidoVencidoParaRemocao {
   asaasSubscriptionId: string | null;
   /** D-177: pedido parcelado vencido remove o parcelamento inteiro, nunca só a primeira parcela. */
   asaasInstallmentId?: string | null;
+  /** 1026: pedido de assinatura superado (contrato cancelado ou pago por fora depois do pedido). */
+  superado?: boolean;
 }
 
 /**
@@ -211,6 +213,8 @@ export interface DbConciliarAsaas {
   clienteAsaasDaOrganizacao(organizationId: string, ambiente: AmbienteAsaas): Promise<RpcResultado<string | null>>;
   /** `fn_billing_pedido_marcar(p_status = 'inconclusivo')`: destrava o `processando` velho. */
   marcarPedidoInconclusivo(organizationId: string, pedidoId: string, motivo: string): Promise<RpcResultado<unknown>>;
+  /** `fn_billing_pedido_marcar(p_status = 'cancelado')`: encerra o pedido superado depois da remoção no Asaas. */
+  marcarPedidoCancelado(organizationId: string, pedidoId: string, motivo: string): Promise<RpcResultado<unknown>>;
   /** `fn_billing_asaas_registrar_evento` com `p_origem = 'conciliacao'` (mesmo caminho do webhook). */
   registrarEventoSintetico(input: RegistrarEventoSinteticoInput): Promise<RpcResultado<{ novo: boolean }>>;
   /** `fn_billing_asaas_podar_eventos(p_dias)` (N38). */
@@ -713,6 +717,18 @@ async function refazerRemocaoDeCobrancaVencida(
 
     if (r.desfecho === "removido") {
       resumo.cobrancasRemovidas++;
+      // 1026: assinatura agendada no cartão (sem cobrança) não manda PAYMENT_DELETED, e o SUBSCRIPTION_DELETED
+      // volta sem_vinculo: sem isto o pedido superado fica aberto, bloqueia compra nova e volta a toda rodada.
+      if (pedido.superado) {
+        const marcado = await deps.db.marcarPedidoCancelado(pedido.organizationId, pedido.id, "superado");
+        if (marcado.error) {
+          deps.logger.error("asaas_conciliar_marcar_superado_falhou", {
+            pedidoId: pedido.id,
+            codigo: marcado.error.code,
+          });
+          resumo.falhas++;
+        }
+      }
       continue;
     }
 
@@ -1004,9 +1020,11 @@ export function criarDbConciliarAsaasSobre(admin: SupabaseClient): DbConciliarAs
         asaas_payment_id: string | null;
         asaas_subscription_id: string | null;
         asaas_installment_id: string | null;
+        superado?: boolean | null;
       }>;
       return {
         data: linhas.map((l) => ({
+          superado: l.superado === true,
           id: l.pedido_id,
           organizationId: l.organization_id,
           tipo: l.tipo,
@@ -1173,6 +1191,17 @@ export function criarDbConciliarAsaasSobre(admin: SupabaseClient): DbConciliarAs
         p_org: organizationId,
         p_pedido: pedidoId,
         p_status: "inconclusivo",
+        p_motivo: motivo,
+      } as never);
+      if (error) return { data: null, error: { code: error.code, message: error.message } };
+      return { data, error: null };
+    },
+
+    async marcarPedidoCancelado(organizationId, pedidoId, motivo) {
+      const { data, error } = await admin.rpc("fn_billing_pedido_marcar" as never, {
+        p_org: organizationId,
+        p_pedido: pedidoId,
+        p_status: "cancelado",
         p_motivo: motivo,
       } as never);
       if (error) return { data: null, error: { code: error.code, message: error.message } };

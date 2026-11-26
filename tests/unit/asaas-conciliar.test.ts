@@ -122,6 +122,7 @@ function dbFalso(overrides: Partial<DbConciliarAsaas> = {}): DbConciliarAsaas {
     marcarAssinaturaEncerrada: vi.fn(async () => ({ data: {}, error: null })),
     clienteAsaasDaOrganizacao: vi.fn(async () => ({ data: "cus_fake123", error: null })),
     marcarPedidoInconclusivo: vi.fn(async () => ({ data: {}, error: null })),
+    marcarPedidoCancelado: vi.fn(async () => ({ data: {}, error: null })),
     registrarEventoSintetico: vi.fn(async () => ({ data: { novo: true }, error: null })),
     podarEventos: vi.fn(async () => ({ data: { podados: 0 }, error: null })),
     contadoresDeAlarme: vi.fn(async () => ({
@@ -426,6 +427,52 @@ describe("conciliarAsaas", () => {
     expect(resumo.eventosSinteticos).toBe(1);
   });
 
+  it("1026: pedido SUPERADO removido no Asaas vira cancelado (motivo superado); o vencido comum removido não é tocado", async () => {
+    const superado: PedidoVencidoParaRemocao = {
+      id: "pedido-sup",
+      organizationId: "org-sup",
+      tipo: "assinatura",
+      asaasPaymentId: null,
+      asaasSubscriptionId: "sub_agendada",
+      superado: true,
+    };
+    const comum: PedidoVencidoParaRemocao = {
+      id: "pedido-comum",
+      organizationId: "org-comum",
+      tipo: "assinatura",
+      asaasPaymentId: null,
+      asaasSubscriptionId: "sub_comum",
+      superado: false,
+    };
+    const db = dbFalso({
+      listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [superado, comum], error: null })),
+    });
+    const resumo = await conciliarAsaas(deps({ db }));
+
+    expect(resumo.cobrancasRemovidas).toBe(2);
+    expect(db.marcarPedidoCancelado).toHaveBeenCalledTimes(1);
+    expect(db.marcarPedidoCancelado).toHaveBeenCalledWith("org-sup", "pedido-sup", "superado");
+  });
+
+  it("1026: pedido superado cuja cobrança está paga (não removida) NÃO é marcado cancelado", async () => {
+    const superado: PedidoVencidoParaRemocao = {
+      id: "pedido-sup2",
+      organizationId: "org-sup2",
+      tipo: "assinatura",
+      asaasPaymentId: "pay_da_assinatura",
+      asaasSubscriptionId: "sub_x",
+      superado: true,
+    };
+    const db = dbFalso({ listarPedidosVencidosParaRemocao: vi.fn(async () => ({ data: [superado], error: null })) });
+    const asaas = asaasFalso({
+      listarCobrancasDaAssinatura: vi.fn(async () => [cobrancaFake({ id: "pay_paga", status: "RECEIVED" })]),
+    });
+    await conciliarAsaas(deps({ db, asaas }));
+
+    expect(asaas.removerAssinatura).not.toHaveBeenCalled();
+    expect(db.marcarPedidoCancelado).not.toHaveBeenCalled();
+  });
+
   it("1026 (M2): cobrança em análise antifraude: não remove e não inventa evento (a rodada seguinte confere)", async () => {
     const vencido: PedidoVencidoParaRemocao = {
       id: "pedido-4",
@@ -722,6 +769,7 @@ describe("B6 (D-177) e 1026: a listagem dos pedidos vencidos vem do banco, com o
         asaasPaymentId: null,
         asaasSubscriptionId: null,
         asaasInstallmentId: "7315c152-a55f-4727-aa6c-d48249df28d4",
+        superado: false,
       },
     ]);
   });

@@ -239,6 +239,7 @@ revoke execute on function public.fn_billing_pedidos_de_assinatura_em_aberto(tim
 grant execute on function public.fn_billing_pedidos_de_assinatura_em_aberto(timestamptz, uuid, uuid) to service_role;
 
 -- 3. O que o passo 3 da conciliação remove hoje.
+drop function if exists public.fn_billing_pedidos_vencidos_para_remocao(timestamptz, integer);
 create or replace function public.fn_billing_pedidos_vencidos_para_remocao(
   p_agora timestamptz default now(),
   p_limite integer default 200
@@ -249,18 +250,20 @@ returns table (
   tipo text,
   asaas_payment_id text,
   asaas_subscription_id text,
-  asaas_installment_id text
+  asaas_installment_id text,
+  superado boolean
 )
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select r.r_id, r.r_org, r.r_tipo, r.r_pay, r.r_sub, r.r_inst
+  select r.r_id, r.r_org, r.r_tipo, r.r_pay, r.r_sub, r.r_inst, r.r_sup
     from (
       -- Pacote de tokens: remoção no vencimento, como antes.
       select o.id as r_id, o.organization_id as r_org, o.tipo as r_tipo,
-             o.asaas_payment_id as r_pay, o.asaas_subscription_id as r_sub, o.asaas_installment_id as r_inst
+             o.asaas_payment_id as r_pay, o.asaas_subscription_id as r_sub, o.asaas_installment_id as r_inst,
+             false as r_sup
         from public.billing_orders o
        where o.status = 'vencido'
          and o.tipo <> 'assinatura'
@@ -268,7 +271,8 @@ as $$
       union all
       -- Assinatura: só no prazo da régua.
       select a.pedido_id, a.organization_id, 'assinatura'::text,
-             a.asaas_payment_id, a.asaas_subscription_id, a.asaas_installment_id
+             a.asaas_payment_id, a.asaas_subscription_id, a.asaas_installment_id,
+             (a.limite = 'superado')
         from public.fn_billing_pedidos_de_assinatura_em_aberto(p_agora) a
        where a.pode_remover
     ) r
@@ -810,7 +814,7 @@ begin
         and v_pedido.status = 'vencido'
         and exists (
           select 1
-            from public.fn_billing_pedidos_de_assinatura_em_aberto(now(), v_pedido.organization_id, v_pedido.id) a
+            from public.fn_billing_pedidos_de_assinatura_em_aberto(v_pago_em, v_pedido.organization_id, v_pedido.id) a
            where not a.pode_remover
         )
       )
