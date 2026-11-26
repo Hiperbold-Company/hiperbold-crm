@@ -387,14 +387,14 @@ describe("CaseChatPanel — falhas da pergunta", () => {
       "orcamento_esgotado",
       undefined,
       "req-42",
-      "A IA parou porque o gasto do mês atingiu o limite definido. Ajuste em Uso de IA › Orçamento.",
+      "A IA parou porque o limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliar o limite.",
     );
     comChat(dados());
     pintar();
 
     expect(
       screen.getByText(
-        "A IA parou porque o gasto do mês atingiu o limite definido. Ajuste em Uso de IA › Orçamento.",
+        "A IA parou porque o limite de segurança de IA desta empresa foi atingido. Fale com o suporte para ampliar o limite.",
       ),
     ).toBeInTheDocument();
     // O id é ANEXO, não a mensagem: quem lê não sabe o que é um uuid.

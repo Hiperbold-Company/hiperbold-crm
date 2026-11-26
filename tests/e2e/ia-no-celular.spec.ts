@@ -338,7 +338,7 @@ test("[P1] o gestor pausa o agente, abre o aviso e acompanha a IA pelo celular",
       .evaluateAll((tds) =>
         tds.map((td) => ({ rotulo: td.getAttribute("data-rotulo"), content: getComputedStyle(td, "::before").content })),
       );
-    expect(rotulos.map((r) => r.rotulo)).toEqual(["Custo", "Latência"]);
+    expect(rotulos.map((r) => r.rotulo)).toEqual(["Tokens", "Latência"]);
     for (const r of rotulos) expect(["none", "normal", ""], `${r.rotulo} sem rótulo desenhado`).not.toContain(r.content);
     expect(await rolagemDoMain(page), "a aba de execuções rola para o lado").toBeLessThanOrEqual(1);
     await page.screenshot({ path: path.join(EVIDENCIA, "02-execucoes-em-cartao.png") });

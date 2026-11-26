@@ -871,13 +871,12 @@ export { HANDOFF_REASON_ORCAMENTO };
  * durável (`buildHandoffSummary`), que também não custa token nenhum.
  */
 export const RESUMO_DO_HANDOFF_POR_ORCAMENTO =
-  'A IA parou de responder porque o teto de gasto mensal com IA desta organização foi ' +
-  'atingido — o lead NÃO pediu atendimento humano. Assuma a conversa; para devolvê-la ao ' +
-  'atendimento automático, ajuste o teto em Uso de IA › Orçamento e use "Devolver ao ' +
+  'A IA parou de responder porque o limite de segurança de IA desta empresa foi atingido — o lead NÃO pediu atendimento humano. ' +
+  'Assuma a conversa; para devolvê-la ao atendimento automático, peça ao suporte para ampliar o limite e use "Devolver ao ' +
   'automático" no cabeçalho da conversa.';
 
 /** Título do item da Central que este handoff abre — rótulo visível, logo constante. */
-export const TITULO_DO_HANDOFF_POR_ORCAMENTO = 'Teto de gasto com IA atingido — assumir a conversa';
+export const TITULO_DO_HANDOFF_POR_ORCAMENTO = 'Limite de segurança de IA atingido — assumir a conversa';
 
 /**
  * Os mesmos dois textos acima, para a carteira de tokens esgotada (fase F3,

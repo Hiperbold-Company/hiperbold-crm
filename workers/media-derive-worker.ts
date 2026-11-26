@@ -41,6 +41,7 @@ import {
   type OrigemDaTranscricao,
 } from "@/lib/messaging/media/escada-de-transcricao";
 import { TranscriptionTooLargeError, type TranscriptionProvider } from "@/lib/messaging/media/transcription";
+import { transcreverAudiosLigado } from "@/lib/schemas/settings";
 import { isMediaPathOfOrg } from "@/lib/messaging/media/upload-validation";
 import { logger } from "@/lib/logger";
 import { validarParProvedorModelo } from "@/lib/ai/par-provedor-modelo";
@@ -224,6 +225,28 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
       .limit(1)
       .maybeSingle();
     if (!flag) return markSkipped("video_frames_disabled");
+  }
+
+  // Interruptor da empresa "Transcrever áudios" (Configurações › Atendimento,
+  // 25/11/2026). Ausente = ligado; só o booleano `false` desliga. Desligado, o
+  // áudio fica na conversa sem texto e nada vai ao provedor — por isso o corte
+  // vem ANTES de baixar o arquivo e de resolver credencial. `skipped` é
+  // terminal no dreno do turno, como o vídeo desligado acima. Leitura que
+  // falha não transcreve nem desiste: o dreno tenta de novo.
+  // O vídeo segue o mesmo interruptor para a FALA: com ele desligado, os
+  // quadros são lidos normalmente e a faixa de som não é transcrita.
+  let transcreverFala = true;
+  if (msg.type === "audio" || msg.type === "video") {
+    const { data: org, error: erroDaOrg } = await admin
+      .from("organizations")
+      .select("settings")
+      .eq("id", msg.organization_id)
+      .maybeSingle();
+    if (erroDaOrg) return { consumer_key, status: "error", detail: "transcription_setting_read_failed" };
+    transcreverFala = transcreverAudiosLigado((org as { settings?: unknown } | null)?.settings);
+    if (msg.type === "audio" && !transcreverFala) {
+      return markSkipped("transcricao_desligada");
+    }
   }
 
   /** O que o operador chama de "isto" — o aviso não pode falar em `msg.type`. */
@@ -593,6 +616,7 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
       chaveEhDaInstalacao,
       origemDoModelo,
       origemDaChaveDaTranscricao,
+      transcreverFala,
     );
 
     const text = await deriveMediaText(msg.type, buffer, msg.media_mime ?? "application/octet-stream", deps);
@@ -783,6 +807,9 @@ function buildDeriveDeps(
   origemDoModelo = "padrao",
   // De quem é a chave do degrau de transcrição escolhido (0906); `null` = não sabida.
   origemDaChaveDaTranscricao: OrigemDaChaveLlm | null = null,
+  // Interruptor "Transcrever áudios" da empresa: desligado, o vídeo não
+  // transcreve a fala (só lê os quadros).
+  transcreverFala = true,
 ): DeriveDeps {
   const registry = createDefaultRegistry();
   // Thunk, não consulta: nada vai ao banco até a visão ser de fato perguntada,
@@ -844,10 +871,10 @@ function buildDeriveDeps(
       await avisarMidiaNaoLida(
         orgId,
         d.tipo,
-        `o limite de gasto com IA deste mês foi atingido e a IA está configurada para parar nele, então ${d.oQueNaoSaiu} ao provedor`,
+        `o limite de segurança de IA desta empresa foi atingido, então ${d.oQueNaoSaiu} ao provedor`,
         "Enquanto o limite valer, a IA também não responde: as conversas vão para a fila de atendimento humano.",
         undefined,
-        "Para resolver, suba o limite ou desligue a parada em Uso de IA › Orçamento.",
+        "Para resolver, fale com o suporte para ampliar o limite.",
       );
       return true;
     }
@@ -1128,7 +1155,8 @@ function buildDeriveDeps(
     describeImage,
     extractPdf: extractPdfText,
     // Onda 3.1: vídeo → ffmpeg (áudio+frames) reusando transcrição e visão da org.
-    deriveVideo: (buffer) => deriveVideoText(buffer, { transcriber, describeImage }),
+    deriveVideo: (buffer) =>
+      deriveVideoText(buffer, { transcriber: transcreverFala ? transcriber : null, describeImage }),
   };
 }
 
@@ -1144,6 +1172,8 @@ interface ChamadaDeMidia {
   /** null = preço desconhecido; 0 diria "grátis" à tela de uso e ao teto. */
   cost_cents: number | null;
   latency_ms: number;
+  /** Transcrição: duração do áudio em segundos (base do débito no plano); null = desconhecida. */
+  audio_seconds?: number | null;
   /**
    * Na transcrição, o degrau da escada que ouviu o áudio. É o que separa a
    * ausência de custo informado por serviço (degraus 1 a 3) do preço de LLM
@@ -1280,9 +1310,10 @@ function comCustoRegistrado(
       let texto: string;
       let uso: TokenUsage | null = null;
       let custoInformado: number | null | undefined;
+      let segundos: number | null | undefined;
       try {
         if (servico.transcribeMedindo) {
-          ({ texto, uso, custoCents: custoInformado } = await servico.transcribeMedindo(audio, mime));
+          ({ texto, uso, custoCents: custoInformado, segundos } = await servico.transcribeMedindo(audio, mime));
         } else {
           texto = await servico.transcribe(audio, mime);
         }
@@ -1313,6 +1344,11 @@ function comCustoRegistrado(
         cache_write_tokens: uso?.cacheWriteTokens ?? 0,
         cost_cents: custoInformado !== undefined ? custoInformado : uso ? costCents(ctx.model, uso) : null,
         latency_ms: Date.now() - inicio,
+        // A duração é a base do débito no plano (migration 1025: 6.000 tokens
+        // por minuto, só com a chave da instalação). Transcrição que voltou
+        // vazia é `failed` para quem atende, então não leva duração e não
+        // desconta.
+        ...(segundos !== undefined ? { audio_seconds: texto.trim() ? segundos : null } : {}),
       }));
       return texto;
     },

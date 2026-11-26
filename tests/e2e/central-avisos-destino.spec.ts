@@ -139,10 +139,11 @@ for (const role of ["manager", "admin"]) test(`${role}: destinos conforme papel 
   test.setTimeout(120_000); await login(page, role); await central(page);
   await expect(row(page, "Conversa outro atendente").getByRole("link")).toBeVisible();
   await expect(row(page, "Conversa outra organização").getByRole("link")).toHaveCount(0);
-  await row(page, "Orçamento para revisar").getByRole("link", { name: "Abrir uso de IA" }).click();
-  await expect(page).toHaveURL(/\/app\/ai\/usage/);
-  await expect(page.getByRole("heading", { name: /Uso de IA|Uso e custos/i }).first()).toBeVisible();
-  await page.goBack(); await expect(row(page, "Conexão para revisar")).toBeVisible();
+  // O teto de gasto de IA é trava que só o suporte da plataforma ajusta (25/11/2026):
+  // o aviso não tem link para tela da empresa, só a orientação de falar com o suporte.
+  await expect(row(page, "Orçamento para revisar").getByRole("link")).toHaveCount(0);
+  await expect(row(page, "Orçamento para revisar").getByText(/fale com o suporte/i)).toBeVisible();
+  await expect(row(page, "Conexão para revisar")).toBeVisible();
   // Gerente e admin abrem Conexões pela Central (decisão do dono do produto, 03/11/2026).
   {
     await row(page, "Conexão para revisar").getByRole("link").click();

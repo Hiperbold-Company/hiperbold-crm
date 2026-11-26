@@ -62,7 +62,7 @@ function montar(status: BudgetStatus) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <BudgetCard initialData={status} isAdmin />
+      <BudgetCard organizationId={status.organization_id} initialData={status} podeEditar />
     </QueryClientProvider>,
   );
 }

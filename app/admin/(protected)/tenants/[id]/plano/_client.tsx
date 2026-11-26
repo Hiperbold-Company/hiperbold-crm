@@ -38,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { BudgetCard } from "@/components/ai/BudgetCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,6 +121,12 @@ export interface PacoteAtivo {
 interface TenantPlanoClientProps {
   organizationId: string;
   podeEscrever: boolean;
+  /**
+   * Escopo `full` do admin da plataforma. Separado de `podeEscrever` porque o
+   * teto de gasto de IA não depende das leituras do plano: a rota dele relê o
+   * estado e confere de novo o escopo.
+   */
+  podeAjustarTetoDeIa: boolean;
   plano: { code: string; name: string; version: number };
   contrato: { status: string; cycle: string | null } | null;
   leituraFalhou: boolean;
@@ -444,6 +451,7 @@ function formatarCelulaDoAjuste(
 export function TenantPlanoClient({
   organizationId,
   podeEscrever,
+  podeAjustarTetoDeIa,
   plano,
   contrato,
   leituraFalhou,
@@ -1712,6 +1720,17 @@ export function TenantPlanoClient({
           )}
         </CardContent>
       </Card>
+
+      {/* Teto de gasto de IA (25/11/2026): trava de segurança em dólar que só a
+          plataforma vê e ajusta; o cliente acompanha o consumo em tokens. */}
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Trava de segurança: a empresa não vê este valor nem o ajusta. Quando o limite é atingido com a parada ligada, a IA da empresa para de responder e a Central avisa a equipe para falar com o suporte.",
+          )}
+        </p>
+        <BudgetCard organizationId={organizationId} podeEditar={podeAjustarTetoDeIa} />
+      </div>
 
       {/* Painel de margem (decisão 17): só a plataforma vê */}
       <Card>

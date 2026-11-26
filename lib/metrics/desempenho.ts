@@ -16,7 +16,9 @@ export const DIAS_PADRAO = 30;
 export const DIAS_MAXIMOS = 366;
 const DIA_MS = 24 * 60 * 60 * 1000;
 
-export const ABAS = ["negocios", "origens", "atendimento", "atrito"] as const;
+// "agentes_de_ia" (25/11/2026): as métricas técnicas do agente que moravam em /app/ai/usage.
+// Só gerente para cima a vê; a tela cai em "negocios" para os outros papéis.
+export const ABAS = ["negocios", "origens", "atendimento", "atrito", "agentes_de_ia"] as const;
 export type Aba = (typeof ABAS)[number];
 
 export const ATALHOS = ["hoje", "7d", "30d", "90d", "mes", "mes_anterior", "personalizado"] as const;

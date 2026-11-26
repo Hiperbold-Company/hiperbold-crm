@@ -25,20 +25,6 @@ import { useT } from "@/hooks/i18n/useT";
 import { PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
 import { RoteamentoResultados } from "./RoteamentoResultados";
 
-/**
- * O MESMO formato da tela de Uso — as duas leem `llm_calls.cost_cents`, que é
- * centavo de DÓLAR (`pricing.ts` cota o provedor em USD).
- */
-const usd = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "USD",
-  // 6 casas porque uma execução isolada custa fração de centavo, e arredondar
-  // mostraria "US$ 0,00" — o zero que não é zero. Com 4, era o caso de TODA
-  // medição do Jev (~US$ 0,000016); o cartão dele já usava 6.
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 6,
-});
-
 interface Execucao {
   id: string;
   purpose: string;
@@ -261,12 +247,6 @@ export function ExecucoesDeIa() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   {e.input_tokens + e.output_tokens} {t("tokens")}
                   {e.latency_ms !== null ? ` · ${e.latency_ms} ms` : ""}
-                  {/* `cost_cents` está em CENTAVOS: dividir por 100 dá REAIS, e o
-                      rótulo dizia "centavos" — uma execução de 25 centavos
-                      aparecia como "0.2500 centavos", 100× menor que o mesmo
-                      evento na tela de Uso, sem nenhuma das duas dizer qual
-                      estava certa. Aqui vale o mesmo formato de lá: reais. */}
-                  {e.cost_cents !== null ? ` · ${usd.format(e.cost_cents / 100)}` : ""}
                 </p>
               )}
 

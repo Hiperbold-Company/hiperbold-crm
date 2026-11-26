@@ -82,7 +82,7 @@ describe("POST /api/v1/ai/voz/preview — orçamento de IA", () => {
     expect(res.status).toBe(402);
     const corpo = (await res.json()) as { error: { code: string; message: string } };
     expect(corpo.error.code).toBe("budget_exceeded");
-    expect(corpo.error.message).toMatch(/orçamento de IA/);
+    expect(corpo.error.message).toMatch(/limite de segurança de IA/);
     expect(deps.sintetizarVoz).not.toHaveBeenCalled();
     expect(deps.registrarCustoDeVoz).not.toHaveBeenCalled();
   });

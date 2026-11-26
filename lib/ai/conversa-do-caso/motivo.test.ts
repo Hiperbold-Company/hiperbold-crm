@@ -25,7 +25,7 @@ describe("motivoDaConversaDoCaso", () => {
     // novo seria mandar a pessoa bater na mesma porta até desistir.
     const m = motivoDaConversaDoCaso(new LlmBudgetExceededError());
     expect(m.codigo).toBe("orcamento_esgotado");
-    expect(m.texto).toContain("Uso de IA › Orçamento");
+    expect(m.texto).toContain("limite de segurança");
   });
 
   it("modelo não habilitado e provider desconhecido caem no MESMO código", () => {

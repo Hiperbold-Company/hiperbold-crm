@@ -889,15 +889,11 @@ export const NAV_CATALOG = [
     // Idem: fora da sidebar para o menu não passar da dobra. Quem vem para cá
     // está diagnosticando, e chega pelo hub ou pelo link do aviso na Central.
   },
-  {
-    href: "/app/ai/usage",
-    label: "Uso e orçamento",
-    description: "Quanto a IA consumiu e qual é o teto de gasto do mês.",
-    icon: "Gauge",
-    group: "ia",
-    section: "Acompanhar o agente",
-    minRole: "manager",
-  },
+  // "/app/ai/usage" (Uso e orçamento) saiu do catálogo em 25/11/2026, por decisão do dono do
+  // produto: o cliente é cobrado em TOKENS, e a tela mostrava o consumo em DÓLAR. O consumo mora
+  // em "Meu plano e consumo de IA" (`/app/settings/plano`), as métricas técnicas do agente na aba
+  // "Agentes de IA" de Desempenho, e o custo em dólar só no painel da plataforma. O endereço
+  // segue vivo como redirect, para link salvo e aviso antigo não darem 404.
 
   // ---- Canais — por onde as mensagens entram e saem ----
   {
@@ -1285,10 +1281,13 @@ export const NAV_CATALOG = [
     // `hiperbold/planos/fase-F2-tarefas.md`). A tela antiga "Billing" (placeholder do
     // produto de origem) saiu do catálogo em 15/10/2026: `/app/settings/billing` só
     // redireciona para cá. Renomeada de "Plano e uso" por feedback do dono: leigo
-    // procura "meu plano", não "uso".
+    // procura "meu plano", não "uso". Em 25/11/2026 virou "Meu plano e consumo de IA":
+    // é o lugar ÚNICO do consumo de IA, em tokens (a antiga "Uso e orçamento" saiu).
+    // Os `termos` acham a tela por quem ainda procura pelo nome antigo.
     href: "/app/settings/plano",
-    label: "Meu plano",
-    description: "Plano contratado, pagamento, uso e cancelamento.",
+    label: "Meu plano e consumo de IA",
+    description: "Plano contratado, pagamento, consumo de tokens de IA e cancelamento.",
+    termos: ["consumo", "tokens", "uso de ia", "uso e orçamento", "orçamento", "gasto de ia"],
     icon: "Gauge",
     group: "organizacao",
     section: "Sua empresa",

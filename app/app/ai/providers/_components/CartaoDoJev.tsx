@@ -990,14 +990,6 @@ function Ligado({
   const [aConfirmar, setAConfirmar] = useState<{ tarefa: TarefaNoCartao; aberto: boolean } | null>(null);
   const n = dados.numeros;
 
-  // `cost_cents` é centavo de DÓLAR, e o Jev custa fração de centavo por
-  // mensagem: com 2 casas a semana inteira mostraria "US$ 0,00".
-  const usd = new Intl.NumberFormat(tagDoIdioma, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 6,
-  });
   const segundos = new Intl.NumberFormat(tagDoIdioma, { maximumFractionDigits: 1 });
   const inteiro = new Intl.NumberFormat(tagDoIdioma);
   // Só com o Jev medindo de verdade a linha de cada tarefa mostra o estado e o
@@ -1289,7 +1281,7 @@ function Ligado({
         </p>
         {/* As colunas seguem a largura do CARTÃO, não a da tela: com a barra
             lateral aberta, um tablet de 800 px dava 3 colunas de 117 px e
-            partia "US$ 0,000049" (130 px) em duas linhas. 9rem cabe o número
+            partia o número mais largo em duas linhas. 9rem cabe o número
             mais largo; abaixo disso a coluna desce para a linha seguinte. */}
         <dl
           className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-6 gap-y-3 border-t border-border pt-3"
@@ -1299,10 +1291,6 @@ function Ligado({
               do cliente rende uma resposta por tarefa. */}
           <Numero rotulo={t("Respostas do Jev")} valor={inteiro.format(n.decisoes)} />
           <Numero rotulo={t("Clientes irritados percebidos")} valor={inteiro.format(n.irritados)} />
-          <Numero
-            rotulo={t("Custo")}
-            valor={n.custo_cents === null ? "—" : usd.format(n.custo_cents / 100)}
-          />
           <Numero
             rotulo={t("Tempo médio")}
             valor={n.latencia_media_ms === null ? "—" : `${segundos.format(n.latencia_media_ms / 1000)} s`}
@@ -1314,13 +1302,6 @@ function Ligado({
             <Numero rotulo={t("Vezes que a IA de sempre cobriu o Jev")} valor={inteiro.format(n.reservas)} />
           )}
         </dl>
-        {n.custo_incompleto && (
-          <p className="mt-2 text-xs text-muted-foreground" data-testid="jev-custo-parcial">
-            {t(
-              "Parte das medições veio de uma versão do Jev sem preço conhecido: o custo mostrado soma só as outras.",
-            )}
-          </p>
-        )}
       </div>
 
       {falha && (

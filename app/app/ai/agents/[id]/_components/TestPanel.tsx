@@ -290,7 +290,6 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
                 {result.tokens_in?.toLocaleString()??"—"} /{" "}
                 {result.tokens_out?.toLocaleString()??"—"}
               </Cell>
-              <Cell label={t("Custo (cents)")}>{result.cost_cents ?? "—"}</Cell>
             </div>
 
             <RunTrace

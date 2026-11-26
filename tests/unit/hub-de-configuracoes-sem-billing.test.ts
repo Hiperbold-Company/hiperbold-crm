@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import AiUsagePage from "@/app/app/ai/usage/page";
 import BillingPage from "@/app/app/settings/billing/page";
 import { NAV_DESTINATIONS, hubSections, searchable } from "@/lib/navigation/registry";
 
@@ -30,13 +31,39 @@ describe("/app/settings/billing", () => {
   });
 });
 
+// 25/11/2026 (decisão do dono do produto): o consumo de IA mora num lugar só, em tokens, em
+// Meu plano e consumo de IA. A tela "Uso e orçamento" (em dólar) saiu do menu, do hub e do ⌘K;
+// o endereço segue vivo só para link salvo, aviso antigo e ajuda.
+describe("/app/ai/usage", () => {
+  it("redireciona para /app/settings/plano e não é mais destino de navegação", () => {
+    let destino = "";
+    try {
+      AiUsagePage();
+    } catch (e) {
+      destino = String((e as { digest?: string }).digest ?? "");
+    }
+    expect(destino).toContain("NEXT_REDIRECT");
+    expect(destino).toContain("/app/settings/plano");
+
+    expect(NAV_DESTINATIONS.map((d) => d.href)).not.toContain("/app/ai/usage");
+    expect(searchable(true, "admin").map((d) => d.href)).not.toContain("/app/ai/usage");
+    const hub = hubSections("ia", true, "admin").flatMap((s) => s.items.map((i) => i.href));
+    expect(hub).not.toContain("/app/ai/usage");
+  });
+
+  it("quem procura pelo nome antigo no ⌘K acha Meu plano e consumo de IA", () => {
+    const plano = searchable(true, "manager").find((d) => d.href === "/app/settings/plano");
+    expect(plano?.termos).toEqual(expect.arrayContaining(["uso e orçamento", "tokens"]));
+  });
+});
+
 describe("nomes do hub", () => {
   const por = (href: string) => NAV_DESTINATIONS.find((d) => d.href === href)!;
 
-  it("Meu plano", () => {
-    expect(por("/app/settings/plano").label).toBe("Meu plano");
+  it("Meu plano e consumo de IA (25/11/2026: o consumo de IA mora aqui, em tokens)", () => {
+    expect(por("/app/settings/plano").label).toBe("Meu plano e consumo de IA");
     expect(por("/app/settings/plano").description).toBe(
-      "Plano contratado, pagamento, uso e cancelamento.",
+      "Plano contratado, pagamento, consumo de tokens de IA e cancelamento.",
     );
   });
 

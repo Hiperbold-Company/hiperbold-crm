@@ -121,7 +121,7 @@ export class LlmBudgetExceededError extends Error {
   readonly terminal = true;
   /** `motivo` só muda no teto do PLANO (`MOTIVO_TETO_DO_PLANO`); o padrão é o do orçamento da org. */
   constructor(
-    motivo = 'orçamento mensal de IA da organização atingido — chamada recusada antes de sair byte para o provedor; ajuste o teto em Uso de IA › Orçamento, desligue a proteção, ou aguarde a virada do mês (agent_inbox_items kind=budget_exceeded)',
+    motivo = 'orçamento mensal de IA da organização atingido (limite de segurança) — chamada recusada antes de sair byte para o provedor; peça ao suporte da plataforma para ampliar o limite, ou aguarde a virada do mês (agent_inbox_items kind=budget_exceeded)',
   ) {
     super(motivo);
   }

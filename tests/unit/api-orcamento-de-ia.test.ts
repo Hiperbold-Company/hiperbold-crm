@@ -1,6 +1,11 @@
 /**
  * A ROTA QUE ESCREVE O TETO — que até aqui não tinha teste NENHUM.
  *
+ * Desde 25/11/2026 o teto é trava de segurança que só o admin da plataforma
+ * ajusta: a escrita mora em `PATCH /api/v1/admin/tenants/[id]/ai-budget`
+ * (organização do PATH) e `PATCH /api/v1/ai/budget` da empresa responde 403
+ * para qualquer papel. As regras abaixo são exercidas pela rota do admin.
+ *
  * `ls app/api/v1/ai/budget/` devolvia só `route.ts`, e o único hit de
  * "api/v1/ai/budget" fora dela era `scripts/qa-wave-11.ts`, que nenhum job de CI
  * invoca. Uma mudança de semântica nesta rota atravessava `verify`,
@@ -26,21 +31,43 @@ import { NextRequest } from "next/server";
 import { fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { requirePlatformAdminEscrita } from "@/lib/auth/requirePlatformAdmin";
 import { getBudgetStatus, type BudgetStatus } from "@/lib/ai/budget/check";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ROLE_RANK, type AuthUser, type Role } from "@/lib/auth/types";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
+vi.mock("@/lib/auth/requirePlatformAdmin", async () => {
+  const { fail: falha } = await import("@/lib/api/wrappers");
+  return {
+    requirePlatformAdmin: vi.fn(),
+    requirePlatformAdminEscrita: vi.fn(),
+    falhaDaEscritaDePlatformAdmin: (err: unknown) =>
+      falha(err instanceof Error && err.message === "forbidden_scope" ? "forbidden_scope" : "forbidden", "Platform admin required", 403, {}),
+  };
+});
+vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/ai/budget/check", () => ({ getBudgetStatus: vi.fn() }));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
+/** Outra empresa — a que o admin da plataforma está olhando no painel. */
+const OUTRA_ORG = "33333333-3333-4333-8333-333333333333";
 const ADMIN = "11111111-1111-4111-8111-111111111111";
 
 const H72_MS = 72 * 60 * 60 * 1000;
 
-function sessao(papel: Role) {
+/** Sessão de admin da PLATAFORMA, escopo `full` — quem escreve o teto. */
+function sessaoDePlataforma() {
+  vi.mocked(requirePlatformAdminEscrita).mockResolvedValue({
+    user: { id: ADMIN, user_metadata: {} },
+    platformAdmin: { user_id: ADMIN, scope: "full", mfa_required: false },
+  } as unknown as Awaited<ReturnType<typeof requirePlatformAdminEscrita>>);
+}
+
+/** Sessão de um usuário da EMPRESA, com o papel dado. */
+function sessaoDaEmpresa(papel: Role) {
   const user: AuthUser = {
     id: ADMIN,
     email: "admin@example.com",
@@ -71,22 +98,36 @@ interface Escrita {
 function fazerAdmin(opts: {
   linha: Record<string, unknown> | null;
   itensAbertos?: number;
+  /** `false` = a organização do path não existe. */
+  orgExiste?: boolean;
 }) {
   const escritas: Escrita[] = [];
   /** Os filtros `.or()` aplicados — quem o retrato alcança mora aí. */
   const filtrosOr: string[] = [];
+  /** Os `.eq()` por tabela — é aqui que se vê de QUAL organização foi a escrita. */
+  const filtrosEq: Array<{ tabela: string; coluna: string; valor: unknown }> = [];
   const from = (tabela: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chain: any = {
       select: () => chain,
-      eq: () => chain,
+      eq: (coluna: string, valor: unknown) => {
+        filtrosEq.push({ tabela, coluna, valor });
+        return chain;
+      },
       in: () => chain,
       or: (filtro: string) => {
         filtrosOr.push(filtro);
         return chain;
       },
       maybeSingle: async () => ({
-        data: tabela === "ai_budgets" ? opts.linha : null,
+        data:
+          tabela === "ai_budgets"
+            ? opts.linha
+            : tabela === "organizations"
+              ? opts.orgExiste === false
+                ? null
+                : { id: "org" }
+              : null,
         error: null,
       }),
       update: (payload: Record<string, unknown>) => {
@@ -108,7 +149,7 @@ function fazerAdmin(opts: {
     };
     return chain;
   };
-  return { cliente: { from }, escritas, filtrosOr };
+  return { cliente: { from }, escritas, filtrosOr, filtrosEq };
 }
 
 function estadoDaTela(over: Partial<BudgetStatus> = {}): BudgetStatus {
@@ -130,7 +171,21 @@ function estadoDaTela(over: Partial<BudgetStatus> = {}): BudgetStatus {
   };
 }
 
-async function patch(body: unknown): Promise<Response> {
+/** O PATCH do ADMIN DA PLATAFORMA, com a organização no path. */
+async function patch(body: unknown, orgId: string = ORG): Promise<Response> {
+  const { PATCH } = await import("@/app/api/v1/admin/tenants/[id]/ai-budget/route");
+  return PATCH(
+    new NextRequest(`http://localhost/api/v1/admin/tenants/${orgId}/ai-budget`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    }),
+    { params: Promise.resolve({ id: orgId }) },
+  );
+}
+
+/** O PATCH da EMPRESA — que não escreve mais nada. */
+async function patchDaEmpresa(body: unknown): Promise<Response> {
   const { PATCH } = await import("@/app/api/v1/ai/budget/route");
   return PATCH(
     new NextRequest("http://localhost/api/v1/ai/budget", {
@@ -153,24 +208,102 @@ beforeEach(() => {
   vi.mocked(getBudgetStatus).mockResolvedValue(estadoDaTela());
 });
 
-describe("PATCH /api/v1/ai/budget", () => {
-  describe("quem pode mexer", () => {
-    for (const papel of ["viewer", "agent", "manager"] as const) {
-      it(`${papel} recebe 403 — mexer no teto é decisão de admin`, async () => {
-        sessao(papel);
-        const { cliente } = fazerAdmin({ linha: null });
-        vi.mocked(createAdminClient).mockReturnValue(
-          cliente as unknown as ReturnType<typeof createAdminClient>,
-        );
-        const res = await patch({ monthly_limit_cents: 10_000 });
-        expect(res.status).toBe(403);
-      });
-    }
+describe("quem pode mexer no teto — só o admin da plataforma", () => {
+  for (const papel of ["viewer", "agent", "manager", "admin"] as const) {
+    it(`${papel} da empresa recebe 403 em PATCH /api/v1/ai/budget, sem escrita e sem auditoria`, async () => {
+      sessaoDaEmpresa(papel);
+      const { cliente, escritas } = fazerAdmin({ linha: null });
+      vi.mocked(createAdminClient).mockReturnValue(
+        cliente as unknown as ReturnType<typeof createAdminClient>,
+      );
+      const res = await patchDaEmpresa({ enforcement_mode: "off", monthly_limit_cents: 0 });
+      expect(res.status).toBe(403);
+      expect(escritas).toEqual([]);
+      expect(vi.mocked(audit)).not.toHaveBeenCalled();
+    });
+  }
+
+  it("admin da plataforma grava o teto de OUTRA empresa, pela organização do path", async () => {
+    sessaoDePlataforma();
+    const { cliente, escritas, filtrosEq } = fazerAdmin({
+      linha: {
+        monthly_limit_cents: 5000,
+        alarm_threshold_pct: 80,
+        enforcement_mode: "avisar",
+        enforcement_effective_at: null,
+      },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(
+      cliente as unknown as ReturnType<typeof createAdminClient>,
+    );
+
+    const res = await patch({ monthly_limit_cents: 20_000 }, OUTRA_ORG);
+
+    expect(res.status).toBe(200);
+    const noTeto = escritas.filter((e) => e.tabela === "ai_budgets");
+    expect(noTeto).toHaveLength(1);
+    expect(noTeto[0]).toMatchObject({ op: "update", payload: { monthly_limit_cents: 20_000 } });
+    expect(
+      filtrosEq.filter((f) => f.tabela === "ai_budgets" && f.coluna === "organization_id").map((f) => f.valor),
+    ).toEqual([OUTRA_ORG, OUTRA_ORG]); // a leitura do estado e o update
+    expect(vi.mocked(audit)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: ADMIN,
+        organizationId: OUTRA_ORG,
+        actingAsPlatformAdmin: true,
+        action: "ai.budget_limit_changed",
+      }),
+    );
   });
+
+  it("organization_id no corpo é ignorado: a escrita só alcança a organização do path", async () => {
+    sessaoDePlataforma();
+    const { cliente, filtrosEq } = fazerAdmin({ linha: null });
+    vi.mocked(createAdminClient).mockReturnValue(
+      cliente as unknown as ReturnType<typeof createAdminClient>,
+    );
+
+    const res = await patch({ monthly_limit_cents: 0, organization_id: ORG }, OUTRA_ORG);
+
+    expect(res.status).toBe(200);
+    const orgsTocadas = new Set(filtrosEq.filter((f) => f.coluna === "organization_id").map((f) => f.valor));
+    expect([...orgsTocadas]).toEqual([OUTRA_ORG]);
+    expect(vi.mocked(audit)).toHaveBeenCalledWith(expect.objectContaining({ organizationId: OUTRA_ORG }));
+  });
+
+  it("admin da plataforma sem escopo full recebe 403, sem escrita", async () => {
+    vi.mocked(requirePlatformAdminEscrita).mockRejectedValue(new Error("forbidden_scope"));
+    const { cliente, escritas } = fazerAdmin({ linha: null });
+    vi.mocked(createAdminClient).mockReturnValue(
+      cliente as unknown as ReturnType<typeof createAdminClient>,
+    );
+
+    const res = await patch({ monthly_limit_cents: 10_000 }, OUTRA_ORG);
+
+    expect(res.status).toBe(403);
+    expect(escritas).toEqual([]);
+    expect(vi.mocked(audit)).not.toHaveBeenCalled();
+  });
+
+  it("organização do path que não existe é 404, sem escrita", async () => {
+    sessaoDePlataforma();
+    const { cliente, escritas } = fazerAdmin({ linha: null, orgExiste: false });
+    vi.mocked(createAdminClient).mockReturnValue(
+      cliente as unknown as ReturnType<typeof createAdminClient>,
+    );
+
+    const res = await patch({ monthly_limit_cents: 10_000 }, OUTRA_ORG);
+
+    expect(res.status).toBe(404);
+    expect(escritas).toEqual([]);
+  });
+});
+
+describe("PATCH /api/v1/admin/tenants/[id]/ai-budget", () => {
 
   describe("a escada — a fase de aviso não é pulável", () => {
     it("off → bloquear é 422, não 500 e não sucesso", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -194,7 +327,7 @@ describe("PATCH /api/v1/ai/budget", () => {
     });
 
     it("avisar → bloquear grava a carência de 72h", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -220,7 +353,7 @@ describe("PATCH /api/v1/ai/budget", () => {
     });
 
     it("confirmar_imediato renuncia à carência — e é escolha explícita, não default", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -245,7 +378,7 @@ describe("PATCH /api/v1/ai/budget", () => {
 
   describe("o piso — armado sem valor útil não passa pela porta da frente", () => {
     it("armar com teto de US$ 0,50 é 422 e nomeia o piso", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -271,7 +404,7 @@ describe("PATCH /api/v1/ai/budget", () => {
       // O piso é resolvido sobre o estado PÓS-escrita: sem isso, bastaria armar
       // hoje com teto válido e zerar o teto amanhã, num PATCH que não fala de
       // modo nenhum.
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -294,7 +427,7 @@ describe("PATCH /api/v1/ai/budget", () => {
   describe("o limiar recusado pelo Zod, e não pelo CHECK do banco", () => {
     for (const pct of [30, 100]) {
       it(`alarm_threshold_pct ${pct} é 422 de validação (não 500)`, async () => {
-        sessao("admin");
+        sessaoDePlataforma();
         const { cliente, escritas } = fazerAdmin({ linha: null });
         vi.mocked(createAdminClient).mockReturnValue(
           cliente as unknown as ReturnType<typeof createAdminClient>,
@@ -311,7 +444,7 @@ describe("PATCH /api/v1/ai/budget", () => {
 
   describe("a linha que nasce pela tela não herda o DEFAULT 5000", () => {
     it("organização sem linha grava o teto EXPLÍCITO que veio no payload", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({ linha: null });
       vi.mocked(createAdminClient).mockReturnValue(
         cliente as unknown as ReturnType<typeof createAdminClient>,
@@ -329,7 +462,7 @@ describe("PATCH /api/v1/ai/budget", () => {
       // `DEFAULT 5000` é o valor que ninguém escolheu — é a confusão que a 0159
       // desfez. Deixá-lo entrar pela porta de escrita a recriaria: a tela
       // passaria a mostrar "US$ 50,00" para quem só mexeu no percentual.
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({ linha: null });
       vi.mocked(createAdminClient).mockReturnValue(
         cliente as unknown as ReturnType<typeof createAdminClient>,
@@ -346,7 +479,7 @@ describe("PATCH /api/v1/ai/budget", () => {
 
   describe("auditoria — mexer no teto deixa rastro", () => {
     it("armar emite ai.budget_enforcement_armed com antes/depois", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -373,7 +506,7 @@ describe("PATCH /api/v1/ai/budget", () => {
     });
 
     it("desarmar emite ai.budget_enforcement_disarmed", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -393,7 +526,7 @@ describe("PATCH /api/v1/ai/budget", () => {
     });
 
     it("mudar só o teto emite ai.budget_limit_changed com os dois valores", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -417,7 +550,7 @@ describe("PATCH /api/v1/ai/budget", () => {
 
   describe("o laço de retorno — afrouxar fecha o alerta na hora", () => {
     it("desarmar resolve os budget_exceeded/budget_warning abertos", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas, filtrosOr } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -450,7 +583,7 @@ describe("PATCH /api/v1/ai/budget", () => {
     });
 
     it("apertar com gasto acima do limiar NÃO retrata aviso nenhum", async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -489,7 +622,7 @@ describe("o piso guarda `avisar` também — o aviso permanente e falso", () => 
    * US$ 0,00" — avisar de quê?
    */
   it("avisar com teto 0 é 422, sem escrita e sem auditoria", async () => {
-    sessao("admin");
+    sessaoDePlataforma();
     const { cliente, escritas } = fazerAdmin({ linha: null });
     vi.mocked(createAdminClient).mockReturnValue(
       cliente as unknown as ReturnType<typeof createAdminClient>,
@@ -507,7 +640,7 @@ describe("o piso guarda `avisar` também — o aviso permanente e falso", () => 
     // Este é o caminho exato da tela numa instalação nova: o campo pré-preenche
     // "0.00" e o usuário só clica no radio. `tetoDepois` cai em 0 e o 422 tem de
     // pegá-lo pelo estado PÓS-escrita, não pela presença do campo no payload.
-    sessao("admin");
+    sessaoDePlataforma();
     const { cliente, escritas } = fazerAdmin({ linha: null });
     vi.mocked(createAdminClient).mockReturnValue(
       cliente as unknown as ReturnType<typeof createAdminClient>,
@@ -522,7 +655,7 @@ describe("o piso guarda `avisar` também — o aviso permanente e falso", () => 
   it("já em `avisar`, derrubar o teto para 0 depois também é 422", async () => {
     // "Armado sem valor útil" renascendo pela porta de trás: mudar só o modo
     // hoje e derrubar o teto amanhã.
-    sessao("admin");
+    sessaoDePlataforma();
     const { cliente, escritas } = fazerAdmin({
       linha: {
         monthly_limit_cents: 5000,
@@ -545,7 +678,7 @@ describe("o piso guarda `avisar` também — o aviso permanente e falso", () => 
     // "Só acompanhar sem limite" é um estado legítimo — é a opção que existe
     // exatamente para isso. Um piso que a barrasse tiraria da pessoa a única
     // saída honesta.
-    sessao("admin");
+    sessaoDePlataforma();
     const { cliente, escritas } = fazerAdmin({
       linha: {
         monthly_limit_cents: 5000,
@@ -581,7 +714,7 @@ describe("desarmar devolve a carência inteira — a coluna NÃO fica pré-gasta
    */
   for (const destino of ["off", "avisar"] as const) {
     it(`bloquear → ${destino} grava enforcement_effective_at: null`, async () => {
-      sessao("admin");
+      sessaoDePlataforma();
       const { cliente, escritas } = fazerAdmin({
         linha: {
           monthly_limit_cents: 5000,
@@ -609,7 +742,7 @@ describe("desarmar devolve a carência inteira — a coluna NÃO fica pré-gasta
 
   it("armar de novo, depois, volta a gravar as 72h inteiras", async () => {
     // Controle positivo: zerar ao desarmar não pode virar "nunca mais grava".
-    sessao("admin");
+    sessaoDePlataforma();
     const { cliente, escritas } = fazerAdmin({
       linha: {
         monthly_limit_cents: 5000,
@@ -634,7 +767,7 @@ describe("desarmar devolve a carência inteira — a coluna NÃO fica pré-gasta
   it("mexer só no teto de quem já está armado NÃO adia a parada", async () => {
     // Senão bastaria salvar o diálogo para empurrar por mais 72h uma parada que
     // já vale.
-    sessao("admin");
+    sessaoDePlataforma();
     const { cliente, escritas } = fazerAdmin({
       linha: {
         monthly_limit_cents: 5000,

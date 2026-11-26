@@ -1,5 +1,9 @@
 /**
- * Configurações → Meu plano (antes "Plano e uso"; fase F2 dos planos de assinatura, tarefa 7).
+ * Configurações → Meu plano e consumo de IA (antes "Meu plano", e antes ainda "Plano e uso";
+ * fase F2 dos planos de assinatura, tarefa 7). Desde 25/11/2026 é o lugar ÚNICO do consumo de
+ * IA da organização, em TOKENS: a antiga tela "Uso e orçamento" (`/app/ai/usage`, em dólar)
+ * virou redirect para cá, as métricas técnicas do agente foram para Desempenho › Agentes de IA,
+ * e o custo em dólar ficou só no painel da plataforma. Nenhum valor em dólar nesta tela.
  *
  * ── O que esta tela mostra, e o que ela NÃO faz ainda ────────────────────────
  *
@@ -107,8 +111,9 @@ import { tagDeIdioma } from "@/lib/i18n/datas";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
+import { GraficoDeTokensPorDia } from "./_grafico-tokens-por-dia";
 
-export const metadata = { title: "Meu plano" };
+export const metadata = { title: "Meu plano e consumo de IA" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -230,9 +235,9 @@ export default async function PlanoEUsoPage() {
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Meu plano")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Meu plano e consumo de IA")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          {t("Quanto sua organização usa de cada item do plano contratado.")}
+          {t("Quanto sua organização usa de cada item do plano contratado, e quantos tokens de IA já consumiu no mês.")}
         </p>
         <LinkDeAjudaDaTela />
         {/* Sem plano (D-094 revisto), o contrato guarda um plano só como chave da linha: não o exibe. */}
@@ -869,10 +874,17 @@ function SecaoTokensDeIA({
         {extratoPorDia.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("Nenhum consumo registrado neste ciclo ainda.")}</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            <ExtratoPorDia linhas={extratoPorDia} t={t} tagDoIdioma={tagDoIdioma} />
-            <ExtratoPorAgente linhas={extratoPorAgente} t={t} tagDoIdioma={tagDoIdioma} />
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">{t("Tokens por dia")}</span>
+              {/* A tabela vem do dia mais recente para o mais antigo; o gráfico lê da esquerda para a direita. */}
+              <GraficoDeTokensPorDia dias={[...extratoPorDia].sort((a, b) => a.dia.localeCompare(b.dia))} />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <ExtratoPorDia linhas={extratoPorDia} t={t} tagDoIdioma={tagDoIdioma} />
+              <ExtratoPorAgente linhas={extratoPorAgente} t={t} tagDoIdioma={tagDoIdioma} />
+            </div>
+          </>
         )}
       </div>
     </>

@@ -1,6 +1,6 @@
 {
   "id": "plano-e-cobranca",
-  "titulo": "Meu plano",
+  "titulo": "Meu plano e consumo de IA",
   "tela": "/app/settings/plano",
   "resumo": "Onde você vê o plano da sua empresa, a situação da assinatura, quanto do plano já usa, o consumo de IA do mês e onde assina, compra tokens ou cancela.",
   "licoes": [
@@ -24,7 +24,7 @@
         {
           "id": "p1",
           "titulo": "Onde fica a tela",
-          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Sua empresa\" está o cartão \"Meu plano\". Clique nele.",
+          "texto": "Abra \"Configurações\", no rodapé do menu lateral. Na parte \"Sua empresa\" está o cartão \"Meu plano e consumo de IA\". Clique nele.",
           "dica": "Administrador e gerente abrem esta tela. O atendente que digitar o endereço cai na página \"Sem permissão\".",
           "rota": "/app/settings",
           "antes": [],
@@ -33,7 +33,7 @@
               "alvo": {
                 "css": "a[href='/app/settings/plano']"
               },
-              "rotulo": "Meu plano",
+              "rotulo": "Meu plano e consumo de IA",
               "tipo": "seta"
             }
           ],
@@ -57,7 +57,7 @@
               "acao": "aguardar",
               "alvo": {
                 "role": "heading",
-                "nome": "Meu plano",
+                "nome": "Meu plano e consumo de IA",
                 "exato": true
               }
             }
@@ -159,7 +159,7 @@
               "acao": "aguardar",
               "alvo": {
                 "role": "heading",
-                "nome": "Meu plano",
+                "nome": "Meu plano e consumo de IA",
                 "exato": true
               }
             }
