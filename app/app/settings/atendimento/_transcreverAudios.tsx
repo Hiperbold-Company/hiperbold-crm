@@ -19,8 +19,8 @@ export function TranscreverAudios({ ligada, podeMudar, idioma }: { ligada: boole
     <div className="flex items-start justify-between gap-4">
       <div className="flex flex-col gap-1">
         <Label htmlFor="transcrever_audios">{t('Transcrever áudios')}</Label>
-        <p className="max-w-2xl text-xs text-muted-foreground">{t('Cada minuto de áudio transcrito pela chave da plataforma desconta 6.000 tokens do plano. Com a chave da própria empresa em Provedores de IA, nada é descontado do plano.')}</p>
-        <p className="text-xs">{valor ? t('Ligado: os áudios recebidos viram texto na conversa e o agente de IA lê a transcrição.') : t('Desligado: o áudio fica na conversa sem texto, e o agente de IA não recebe a transcrição.')}</p>
+        <p className="max-w-2xl text-xs text-muted-foreground">{t('Cada minuto de áudio transcrito pela chave da plataforma desconta 6.000 tokens do plano, e cada áudio conta no máximo 10 minutos. Vale também para a fala dos vídeos. Com a chave da própria empresa em Provedores de IA, nada é descontado do plano.')}</p>
+        <p className="text-xs">{valor ? t('Ligado: os áudios recebidos e a fala dos vídeos viram texto na conversa, e o agente de IA lê a transcrição.') : t('Desligado: o áudio e a fala dos vídeos ficam na conversa sem texto, e o agente de IA não recebe a transcrição (os vídeos ainda são lidos pelas imagens).')}</p>
       </div>
       <Switch id="transcrever_audios" checked={valor} disabled={pendente || !podeMudar}
         onCheckedChange={(novo) => startTransition(async () => {

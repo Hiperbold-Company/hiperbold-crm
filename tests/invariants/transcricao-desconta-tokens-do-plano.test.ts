@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { sql } from "./psql-transporte";
+import { motivoDoErro, sql } from "./psql-transporte";
 
 /**
  * A TRANSCRIÇÃO DE ÁUDIO DESCONTA TOKENS DO PLANO (migration 1025).
@@ -33,6 +33,7 @@ const ORG_ISO_A = "10250000-0000-4000-8000-000000000005";
 const ORG_ISO_B = "10250000-0000-4000-8000-000000000006";
 const USER_ISO_A_MANAGER = "10250000-1111-4000-8000-000000000001";
 const ORG_PENDENTE = "10250000-0000-4000-8000-000000000007";
+const ORG_TETO = "10250000-0000-4000-8000-000000000008";
 
 const MARCA = "SONDA|";
 
@@ -200,5 +201,51 @@ describe("6. O conferidor acha a transcrição que o gatilho não debitou", () =
       `select 'SONDA|' || public.fn_billing_debitar_chamada(p) from public.fn_billing_debitos_pendentes('${ORG_PENDENTE}'::uuid) p;`,
     );
     expect(debitoDaChamada("t-pendente")).toBe(4500);
+  });
+});
+
+describe("7. Cada áudio cobra no máximo 10 minutos", () => {
+  beforeAll(() => {
+    comoServico(`
+      ${criarOrgSql(ORG_TETO, "transcricao-teto")}
+      ${transcricao(ORG_TETO, "t-7200", 7200)}
+      ${transcricao(ORG_TETO, "t-600", 600)}
+      ${transcricao(ORG_TETO, "t-601", 601)}
+      ${transcricao(ORG_TETO, "t-599", 599)}
+    `);
+  });
+
+  it("áudio de 7200 s desconta 60.000 (600 s x 6.000 / 60), e 601 s também", () => {
+    expect(debitoDaChamada("t-7200")).toBe(60000);
+    expect(debitoDaChamada("t-601")).toBe(60000);
+  });
+
+  it("no teto exato (600 s) desconta 60.000; abaixo dele segue proporcional (599 s = 59.900)", () => {
+    expect(debitoDaChamada("t-600")).toBe(60000);
+    expect(debitoDaChamada("t-599")).toBe(59900);
+  });
+});
+
+describe("8. A coluna audio_seconds recusa valor absurdo", () => {
+  function erroDoInsert(valor: string): string | null {
+    try {
+      sql(
+        `${criarOrgSql(ORG_TETO, "transcricao-teto")}
+         insert into public.llm_calls (organization_id, purpose, provider, model, input_tokens, output_tokens, origem_da_chave, status, audio_seconds)
+         values ('${ORG_TETO}', 'transcricao_de_audio', 'openrouter', 'recusado', 0, 0, 'chave_da_instalacao', 'ok', ${valor});`,
+      );
+      return null;
+    } catch (err) {
+      return motivoDoErro(err);
+    }
+  }
+
+  it.each([["'NaN'"], ["90000"], ["-1"]])("recusa %s", (valor) => {
+    expect(erroDoInsert(valor)).toContain("llm_calls_audio_seconds_check");
+  });
+
+  it("86400 (24 h) e nulo continuam aceitos", () => {
+    expect(erroDoInsert("86400")).toBeNull();
+    expect(erroDoInsert("null")).toBeNull();
   });
 });

@@ -85,6 +85,26 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
+// ffmpeg falso: o módulo de vídeo é o REAL, só o binário é trocado — o falso
+// escreve no diretório de trabalho o que o comando pediria (a faixa de som ou
+// os quadros) e termina com sucesso.
+vi.mock("@/lib/messaging/media/video-derive", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/messaging/media/video-derive")>();
+  const { writeFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  return {
+    ...real,
+    deriveVideoText: (buffer: Buffer, deps: Parameters<typeof real.deriveVideoText>[1]) =>
+      real.deriveVideoText(buffer, {
+        ...deps,
+        runFfmpeg: async (args: string[], cwd: string) => {
+          if (args.includes("audio.ogg")) await writeFile(join(cwd, "audio.ogg"), Buffer.from([1, 2, 3]));
+          else await writeFile(join(cwd, "frame-01.jpg"), Buffer.from([1]));
+        },
+      }),
+  };
+});
+
 vi.mock("@/lib/messaging/media/derive", () => ({
   deriveMediaText: vi.fn(async () => "derivado de mentira"),
 }));
@@ -504,6 +524,28 @@ describe("interruptor da empresa \"Transcrever áudios\"", () => {
     await depsDaChamada().transcriber.transcribe(Buffer.from("ogg"), "audio/ogg");
 
     expect(transcribeDoSvcMock).toHaveBeenCalled();
+  });
+
+  it("vídeo com o interruptor desligado lê os quadros e NÃO transcreve a fala", async () => {
+    linhaDaMensagem = { ...linhaDaMensagem, type: "video", media_mime: "video/mp4", media_storage_path: "org1/conv1/msg1.mp4" };
+    settingsDaOrg = { crm: { transcrever_audios: false } };
+
+    await deriveMessageMedia(eventRow());
+    const texto = await depsDaChamada().deriveVideo!(Buffer.from("mp4"), "video/mp4");
+
+    expect(transcribeDoSvcMock).not.toHaveBeenCalled();
+    expect(texto).toContain("Cenas do vídeo:");
+    expect(texto).not.toContain("Transcrição do áudio do vídeo");
+  });
+
+  it("vídeo com o interruptor ligado transcreve a fala", async () => {
+    linhaDaMensagem = { ...linhaDaMensagem, type: "video", media_mime: "video/mp4", media_storage_path: "org1/conv1/msg1.mp4" };
+
+    await deriveMessageMedia(eventRow());
+    const texto = await depsDaChamada().deriveVideo!(Buffer.from("mp4"), "video/mp4");
+
+    expect(transcribeDoSvcMock).toHaveBeenCalledTimes(1);
+    expect(texto).toContain("Transcrição do áudio do vídeo: transcrição de mentira");
   });
 
   it("desligado não alcança a imagem: a visão continua", async () => {

@@ -105741,11 +105741,14 @@ do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'llm_calls_audio_seconds_check') then
     alter table public.llm_calls
-      add constraint llm_calls_audio_seconds_check check (audio_seconds is null or audio_seconds >= 0);
+      add constraint llm_calls_audio_seconds_check check (audio_seconds is null or (audio_seconds >= 0 and audio_seconds <= 86400)) not valid;
   end if;
 end
 $$;
 
+-- `not valid`: a coluna nasce nula em toda linha antiga, então nada a
+-- validar, e a varredura de llm_calls sob trava fica de fora. A constraint vale
+-- para toda linha nova (NaN e mais de 24 h são recusados).
 comment on column public.llm_calls.audio_seconds is
   '1025: duração do áudio transcrito, em segundos, informada pelo serviço de transcrição. Base do débito da transcrição na carteira (fn_billing_ponderado_da_chamada). Nula = desconhecida ou não é transcrição.';
 
@@ -105767,6 +105770,23 @@ comment on function public.fn_billing_tokens_por_minuto_de_audio() is
 
 revoke execute on function public.fn_billing_tokens_por_minuto_de_audio() from public, anon, authenticated;
 grant execute on function public.fn_billing_tokens_por_minuto_de_audio() to service_role;
+
+-- O TETO por áudio, também num lugar só e com nome: cada áudio cobra no
+-- máximo 10 minutos (600 s), por mais longo que seja o arquivo.
+create or replace function public.fn_billing_segundos_maximos_cobrados_por_audio()
+returns integer
+language sql
+immutable
+set search_path = pg_catalog, pg_temp
+as $$
+  select 600
+$$;
+
+comment on function public.fn_billing_segundos_maximos_cobrados_por_audio() is
+  '1025: teto de segundos cobrados por áudio transcrito (600 = 10 minutos). Lugar único do teto; quem lê é fn_billing_ponderado_da_chamada.';
+
+revoke execute on function public.fn_billing_segundos_maximos_cobrados_por_audio() from public, anon, authenticated;
+grant execute on function public.fn_billing_segundos_maximos_cobrados_por_audio() to service_role;
 
 -- O ponderado de UMA chamada, para o débito e para o conferidor. A
 -- transcrição de áudio (purpose = transcricao_de_audio) que deu certo e tem
@@ -105796,7 +105816,7 @@ as $$
       and p_audio_seconds is not null
       and p_audio_seconds > 0
     then ceil(
-      p_audio_seconds
+      least(p_audio_seconds, public.fn_billing_segundos_maximos_cobrados_por_audio()::numeric)
       * public.fn_billing_tokens_por_minuto_de_audio()::numeric / 60
       * p_peso_proposito::numeric / 100
     )::bigint
@@ -105805,7 +105825,7 @@ as $$
 $$;
 
 comment on function public.fn_billing_ponderado_da_chamada(text, text, numeric, int, int, int, int, int) is
-  '1025: ponderado de uma chamada de llm_calls. Transcrição de áudio com status ok e audio_seconds > 0: ceil(audio_seconds * fn_billing_tokens_por_minuto_de_audio() / 60 * peso_proposito / 100). O resto: fn_billing_tokens_ponderados. Régua única de fn_billing_debitar_chamada e fn_billing_debitos_pendentes.';
+  '1025: ponderado de uma chamada de llm_calls. Transcrição de áudio com status ok e audio_seconds > 0: ceil(least(audio_seconds, fn_billing_segundos_maximos_cobrados_por_audio()) * fn_billing_tokens_por_minuto_de_audio() / 60 * peso_proposito / 100). O resto: fn_billing_tokens_ponderados. Régua única de fn_billing_debitar_chamada e fn_billing_debitos_pendentes.';
 
 revoke execute on function public.fn_billing_ponderado_da_chamada(text, text, numeric, int, int, int, int, int) from public, anon, authenticated;
 grant execute on function public.fn_billing_ponderado_da_chamada(text, text, numeric, int, int, int, int, int) to service_role;
@@ -106113,7 +106133,7 @@ grant execute on function public.fn_billing_debitos_pendentes(uuid, integer) to 
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'agent_worker') then
-    execute 'revoke execute on function public.fn_billing_tokens_por_minuto_de_audio(), public.fn_billing_ponderado_da_chamada(text, text, numeric, int, int, int, int, int) from agent_worker';
+    execute 'revoke execute on function public.fn_billing_tokens_por_minuto_de_audio(), public.fn_billing_segundos_maximos_cobrados_por_audio(), public.fn_billing_ponderado_da_chamada(text, text, numeric, int, int, int, int, int) from agent_worker';
   end if;
 end
 $$;

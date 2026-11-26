@@ -84,12 +84,12 @@ describe("a tela", () => {
     mocks.definir.mockResolvedValue({ ok: true });
     render(<TranscreverAudios ligada={true} podeMudar={true} idioma="pt-BR" />);
     expect(screen.getByText("Transcrever áudios")).toBeVisible();
-    expect(screen.getByText("Ligado: os áudios recebidos viram texto na conversa e o agente de IA lê a transcrição.")).toBeVisible();
+    expect(screen.getByText("Ligado: os áudios recebidos e a fala dos vídeos viram texto na conversa, e o agente de IA lê a transcrição.")).toBeVisible();
     fireEvent.click(screen.getByRole("switch", { name: "Transcrever áudios" }));
     await waitFor(() => expect(mocks.definir).toHaveBeenCalledWith(false));
     await waitFor(() =>
       expect(
-        screen.getByText("Desligado: o áudio fica na conversa sem texto, e o agente de IA não recebe a transcrição."),
+        screen.getByText("Desligado: o áudio e a fala dos vídeos ficam na conversa sem texto, e o agente de IA não recebe a transcrição (os vídeos ainda são lidos pelas imagens)."),
       ).toBeVisible(),
     );
   });
@@ -102,8 +102,8 @@ describe("a tela", () => {
   it("os textos novos têm tradução em espanhol e inglês", () => {
     for (const texto of [
       "Transcrever áudios",
-      "Ligado: os áudios recebidos viram texto na conversa e o agente de IA lê a transcrição.",
-      "Desligado: o áudio fica na conversa sem texto, e o agente de IA não recebe a transcrição.",
+      "Ligado: os áudios recebidos e a fala dos vídeos viram texto na conversa, e o agente de IA lê a transcrição.",
+      "Desligado: o áudio e a fala dos vídeos ficam na conversa sem texto, e o agente de IA não recebe a transcrição (os vídeos ainda são lidos pelas imagens).",
     ]) {
       expect(DICIONARIO[texto], texto).toBeDefined();
       expect(traduzir(texto, "en")).not.toBe(texto);

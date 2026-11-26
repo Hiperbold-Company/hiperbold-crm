@@ -233,14 +233,18 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
   // vem ANTES de baixar o arquivo e de resolver credencial. `skipped` é
   // terminal no dreno do turno, como o vídeo desligado acima. Leitura que
   // falha não transcreve nem desiste: o dreno tenta de novo.
-  if (msg.type === "audio") {
+  // O vídeo segue o mesmo interruptor para a FALA: com ele desligado, os
+  // quadros são lidos normalmente e a faixa de som não é transcrita.
+  let transcreverFala = true;
+  if (msg.type === "audio" || msg.type === "video") {
     const { data: org, error: erroDaOrg } = await admin
       .from("organizations")
       .select("settings")
       .eq("id", msg.organization_id)
       .maybeSingle();
     if (erroDaOrg) return { consumer_key, status: "error", detail: "transcription_setting_read_failed" };
-    if (!transcreverAudiosLigado((org as { settings?: unknown } | null)?.settings)) {
+    transcreverFala = transcreverAudiosLigado((org as { settings?: unknown } | null)?.settings);
+    if (msg.type === "audio" && !transcreverFala) {
       return markSkipped("transcricao_desligada");
     }
   }
@@ -612,6 +616,7 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
       chaveEhDaInstalacao,
       origemDoModelo,
       origemDaChaveDaTranscricao,
+      transcreverFala,
     );
 
     const text = await deriveMediaText(msg.type, buffer, msg.media_mime ?? "application/octet-stream", deps);
@@ -802,6 +807,9 @@ function buildDeriveDeps(
   origemDoModelo = "padrao",
   // De quem é a chave do degrau de transcrição escolhido (0906); `null` = não sabida.
   origemDaChaveDaTranscricao: OrigemDaChaveLlm | null = null,
+  // Interruptor "Transcrever áudios" da empresa: desligado, o vídeo não
+  // transcreve a fala (só lê os quadros).
+  transcreverFala = true,
 ): DeriveDeps {
   const registry = createDefaultRegistry();
   // Thunk, não consulta: nada vai ao banco até a visão ser de fato perguntada,
@@ -1147,7 +1155,8 @@ function buildDeriveDeps(
     describeImage,
     extractPdf: extractPdfText,
     // Onda 3.1: vídeo → ffmpeg (áudio+frames) reusando transcrição e visão da org.
-    deriveVideo: (buffer) => deriveVideoText(buffer, { transcriber, describeImage }),
+    deriveVideo: (buffer) =>
+      deriveVideoText(buffer, { transcriber: transcreverFala ? transcriber : null, describeImage }),
   };
 }
 
