@@ -68,7 +68,7 @@ vi.mock("@/app/app/settings/plano/assinar/_dados", () => ({
     planos: [{ code: "pro" }],
     opcoesDeParcelas: [],
     taxaMensalPercentual: 0,
-    precisaPagador: false,
+    pagadorInicial: {},
     planoAtualCode: null,
     pixDisponivel: true,
     leituraFalhou: false,

@@ -25,6 +25,7 @@ import { AssinarOuComprarClient } from "@/app/app/settings/plano/assinar/_client
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import type { PlanoParaVenda } from "@/lib/billing/asaas/leitura";
+import { PAGADOR_INICIAL_COMPLETO } from "./helpers/pagador-completo";
 
 const PRO: PlanoParaVenda = {
   code: "pro",
@@ -51,7 +52,7 @@ const SO_MENSAL_E_ANUAL: PlanoParaVenda = {
 function tela(planos: PlanoParaVenda[], locale = "pt-BR", pixDisponivel = true) {
   return render(
     <IdiomaProvider locale={locale}>
-      <AssinarOuComprarClient pixDisponivel={pixDisponivel} planos={planos} pacotes={[]} precisaPagador={false} leituraFalhou={false} />
+      <AssinarOuComprarClient pixDisponivel={pixDisponivel} planos={planos} pacotes={[]} pagadorInicial={PAGADOR_INICIAL_COMPLETO} leituraFalhou={false} />
     </IdiomaProvider>,
   );
 }
@@ -218,7 +219,7 @@ describe("a tela pede ao servidor o ciclo e o método escolhidos", () => {
           planos={[]}
           pixDisponivel={false}
           pacotes={[{ codigo: "mil", nome: "Mil", tokens: 1000, precoCents: 5000 } as never]}
-          precisaPagador={false}
+          pagadorInicial={PAGADOR_INICIAL_COMPLETO}
           leituraFalhou={false}
         />
       </IdiomaProvider>,
@@ -315,7 +316,7 @@ describe("D-133: aceite dos Termos de Uso na tela de compra", () => {
           planos={[]}
           pixDisponivel
           pacotes={[{ codigo: "mil", nome: "Mil", tokens: 1000, precoCents: 5000 } as never]}
-          precisaPagador={false}
+          pagadorInicial={PAGADOR_INICIAL_COMPLETO}
           leituraFalhou={false}
         />
       </IdiomaProvider>,

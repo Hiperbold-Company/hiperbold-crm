@@ -42,15 +42,15 @@ import type { OpcaoDeParcelas } from "@/lib/billing/asaas/parcelamento";
 import {
   chaveParaProximaTentativaDeCompra,
   classificarDesfechoDaTentativa,
+  camposIniciaisDoPagador,
   montarPagadorDoFormulario,
   urlDeRedirecionamentoEhSegura,
   type CamposDoFormularioDoPagador,
-  type DadosDoPagador,
   type DesfechoDaTentativaDeCompra,
   type EscolhaDeCompra,
 } from "../_logica-compra";
 import { PixPendente } from "./_pix-pendente";
-import { AceiteDosTermos, CAMPOS_VAZIOS, FormularioDoPagador, formatarReais } from "./_comuns";
+import { AceiteDosTermos, FormularioDoPagador, formatarReais } from "./_comuns";
 import { AssinarPlanoPassoAPasso } from "./_passo-a-passo";
 import type { PacoteParaVenda } from "./_dados";
 import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
@@ -69,7 +69,7 @@ export function AssinarOuComprarClient({
   taxaMensalPercentual = null,
   planos,
   pacotes,
-  precisaPagador,
+  pagadorInicial,
   leituraFalhou,
   planoAtualCode = null,
   pixDisponivel,
@@ -79,7 +79,8 @@ export function AssinarOuComprarClient({
   taxaMensalPercentual?: number | null;
   planos: PlanoParaVenda[];
   pacotes: PacoteParaVenda[];
-  precisaPagador: boolean;
+  /** O formulário do pagador já preenchido (empresa e quem está logado). O formulário aparece em toda compra. */
+  pagadorInicial: Partial<CamposDoFormularioDoPagador> | null;
   leituraFalhou: boolean;
   /** D-180: o plano que a organização tem hoje (contrato vivo), só para marcar o cartão; `null` quando não há. */
   planoAtualCode?: string | null;
@@ -115,7 +116,7 @@ export function AssinarOuComprarClient({
             planos={planos}
             opcoesDeParcelas={opcoesDeParcelas}
             taxaMensalPercentual={taxaMensalPercentual}
-            precisaPagador={precisaPagador}
+            pagadorInicial={pagadorInicial}
             planoAtualCode={planoAtualCode}
             pixDisponivel={pixDisponivel}
           />
@@ -127,7 +128,7 @@ export function AssinarOuComprarClient({
           <h2 className="text-lg font-medium">{t("Pacotes de tokens")}</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {pacotes.map((pacote) => (
-              <PacoteParaComprar key={pacote.codigo} pacote={pacote} precisaPagador={precisaPagador} pixDisponivel={pixDisponivel} />
+              <PacoteParaComprar key={pacote.codigo} pacote={pacote} pagadorInicial={pagadorInicial} pixDisponivel={pixDisponivel} />
             ))}
           </div>
         </section>
@@ -140,17 +141,17 @@ export function AssinarOuComprarClient({
 
 function PacoteParaComprar({
   pacote,
-  precisaPagador,
+  pagadorInicial,
   pixDisponivel,
 }: {
   pacote: PacoteParaVenda;
-  precisaPagador: boolean;
+  pagadorInicial: Partial<CamposDoFormularioDoPagador> | null;
   pixDisponivel: boolean;
 }) {
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
   const [metodo, setMetodo] = useState<"CREDIT_CARD" | "PIX">(pixDisponivel ? "PIX" : "CREDIT_CARD");
-  const [pagador, setPagador] = useState<CamposDoFormularioDoPagador>(CAMPOS_VAZIOS);
+  const [pagador, setPagador] = useState<CamposDoFormularioDoPagador>(() => camposIniciaisDoPagador(pagadorInicial));
   const [pendente, setPendente] = useState(false);
   const [aceitouTermos, setAceitouTermos] = useState(false);
   const [resultado, setResultado] = useState<ResultadoIniciarCompra | null>(null);
@@ -166,17 +167,13 @@ function PacoteParaComprar({
     });
     if (chaveDestaTentativa !== chave) setChave(chaveDestaTentativa);
 
-    let entradaDoPagador: DadosDoPagador | undefined;
-
-    if (precisaPagador) {
-      const montado = montarPagadorDoFormulario(pagador);
-      if (!montado.ok) {
-        toast.error(t(montado.erro));
-        tentativaAnteriorRef.current = { escolha: escolhaAtual, desfecho: "terminal" };
-        return;
-      }
-      entradaDoPagador = montado.pagador;
+    const montado = montarPagadorDoFormulario(pagador);
+    if (!montado.ok) {
+      toast.error(t(montado.erro));
+      tentativaAnteriorRef.current = { escolha: escolhaAtual, desfecho: "terminal" };
+      return;
     }
+    const entradaDoPagador = montado.pagador;
 
     setPendente(true);
     try {
@@ -259,9 +256,7 @@ function PacoteParaComprar({
           )}
         </div>
 
-        {precisaPagador && (
-          <FormularioDoPagador pagador={pagador} onChange={setPagador} idPrefixo={`pagador-pacote-${pacote.codigo}`} />
-        )}
+        <FormularioDoPagador pagador={pagador} onChange={setPagador} idPrefixo={`pagador-pacote-${pacote.codigo}`} />
 
         <AceiteDosTermos id={`termos-pacote-${pacote.codigo}`} aceito={aceitouTermos} onChange={setAceitouTermos} />
 

@@ -32,21 +32,43 @@ export const clienteAsaasSchema = z
   .passthrough();
 export type ClienteAsaas = z.infer<typeof clienteAsaasSchema>;
 
+/**
+ * Endereço do pagador como o Asaas recebe em `POST`/`PUT /v3/customers` (docs.asaas.com): `postalCode` só com
+ * dígitos, `address` (rua), `addressNumber`, `complement` e `province` (bairro). Não há campo de cidade nem de
+ * UF: o Asaas resolve os dois pelo CEP.
+ */
+const enderecoDoClienteAsaas = {
+  postalCode: z.string().regex(/^\d{8}$/).optional(),
+  address: z.string().min(1).max(200).optional(),
+  addressNumber: z.string().min(1).max(20).optional(),
+  complement: z.string().min(1).max(200).optional(),
+  province: z.string().min(1).max(100).optional(),
+};
+
 export const criarClienteRequestSchema = z.object({
   name: z.string().min(1),
   cpfCnpj: z.string().min(11),
   email: z.string().optional(),
   phone: z.string().optional(),
   mobilePhone: z.string().optional(),
+  ...enderecoDoClienteAsaas,
   externalReference: z.string().min(1).max(200).optional(),
   /** D-087: `true` desliga as notificações de cobrança do Asaas (docs.asaas.com, `POST /v3/customers`). */
   notificationDisabled: z.boolean().optional(),
 });
 export type CriarClienteRequest = z.infer<typeof criarClienteRequestSchema>;
 
-/** D-087: `PUT /v3/customers/{id}` só com o que este app muda (docs.asaas.com, "Atualizar cliente existente"). */
+/**
+ * `PUT /v3/customers/{id}` só com o que este app muda (docs.asaas.com, "Atualizar cliente existente"):
+ * D-087 (`notificationDisabled`, sempre presente, para nenhum PUT religar as notificações do Asaas) e o
+ * contato e o endereço de quem paga, que completam a ficha de um cliente criado só com nome e CPF. Nome e
+ * CPF/CNPJ não entram: trocar o documento de um cliente com cobranças é outra conversa.
+ */
 export const atualizarClienteRequestSchema = z.object({
   notificationDisabled: z.boolean(),
+  email: z.string().optional(),
+  mobilePhone: z.string().optional(),
+  ...enderecoDoClienteAsaas,
 });
 export type AtualizarClienteRequest = z.infer<typeof atualizarClienteRequestSchema>;
 

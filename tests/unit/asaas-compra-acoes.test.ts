@@ -103,12 +103,27 @@ vi.mock("@/lib/billing/asaas/compra", () => ({
 import { cancelarAssinatura, comprarPacote, iniciarAssinatura } from "@/app/actions/settings/compraDoPlano";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 
+/** O cadastro completo de quem paga: obrigatório em toda compra (só o complemento é opcional). */
+const PAGADOR = {
+  nome: "Fulano de Tal",
+  documento: "111.444.777-35",
+  email: "fulano@example.com",
+  celular: "11999998888",
+  cep: "01310-100",
+  rua: "Avenida Paulista",
+  numero: "1000",
+  bairro: "Bela Vista",
+  cidade: "São Paulo",
+  uf: "SP",
+};
+
 const ENTRADA_ASSINATURA = {
   planCode: "pro",
   ciclo: "monthly" as const,
   metodo: "CREDIT_CARD" as const,
   chave: CHAVE,
   termosVersao: VERSAO_DOS_TERMOS,
+  pagador: PAGADOR,
 };
 
 /** O cancelamento pede o motivo (migration 0957). */
@@ -119,14 +134,9 @@ const ENTRADA_PACOTE = {
   metodo: "PIX" as const,
   chave: CHAVE,
   termosVersao: VERSAO_DOS_TERMOS,
+  pagador: PAGADOR,
 };
 
-const PAGADOR = {
-  nome: "Fulano de Tal",
-  documento: "111.444.777-35",
-  email: "fulano@example.com",
-  celular: "11999998888",
-};
 
 beforeEach(() => {
   papel = "admin";
@@ -370,6 +380,49 @@ describe("compraDoPlano: CPF/CNPJ do pagador validado no servidor", () => {
   });
 });
 
+describe("compraDoPlano: cadastro completo do pagador exigido no servidor", () => {
+  const FRASE = "Preencha os dados de quem paga";
+
+  it("compra sem pagador é recusada com a frase do cadastro, sem chegar à compra", async () => {
+    const { pagador: _semPagador, ...semPagador } = ENTRADA_ASSINATURA;
+    const r = await iniciarAssinatura(semPagador);
+    expect(r).toMatchObject({ tipo: "erro", mensagem: expect.stringContaining(FRASE) });
+    expect(chamadasIniciar.length).toBe(0);
+  });
+
+  it.each(["email", "celular", "cep", "rua", "numero", "bairro", "cidade", "uf"] as const)(
+    "iniciarAssinatura recusa o pagador sem %s",
+    async (campo) => {
+      const { [campo]: _fora, ...incompleto } = PAGADOR;
+      const r = await iniciarAssinatura({ ...ENTRADA_ASSINATURA, pagador: incompleto as typeof PAGADOR });
+      expect(r).toMatchObject({ tipo: "erro", mensagem: expect.stringContaining(FRASE) });
+      expect(chamadasIniciar.length).toBe(0);
+    },
+  );
+
+  it.each([
+    ["celular sem DDD", { celular: "99999-8888" }],
+    ["CEP com 7 dígitos", { cep: "0131010" }],
+    ["UF que não existe", { uf: "XX" }],
+    ["e-mail inválido", { email: "fulano" }],
+  ])("comprarPacote recusa %s", async (_nome, troca) => {
+    const r = await comprarPacote({ ...ENTRADA_PACOTE, pagador: { ...PAGADOR, ...troca } });
+    expect(r).toMatchObject({ tipo: "erro", mensagem: expect.stringContaining(FRASE) });
+    expect(chamadasIniciar.length).toBe(0);
+  });
+
+  it("o pagador chega à compra normalizado: celular e CEP só com dígitos, UF em maiúsculas, complemento vazio fora", async () => {
+    await iniciarAssinatura({
+      ...ENTRADA_ASSINATURA,
+      pagador: { ...PAGADOR, celular: "+55 (11) 99999-8888", cep: "01310-100", uf: "sp", complemento: "  " },
+    });
+    expect(chamadasIniciar.length).toBe(1);
+    const pagador = chamadasIniciar[0]!.pagador as Record<string, unknown>;
+    expect(pagador).toMatchObject({ celular: "11999998888", cep: "01310100", uf: "SP" });
+    expect(pagador.complemento).toBeUndefined();
+  });
+});
+
 describe("compraDoPlano: auditoria sem dado sensível", () => {
   it("iniciarAssinatura com pagador audita billing.order_created sem CPF/e-mail/telefone/valor", async () => {
     const r = await iniciarAssinatura({ ...ENTRADA_ASSINATURA, pagador: PAGADOR });
@@ -454,7 +507,7 @@ describe("D-133: o servidor recusa a compra sem o aceite da versão vigente dos 
     const { termosVersao: _ignorada, ...semAceite } = ENTRADA_ASSINATURA;
     const r = await iniciarAssinatura(semAceite);
     expect(r).toEqual({ tipo: "erro", mensagem: "Aceite os Termos de Uso para continuar." });
-    const p = await comprarPacote({ pacote: "mil_tokens", metodo: "PIX", chave: CHAVE });
+    const p = await comprarPacote({ pacote: "mil_tokens", metodo: "PIX", chave: CHAVE, pagador: PAGADOR });
     expect(p).toEqual({ tipo: "erro", mensagem: "Aceite os Termos de Uso para continuar." });
     expect(chamadasIniciar).toHaveLength(0);
   });

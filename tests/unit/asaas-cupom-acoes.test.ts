@@ -83,12 +83,27 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
 import { iniciarAssinatura, simularCupom } from "@/app/actions/settings/compraDoPlano";
 import { VERSAO_DOS_TERMOS } from "@/lib/legal/versao-dos-termos";
 
+/** O cadastro completo de quem paga: obrigatório em toda compra (só o complemento é opcional). */
+const PAGADOR = {
+  nome: "Fulano de Tal",
+  documento: "111.444.777-35",
+  email: "fulano@example.com",
+  celular: "11999998888",
+  cep: "01310-100",
+  rua: "Avenida Paulista",
+  numero: "1000",
+  bairro: "Bela Vista",
+  cidade: "São Paulo",
+  uf: "SP",
+};
+
 const ENTRADA = {
   planCode: "pro",
   ciclo: "semiannual" as const,
   metodo: "CREDIT_CARD" as const,
   chave: CHAVE,
   termosVersao: VERSAO_DOS_TERMOS,
+  pagador: PAGADOR,
 };
 
 const SIMULACAO = { codigo: "PCT10", planCode: "pro", ciclo: "semiannual" as const, metodo: "CREDIT_CARD" as const };
@@ -167,7 +182,6 @@ describe("iniciarAssinatura com cupom", () => {
     await iniciarAssinatura({
       ...ENTRADA,
       cupom: "pct10",
-      pagador: { nome: "Fulano de Tal", documento: "111.444.777-35", email: "fulano@example.com" },
     });
     expect(auditadas).toHaveLength(1);
     expect(auditadas[0]?.action).toBe("billing.order_created");

@@ -121,6 +121,8 @@ interface OpcoesChamada {
   metodo: Metodo;
   caminho: string;
   corpo?: unknown;
+  /** Teto próprio desta chamada (só vale abaixo do padrão do método); sem ele, 20s em GET e 60s nos demais. */
+  tetoMs?: number;
 }
 
 function esperar(ms: number): Promise<void> {
@@ -176,7 +178,8 @@ async function chamar(deps: DepsClienteAsaas, opcoes: OpcoesChamada): Promise<un
   };
   // PUT escreve como o POST: mesmo teto de tempo, nunca repete, falha vira `inconclusivo`.
   const isPost = opcoes.metodo === "POST" || opcoes.metodo === "PUT";
-  const teto = opcoes.metodo === "GET" ? TETO_GET_MS : TETO_POST_MS;
+  const tetoPadrao = opcoes.metodo === "GET" ? TETO_GET_MS : TETO_POST_MS;
+  const teto = opcoes.tetoMs !== undefined ? Math.min(opcoes.tetoMs, tetoPadrao) : tetoPadrao;
   // Só GET repete; POST/DELETE têm uma única tentativa (decisão 13).
   const maxTentativas = opcoes.metodo === "GET" ? MAX_RETENTATIVAS_GET + 1 : 1;
 
@@ -289,7 +292,7 @@ export interface ClienteAsaasHttp {
   buscarClientePorReferencia(externalReference: string): Promise<ClienteAsaas | null>;
   criarCliente(dados: CriarClienteRequest): Promise<ClienteAsaas>;
   /** D-087: `PUT /customers/{id}`; hoje só liga/desliga `notificationDisabled`. Não repete sozinho. */
-  atualizarCliente(id: string, dados: AtualizarClienteRequest): Promise<ClienteAsaas>;
+  atualizarCliente(id: string, dados: AtualizarClienteRequest, opcoes?: { tetoMs?: number }): Promise<ClienteAsaas>;
   criarAssinatura(dados: CriarAssinaturaRequest): Promise<AssinaturaAsaas>;
   buscarAssinatura(id: string): Promise<AssinaturaAsaas | Removido>;
   listarCobrancasDaAssinatura(id: string): Promise<CobrancaAsaas[]>;
@@ -338,11 +341,11 @@ export function criarClienteAsaas(deps: DepsClienteAsaas): ClienteAsaasHttp {
       return chamarComSchema(deps, { metodo: "POST", caminho: "/customers", corpo }, clienteAsaasSchema);
     },
 
-    async atualizarCliente(id, dados) {
+    async atualizarCliente(id, dados, opcoes) {
       const corpo = atualizarClienteRequestSchema.parse(dados);
       return chamarComSchema(
         deps,
-        { metodo: "PUT", caminho: `/customers/${encodeURIComponent(id)}`, corpo },
+        { metodo: "PUT", caminho: `/customers/${encodeURIComponent(id)}`, corpo, tetoMs: opcoes?.tetoMs },
         clienteAsaasSchema,
       );
     },

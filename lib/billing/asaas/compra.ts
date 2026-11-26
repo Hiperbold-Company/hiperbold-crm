@@ -172,17 +172,29 @@ export type StatusPedido =
   | "estornado";
 
 /**
- * Nome, CPF/CNPJ, e-mail e celular do pagador. Só usado para
- * `POST /customers`; nunca gravado no CRM, nunca logado (decisão 16).
+ * Nome, CPF/CNPJ, e-mail, celular e endereço do pagador. Só usado para
+ * `POST /customers` (cliente novo) e `PUT /customers/{id}` (completar a ficha
+ * de um cliente que já existe); nunca gravado no CRM, nunca logado (decisão 16).
  * Opcional em `EntradaIniciarCompra`: só é exigido quando a organização
  * AINDA não tem cliente Asaas (nem vínculo local, nem cliente achado pela
- * referência), normalmente a primeira compra.
+ * referência). A action da tela (`app/actions/settings/compraDoPlano.ts`)
+ * já exige todos os campos menos o complemento, com `celular` e `cep` só em
+ * dígitos; aqui seguem opcionais para quem chama sem o formulário.
  */
 export interface DadosPagador {
   nome: string;
   documento: string;
   email?: string;
   celular?: string;
+  cep?: string;
+  rua?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  /** Conferida na tela e no servidor; o Asaas não recebe cidade (resolve pelo CEP). */
+  cidade?: string;
+  /** Idem: o Asaas resolve a UF pelo CEP. */
+  uf?: string;
 }
 
 export interface EntradaIniciarCompra {
@@ -873,13 +885,18 @@ async function resolverRespostaPeloEstado(deps: DepsCompra, org: string, pedido:
 
 // ─── Passo 3: cliente Asaas (vínculo local, depois referência, depois criar) ─
 
+/** Teto do PUT que completa a ficha (e do mínimo que desliga as notificações): melhor esforço, sem retry. */
+const TETO_COMPLETAR_FICHA_MS = 8_000;
+
 type ResultadoCliente =
   | { ok: true; asaasCustomerId: string }
   | { ok: false; mensagem: string; motivoInterno: string };
 
 function tratarErroAsaasComoFalhaDeCliente(deps: DepsCompra, err: unknown): ResultadoCliente {
   const tipoErro = err instanceof ErroAsaasException ? err.erro.tipo : "desconhecido";
-  deps.logger.error("asaas_compra_cliente_falhou", { tipoErro });
+  // Só os códigos do envelope de erro do Asaas (nunca descrição nem dado do pagador).
+  const codigos = err instanceof ErroAsaasException && err.erro.tipo === "validacao" ? err.erro.codigos : undefined;
+  deps.logger.error("asaas_compra_cliente_falhou", codigos ? { tipoErro, codigos } : { tipoErro });
   return { ok: false, mensagem: MENSAGEM_GENERICA, motivoInterno: `cliente_asaas_${tipoErro}` };
 }
 
@@ -890,10 +907,76 @@ function tratarErroAsaasComoFalhaDeCliente(deps: DepsCompra, err: unknown): Resu
  */
 async function desligarNotificacoesDoAsaas(deps: DepsCompra, asaasCustomerId: string): Promise<void> {
   try {
-    await deps.asaas.atualizarCliente(asaasCustomerId, { notificationDisabled: true });
+    await deps.asaas.atualizarCliente(asaasCustomerId, { notificationDisabled: true }, { tetoMs: TETO_COMPLETAR_FICHA_MS });
   } catch (err) {
     const tipoErro = err instanceof ErroAsaasException ? err.erro.tipo : "desconhecido";
     deps.logger.warn("asaas_compra_desligar_notificacoes_falhou", { tipoErro });
+  }
+}
+
+/**
+ * O contato e o endereço do pagador no formato do Asaas (`email`, `mobilePhone`, `postalCode`, `address`,
+ * `addressNumber`, `complement`, `province`), só com o que veio preenchido. Cidade e UF não vão: o Asaas
+ * resolve as duas pelo CEP. `null` quando não há nada a mandar.
+ */
+function contatoEEnderecoParaOAsaas(pagador: DadosPagador | undefined): {
+  email?: string;
+  mobilePhone?: string;
+  postalCode?: string;
+  address?: string;
+  addressNumber?: string;
+  complement?: string;
+  province?: string;
+} | null {
+  if (!pagador) return null;
+  const preenchido = (v: string | undefined) => (v && v.trim().length > 0 ? v.trim() : undefined);
+  const celular = preenchido(pagador.celular);
+  const cep = preenchido(pagador.cep);
+  const campos = {
+    email: preenchido(pagador.email),
+    mobilePhone: celular ? somenteDigitos(celular) : undefined,
+    postalCode: cep ? somenteDigitos(cep) : undefined,
+    address: preenchido(pagador.rua),
+    addressNumber: preenchido(pagador.numero),
+    complement: preenchido(pagador.complemento),
+    province: preenchido(pagador.bairro),
+  };
+  const soOsPreenchidos = Object.fromEntries(Object.entries(campos).filter(([, v]) => v !== undefined));
+  return Object.keys(soOsPreenchidos).length > 0 ? soOsPreenchidos : null;
+}
+
+/**
+ * O pagador traz o cadastro completo que o formulário exige (e-mail, celular e endereço; só o complemento é
+ * opcional)? Só então a ficha de um cliente que JÁ existe é reescrita: um pagador parcial não apaga nem
+ * troca pela metade o que o Asaas já tem.
+ */
+function cadastroCompletoDoPagador(dados: ReturnType<typeof contatoEEnderecoParaOAsaas>): dados is NonNullable<
+  ReturnType<typeof contatoEEnderecoParaOAsaas>
+> {
+  return Boolean(
+    dados && dados.email && dados.mobilePhone && dados.postalCode && dados.address && dados.addressNumber && dados.province,
+  );
+}
+
+/**
+ * Cliente Asaas que já existe e recebeu o formulário completo nesta compra: a ficha é completada (ou corrigida)
+ * com o contato e o endereço digitados, num PUT só, que leva também o `notificationDisabled: true` (D-087: nenhum
+ * PUT religa as notificações do Asaas). Melhor esforço, como `desligarNotificacoesDoAsaas`: a ficha
+ * incompleta é ruim, a venda perdida é pior. Nenhum dado do pagador vai ao log.
+ */
+async function completarFichaDoAsaas(
+  deps: DepsCompra,
+  asaasCustomerId: string,
+  dados: NonNullable<ReturnType<typeof contatoEEnderecoParaOAsaas>>,
+): Promise<void> {
+  try {
+    // Teto curto próprio: o PUT é acessório e não pode segurar a compra pelos 60s do padrão.
+    await deps.asaas.atualizarCliente(asaasCustomerId, { ...dados, notificationDisabled: true }, { tetoMs: TETO_COMPLETAR_FICHA_MS });
+  } catch (err) {
+    const tipoErro = err instanceof ErroAsaasException ? err.erro.tipo : "desconhecido";
+    deps.logger.warn("asaas_compra_completar_ficha_falhou", { tipoErro });
+    // O PUT completo pode ter falhado antes de desligar as notificações: o mínimo garante o D-087.
+    await desligarNotificacoesDoAsaas(deps, asaasCustomerId);
   }
 }
 
@@ -903,12 +986,18 @@ async function resolverAsaasCustomerId(
   ambiente: AmbienteAsaas,
   pagador: DadosPagador | undefined,
 ): Promise<ResultadoCliente> {
+  const contatoEEndereco = contatoEEnderecoParaOAsaas(pagador);
   const vinculo = await deps.db.buscarVinculoClienteAsaas(org, ambiente);
   if (vinculo.error) {
     deps.logger.error("asaas_compra_ler_vinculo_falhou", { org, codigo: vinculo.error.code });
     return { ok: false, mensagem: MENSAGEM_GENERICA, motivoInterno: "ler_vinculo_cliente_falhou" };
   }
-  if (vinculo.data) return { ok: true, asaasCustomerId: vinculo.data.asaasCustomerId };
+  if (vinculo.data) {
+    if (cadastroCompletoDoPagador(contatoEEndereco)) {
+      await completarFichaDoAsaas(deps, vinculo.data.asaasCustomerId, contatoEEndereco);
+    }
+    return { ok: true, asaasCustomerId: vinculo.data.asaasCustomerId };
+  }
 
   const referencia = `HC:org:${org}`;
   let asaasCustomerId: string;
@@ -916,9 +1005,14 @@ async function resolverAsaasCustomerId(
     const existente = await deps.asaas.buscarClientePorReferencia(referencia);
     if (existente) {
       asaasCustomerId = existente.id;
-      // D-087: a leitura que já fizemos diz se as notificações do Asaas estão ligadas; só então
-      // se gasta um PUT (uma vez por cliente, porque o vínculo logo abaixo impede voltar aqui).
-      if (existente.notificationDisabled !== true) await desligarNotificacoesDoAsaas(deps, existente.id);
+      if (cadastroCompletoDoPagador(contatoEEndereco)) {
+        // Um PUT só: completa a ficha e já desliga as notificações (D-087).
+        await completarFichaDoAsaas(deps, existente.id, contatoEEndereco);
+      } else if (existente.notificationDisabled !== true) {
+        // D-087: a leitura que já fizemos diz se as notificações do Asaas estão ligadas; só então
+        // se gasta um PUT (uma vez por cliente, porque o vínculo logo abaixo impede voltar aqui).
+        await desligarNotificacoesDoAsaas(deps, existente.id);
+      }
     } else {
       if (!pagador) {
         return { ok: false, mensagem: MENSAGEM_PAGADOR_OBRIGATORIO, motivoInterno: "pagador_ausente" };
@@ -929,8 +1023,7 @@ async function resolverAsaasCustomerId(
       const criado = await deps.asaas.criarCliente({
         name: pagador.nome,
         cpfCnpj: somenteDigitos(pagador.documento),
-        email: pagador.email,
-        mobilePhone: pagador.celular,
+        ...(contatoEEndereco ?? {}),
         externalReference: referencia,
         // D-087: os e-mails/SMS de cobrança são do CRM (fila conta-e-cobranca); o Asaas fica calado.
         notificationDisabled: true,
