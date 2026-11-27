@@ -49,7 +49,7 @@ import {
   type FormatoDeExport,
 } from "@/lib/contacts/exportar";
 import { montarCsvDeContatos, type ContatoParaCsv } from "@/lib/contacts/exportar-csv";
-import { resumoDoFiltroParaAuditoria } from "@/lib/contacts/filtros";
+import { campoDoFiltro, resumoDoFiltroParaAuditoria } from "@/lib/contacts/filtros";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   contactListQuerySchema,
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
       supabase,
       organizationId,
-      corpo.filtro.campo_valor ? corpo.filtro.campo : null,
+      campoDoFiltro(corpo.filtro),
       authz.org.role,
       requestId,
     );

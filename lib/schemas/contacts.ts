@@ -359,6 +359,63 @@ const diaIso = () =>
 export const CHAVE_DE_CAMPO_FILTRAVEL = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
 
 /**
+ * As condições do filtro por campo personalizado, na ordem em que a tela as mostra.
+ * "Vazio" é chave ausente, `null` ou texto só de espaços. As negativas (`nao_contem`,
+ * `diferente`, `vazio`) contam o campo vazio como "não contém"/"diferente".
+ */
+export const OPERADORES_DE_CAMPO = [
+  "contem",
+  "nao_contem",
+  "igual",
+  "diferente",
+  "qualquer_de",
+  "vazio",
+  "preenchido",
+] as const;
+export type OperadorDeCampo = (typeof OPERADORES_DE_CAMPO)[number];
+
+/** As condições que não levam valor ("está vazio", "não está vazio"). */
+export function operadorDeCampoSemValor(op: string | null | undefined): op is "vazio" | "preenchido" {
+  return op === "vazio" || op === "preenchido";
+}
+
+/** Teto de valores em "é qualquer um de". */
+export const MAXIMO_DE_VALORES_EM_QUALQUER_DE = 20;
+
+/**
+ * Os valores de "é qualquer um de": separados por vírgula, cada um sem os espaços em volta, os
+ * vazios descartados, sem repetição. `\,` é uma vírgula DENTRO de um valor. Não corta no teto: quem
+ * chama decide (o schema recusa acima de `MAXIMO_DE_VALORES_EM_QUALQUER_DE`).
+ */
+export function valoresDeQualquerDe(texto: string): string[] {
+  // Laço, não `split` com lookbehind: este módulo vai para o navegador, e Safari antigo não o lê.
+  const partes: string[] = [];
+  let atual = "";
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i]!;
+    if (c === "\\" && texto[i + 1] === ",") {
+      atual += ",";
+      i++;
+    } else if (c === ",") {
+      partes.push(atual);
+      atual = "";
+    } else atual += c;
+  }
+  partes.push(atual);
+  const valores = partes.map((v) => v.trim()).filter(Boolean);
+  return [...new Set(valores)];
+}
+
+/**
+ * O filtro por campo está ligado? Campo + valor, ou campo + uma condição sem valor. É a régua das
+ * rotas para a recusa de campo restrito (1015), da consulta e da tela.
+ */
+export function filtroDeCampoAtivo(f: { campo?: string; campo_op?: string; campo_valor?: string }): boolean {
+  if (!f.campo) return false;
+  return operadorDeCampoSemValor(f.campo_op) || Boolean(f.campo_valor);
+}
+
+/**
  * Os filtros da lista de contatos — a MESMA forma na URL da tela, na query do
  * GET, e (como objeto) no corpo de "excluir/exportar todos do filtro". Uma
  * definição só: o que a tela mostra, o que se exclui e o que se exporta são o
@@ -455,12 +512,28 @@ const formaDosFiltros = {
       .regex(CHAVE_DE_CAMPO_FILTRAVEL)
       .refine((c) => !chaveSensivelDeCampo(c), { message: "Campo não filtrável." })
       .optional(),
-    campo_op: z.enum(["contem", "igual"]).default("contem"),
+    campo_op: z.enum(OPERADORES_DE_CAMPO).default("contem"),
     campo_valor: z.string().min(1).max(200).optional(),
 };
 
-const campoEValorJuntos = (v: { campo?: string; campo_valor?: string }) => !v.campo === !v.campo_valor;
-const MENSAGEM_CAMPO_E_VALOR = { message: "Informe o campo e o valor juntos.", path: ["campo_valor"] };
+/**
+ * Campo e valor andam juntos — menos em "está vazio"/"não está vazio", que exigem o campo e
+ * recusam valor. Em "é qualquer um de", de 1 a `MAXIMO_DE_VALORES_EM_QUALQUER_DE` valores.
+ */
+const campoEValorJuntos = (v: { campo?: string; campo_op?: string; campo_valor?: string }) => {
+  if (!v.campo) return !v.campo_valor;
+  if (operadorDeCampoSemValor(v.campo_op)) return !v.campo_valor;
+  if (!v.campo_valor) return false;
+  if (v.campo_op === "qualquer_de") {
+    const n = valoresDeQualquerDe(v.campo_valor).length;
+    return n > 0 && n <= MAXIMO_DE_VALORES_EM_QUALQUER_DE;
+  }
+  return true;
+};
+const MENSAGEM_CAMPO_E_VALOR = {
+  message: "Informe o campo e o valor juntos (sem valor em \"está vazio\" e \"não está vazio\"; até 20 valores em \"é qualquer um de\").",
+  path: ["campo_valor"],
+};
 
 export const filtrosDeContatosSchema = z
   .object(formaDosFiltros)

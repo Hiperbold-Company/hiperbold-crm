@@ -14,10 +14,17 @@
  *  - junção `apelido:tabela!fk!inner(id)` + predicados `apelido.coluna`: o contato passa se ALGUM
  *    registro da tabela ligada satisfaz TODOS os predicados daquele apelido;
  *  - junção SEM `!inner` (`apelido:tabela!fk(id)`): não corta o contato; só responde ao
- *    `apelido.not.is.null` do `or`. Cada apelido tem os PRÓPRIOS predicados.
+ *    `apelido.not.is.null` do `or` e ao anti-join `.is(apelido, null)` do topo (nenhum registro
+ *    ligado satisfaz os predicados dela). Cada apelido tem os PRÓPRIOS predicados;
+ *  - `regexMatch`/`regexIMatch` (`~`/`~*`) no topo e na junção; no `or`, `match`, `imatch`,
+ *    `is.null` e a negação `not.<op>` — com NULL nunca casando nem a condição nem a negação,
+ *    como no SQL.
  *
  * Que estas regras são as do PostgREST de verdade foi medido contra um PostgREST real (v16.2) em
  * 28/10/2026, com os mesmos casos de "qualquer" de `contatos-lote-e-exportacao.test.ts`.
+ * ⚠️ NÃO medidas contra PostgREST real (entraram com as condições negativas do filtro de campo):
+ * o anti-join `.is(apelido, null)` em junção para-muitos filtrada; `is.null` e `not.<op>` dentro do
+ * `or`; `regexMatch`/`regexIMatch` em coluna de junção; o desescape de `\` na regex entre aspas.
  *
  * `fn_excluir_contatos_em_lote` é reimplementada aqui com a mesma regra da migration 0971 — a prova
  * do SQL de verdade é `tests/invariants/excluir-contatos-em-lote.test.ts` (Postgres real).
@@ -60,6 +67,18 @@ function ilikeCasa(valor: unknown, padrao: string): boolean {
     else re += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
   return new RegExp(`^${re}$`, "i").test(String(valor));
+}
+
+/** Uma condição simples sobre um valor; `null` = NULL do SQL (nem casa, nem a negação casa). */
+function condicaoCasa(op: string, v: unknown, val: string): boolean | null {
+  if (op === "is") return val === "null" ? v === null || v === undefined : null;
+  if (v === null || v === undefined) return null;
+  if (op === "ilike") return ilikeCasa(v, val);
+  if (op === "imatch") return new RegExp(val, "i").test(String(v));
+  if (op === "match") return new RegExp(val).test(String(v));
+  if (op === "eq") return String(v) === val;
+  // Operador que este dublê não imita (o comportamento antigo: não casa).
+  return null;
 }
 
 /** Quebra o `or` nas vírgulas de fora das aspas. */
@@ -173,7 +192,22 @@ export function clienteEmMemoria(banco: BancoEmMemoria): never {
         },
         is(col: string, val: unknown) {
           filtros.push(["is", col, val]);
+          // `.is(apelido, null)`: anti-join — nenhum registro ligado satisfaz os predicados da junção.
+          if (juncoes.has(col) && val === null) {
+            predicados.push((l) => !juncaoAchou(col, l));
+            return cadeia;
+          }
           adicionar(col, (v) => (v ?? null) === val);
+          return cadeia;
+        },
+        regexMatch(col: string, padrao: string) {
+          filtros.push(["regexMatch", col, padrao]);
+          adicionar(col, (v) => v != null && new RegExp(padrao).test(String(v)));
+          return cadeia;
+        },
+        regexIMatch(col: string, padrao: string) {
+          filtros.push(["regexIMatch", col, padrao]);
+          adicionar(col, (v) => v != null && new RegExp(padrao, "i").test(String(v)));
           return cadeia;
         },
         ilike(col: string, padrao: string) {
@@ -200,20 +234,23 @@ export function clienteEmMemoria(banco: BancoEmMemoria): never {
           filtros.push(["or", "", expr]);
           const partes = partesDoOr(expr).map((p) => {
             const [col, op, ...resto] = p.split(".");
-            return { col: col!, op: op!, val: valorDoOr(resto.join(".")) };
+            if (op === "not") {
+              const [interno, ...valor] = resto;
+              return { col: col!, nega: true, op: interno!, val: valorDoOr(valor.join(".")) };
+            }
+            return { col: col!, nega: false, op: op!, val: valorDoOr(resto.join(".")) };
           });
           predicados.push((l) =>
-            partes.some(({ col, op, val }) =>
-              op === "ilike"
-                ? ilikeCasa(valorDe(l, col), val)
-                : op === "imatch"
-                  ? valorDe(l, col) != null && new RegExp(val, "i").test(String(valorDe(l, col)))
-                  : op === "eq"
-                  ? String(valorDe(l, col)) === val
-                  : op === "not" && val === "is.null"
-                    ? juncaoAchou(col, l)
-                    : false,
-            ),
+            partes.some(({ col, nega, op, val }) => {
+              // `apelido.not.is.null`: a junção opcional achou algum registro.
+              if (juncoes.has(col)) {
+                if (op !== "is" || val !== "null") throw new Error(`junção ${col} no or só com is.null`);
+                return nega ? juncaoAchou(col, l) : !juncaoAchou(col, l);
+              }
+              const r = condicaoCasa(op, valorDe(l, col), val);
+              if (r === null) return false;
+              return nega ? !r : r;
+            }),
           );
           return cadeia;
         },

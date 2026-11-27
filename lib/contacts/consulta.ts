@@ -22,6 +22,9 @@
  *    contato e uma segunda junção, SEM `!inner`, com os negócios que têm o valor
  *    (`lc.not.is.null`). O valor entra no `or` entre aspas, com `\` e `"` escapados:
  *    é o único texto do usuário que passa pelo DSL do `or`.
+ *  - As condições NEGATIVAS do campo ("não contém", "é diferente de", "está vazio") são anti-join:
+ *    a junção opcional `lc` filtrada pela positiva + `lc is null` ("nenhum negócio do recorte").
+ *    No contato, `is.null` OU `not.<positiva>` — o campo vazio conta como negativo.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -34,7 +37,13 @@ import { intervaloEmInstantes, periodoDoFiltro } from "@/lib/contacts/filtros";
 import { padraoRegexDeBusca } from "@/lib/contacts/busca-regex";
 import { buscaValeConsulta } from "@/lib/inbox/termo-de-busca";
 import { arrayDeUmValorParaOr } from "@/lib/inbox/marcador-da-conversa";
-import { CHAVE_DE_CAMPO_FILTRAVEL, type FiltrosDeContatos } from "@/lib/schemas/contacts";
+import {
+  CHAVE_DE_CAMPO_FILTRAVEL,
+  MAXIMO_DE_VALORES_EM_QUALQUER_DE,
+  filtroDeCampoAtivo,
+  valoresDeQualquerDe,
+  type FiltrosDeContatos,
+} from "@/lib/schemas/contacts";
 
 export interface ContextoDaConsulta {
   organizationId: string;
@@ -77,7 +86,15 @@ const FK_DO_NEGOCIO_OPCIONAL = "crm_leads!crm_leads_contact_id_fkey(id)";
 export const MAXIMO_DE_ETAPAS_NO_FILTRO = 100;
 
 function campoAtivo(f: FiltrosDeContatos): boolean {
-  return Boolean(f.campo && f.campo_valor);
+  return filtroDeCampoAtivo(f);
+}
+
+/**
+ * As condições NEGATIVAS são a negação de uma positiva: "não contém" = não "contém", "é diferente
+ * de" = não "é igual a", "está vazio" = não "não está vazio". O campo vazio conta como negativo.
+ */
+function condicaoNegativa(f: FiltrosDeContatos): boolean {
+  return f.campo_op === "nao_contem" || f.campo_op === "diferente" || f.campo_op === "vazio";
 }
 
 function campoDeNegocioAtivo(f: FiltrosDeContatos): boolean {
@@ -86,6 +103,14 @@ function campoDeNegocioAtivo(f: FiltrosDeContatos): boolean {
 
 function campoEmQualquerAtivo(f: FiltrosDeContatos): boolean {
   return campoAtivo(f) && f.campo_escopo === "qualquer";
+}
+
+/**
+ * A junção opcional `lc` entra no escopo "qualquer" (o OU com o contato) e nas condições negativas
+ * do escopo "negocio" (o anti-join: `lc` filtrado pela positiva + `lc is null`).
+ */
+function usaJuncaoDoCampo(f: FiltrosDeContatos): boolean {
+  return campoEmQualquerAtivo(f) || (campoDeNegocioAtivo(f) && condicaoNegativa(f));
 }
 
 function temEtapa(f: FiltrosDeContatos): boolean {
@@ -104,7 +129,7 @@ export function filtraPorNegocio(f: FiltrosDeContatos): boolean {
 export function colunasComJuncoes(colunas: string, f: FiltrosDeContatos): string {
   let saida = colunas;
   if (f.funil || temEtapa(f) || campoDeNegocioAtivo(f)) saida += `, ${JUNCAO}:${FK_DO_NEGOCIO}`;
-  if (campoEmQualquerAtivo(f)) saida += `, ${JUNCAO_DO_CAMPO}:${FK_DO_NEGOCIO_OPCIONAL}`;
+  if (usaJuncaoDoCampo(f)) saida += `, ${JUNCAO_DO_CAMPO}:${FK_DO_NEGOCIO_OPCIONAL}`;
   return saida;
 }
 
@@ -133,6 +158,41 @@ function valorEntreAspas(valor: string): string {
  */
 function escaparLike(valor: string): string {
   return valor.replace(/[\\%_]/g, (m) => `\\${m}`).replace(/\*/g, "_");
+}
+
+/** Escapa os metacaracteres de regex (POSIX ARE do Postgres e JS aceitam `\` antes deles). */
+function escaparRegex(valor: string): string {
+  return valor.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
+}
+
+/** A condição POSITIVA de um valor de campo, num operador do PostgREST. */
+type Positiva = { op: "ilike" | "match" | "imatch"; valor: string };
+
+/**
+ * A positiva da condição escolhida (a negativa é a negação dela):
+ *  - contém / não contém: `ilike %v%`; é igual a / é diferente de: `ilike v` (sem caixa, exato);
+ *  - é qualquer um de: `imatch ^(a|b|…)$` com cada valor escapado — UM predicado, que serve no
+ *    contato, na junção e dentro do `or` sem abrir outro `or`;
+ *  - não está vazio / está vazio: `match \S` (algum caractere que não é espaço; NULL não casa).
+ */
+function positivaDoCampo(f: FiltrosDeContatos, requestId: string): Positiva {
+  switch (f.campo_op) {
+    case "vazio":
+    case "preenchido":
+      return { op: "match", valor: "\\S" };
+    case "qualquer_de": {
+      const valores = valoresDeQualquerDe(f.campo_valor ?? "");
+      if (valores.length === 0 || valores.length > MAXIMO_DE_VALORES_EM_QUALQUER_DE) {
+        throw new ApiError(422, "validation_failed", undefined, requestId, "Valores do campo inválidos.");
+      }
+      return { op: "imatch", valor: `^(${valores.map(escaparRegex).join("|")})$` };
+    }
+    case "igual":
+    case "diferente":
+      return { op: "ilike", valor: escaparLike(f.campo_valor!) };
+    default:
+      return { op: "ilike", valor: `%${escaparLike(f.campo_valor!)}%` };
+  }
 }
 
 /**
@@ -265,25 +325,55 @@ export async function consultaDeContatos(
     if (temEtapa(f)) query = query.in(`${JUNCAO}.stage_id`, f.etapa!);
   }
 
-  if (f.campo && f.campo_valor) {
-    if (!CHAVE_DE_CAMPO_FILTRAVEL.test(f.campo) || chaveSensivelDeCampo(f.campo)) {
+  if (campoAtivo(f)) {
+    const campo = f.campo!;
+    if (!CHAVE_DE_CAMPO_FILTRAVEL.test(campo) || chaveSensivelDeCampo(campo)) {
       throw new ApiError(422, "validation_failed", undefined, ctx.requestId, "Campo inválido.");
     }
-    const padrao =
-      f.campo_op === "igual" ? escaparLike(f.campo_valor) : `%${escaparLike(f.campo_valor)}%`;
-    if (f.campo_escopo === "qualquer") {
-      // O valor no próprio contato OU num negócio dele (do funil/etapas escolhidos, se houver).
+    const positiva = positivaDoCampo(f, ctx.requestId);
+    const negativa = condicaoNegativa(f);
+    const doContato = `custom_fields->>${campo}`;
+    const noOr = `${doContato}.${positiva.op}.${valorEntreAspas(positiva.valor)}`;
+    // Negativa no contato: o campo vazio (NULL) também conta — `not` sozinho perderia o NULL.
+    const negativaNoOr = `${doContato}.is.null,${doContato}.not.${positiva.op}.${valorEntreAspas(positiva.valor)}`;
+    /** A positiva como filtro do topo, numa coluna do contato ou de uma junção. */
+    const comPositiva = (coluna: string) => {
+      if (positiva.op === "ilike") query = query.ilike(coluna, positiva.valor);
+      else if (positiva.op === "match") query = query.regexMatch(coluna, positiva.valor);
+      else query = query.regexIMatch(coluna, positiva.valor);
+    };
+
+    /** `lc`: os negócios do recorte (funil/etapas) em que a POSITIVA vale. */
+    const juncaoDoCampoComPositiva = () => {
       const lc = JUNCAO_DO_CAMPO;
       query = query.eq(`${lc}.organization_id`, ctx.organizationId);
       if (f.funil) query = query.eq(`${lc}.pipeline_id`, f.funil);
       if (temEtapa(f)) query = query.in(`${lc}.stage_id`, f.etapa!);
-      query = query.ilike(`${lc}.custom_fields->>${f.campo}`, padrao);
-      query = query.or(`custom_fields->>${f.campo}.ilike.${valorEntreAspas(padrao)},${lc}.not.is.null`);
+      comPositiva(`${lc}.custom_fields->>${campo}`);
+    };
+
+    if (f.campo_escopo === "qualquer") {
+      juncaoDoCampoComPositiva();
+      if (negativa) {
+        // Nem o contato nem nenhum negócio do recorte (anti-join: `lc is null`).
+        query = query.or(negativaNoOr);
+        query = query.is(JUNCAO_DO_CAMPO, null);
+      } else {
+        // O valor no próprio contato OU num negócio dele (do funil/etapas escolhidos, se houver).
+        query = query.or(`${noOr},${JUNCAO_DO_CAMPO}.not.is.null`);
+      }
+    } else if (f.campo_escopo === "negocio") {
+      if (negativa) {
+        // `lf` (inner, sem predicado de campo) prova que há negócio no recorte; nenhum deles com a positiva.
+        juncaoDoCampoComPositiva();
+        query = query.is(JUNCAO_DO_CAMPO, null);
+      } else {
+        comPositiva(`${JUNCAO}.custom_fields->>${campo}`);
+      }
+    } else if (negativa) {
+      query = query.or(negativaNoOr);
     } else {
-      query = query.ilike(
-        f.campo_escopo === "negocio" ? `${JUNCAO}.custom_fields->>${f.campo}` : `custom_fields->>${f.campo}`,
-        padrao,
-      );
+      comPositiva(doContato);
     }
   }
 

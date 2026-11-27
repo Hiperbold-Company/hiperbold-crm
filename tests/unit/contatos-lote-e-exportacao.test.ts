@@ -465,6 +465,12 @@ describe("lista, contagem, lote e exportação concordam", () => {
     { nome: "* é texto, não curinga", filtro: { campo_escopo: "contato", campo: "empresa", campo_valor: "off*" }, esperado: [3] },
     // Se `*` valesse como curinga ("50, qualquer coisa, off") isto casaria o contato 3; como texto, não.
     { nome: "* no meio não casa 'qualquer coisa'", filtro: { campo_escopo: "contato", campo: "empresa", campo_valor: "50*off" }, esperado: [] },
+    // As condições sem valor e as negativas passam pela MESMA consulta na lista, no lote e na exportação.
+    { nome: "campo do contato 'cargo não está vazio'", filtro: { campo_escopo: "contato", campo: "cargo", campo_op: "preenchido" }, esperado: [1] },
+    // O 2 só tem negócio de OUTRA organização (l5, com google): para a org A ele está vazio.
+    // (A etiqueta tira o anonimizado 6, que a lista mostra e que também tem o campo vazio.)
+    { nome: "campo em qualquer lugar 'utm_source está vazio'", filtro: { tag: "vip", campo: "utm_source", campo_op: "vazio" }, esperado: [1, 2] },
+    { nome: "funil F1 + negócio 'utm_source não contém google'", filtro: { funil: F1, campo_escopo: "negocio", campo: "utm_source", campo_op: "nao_contem", campo_valor: "google" }, esperado: [4] },
   ];
 
   for (const caso of casos) {

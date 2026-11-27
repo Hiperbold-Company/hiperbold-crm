@@ -34,7 +34,7 @@ import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
 import { temCamposPersonalizados } from "@/lib/campos/resposta-recortada";
 import { chavesRestritasDaOrganizacao } from "@/lib/campos/chaves-restritas";
 import { leitorVeCamposRestritos, recortarLinha, type LeitorDosCampos } from "@/lib/campos/recorte-por-papel";
-import { temFiltroDeData } from "@/lib/contacts/filtros";
+import { campoDoFiltro, temFiltroDeData } from "@/lib/contacts/filtros";
 import { fusoDaOrganizacao } from "@/lib/contacts/fuso-da-organizacao";
 import { filtraPorNegocio } from "@/lib/contacts/consulta";
 
@@ -194,7 +194,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
     supabase,
     organizationId,
-    qsParsed.data.campo_valor ? qsParsed.data.campo : null,
+    campoDoFiltro(qsParsed.data),
     auth.leitor,
     requestId,
   );

@@ -464,4 +464,16 @@ describe("GET /api/v1/contacts — recorte do campo não público (1015)", () =>
     const res = await GET(req("http://localhost/api/v1/contacts?campo_escopo=contato&campo=legado&campo_valor=x"));
     expect(res.status).toBe(403);
   });
+
+  it("'está vazio'/'não está vazio' num campo restrito também é oráculo: 403 para quem não é admin", async () => {
+    sessaoCom("manager");
+    const { GET } = await import("./route");
+    for (const op of ["vazio", "preenchido"]) {
+      const res = await GET(req(`http://localhost/api/v1/contacts?campo_escopo=contato&campo=legado&campo_op=${op}`));
+      expect(res.status, op).toBe(403);
+    }
+    sessaoCom("admin");
+    const doAdmin = await GET(req("http://localhost/api/v1/contacts?campo_escopo=contato&campo=legado&campo_op=vazio"));
+    expect(doAdmin.status).toBe(200);
+  });
 });

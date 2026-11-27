@@ -11,12 +11,30 @@ import type { OpcoesDeFiltroDeContatos } from "@/hooks/contacts/useContactFilter
 import { useT } from "@/hooks/i18n/useT";
 import { etapasDoFiltro, type FiltrosDaTela, type MudancaDeTexto } from "@/lib/contacts/filtros-url";
 import type { FiltroDeData } from "@/lib/kanban/datas-do-lead";
+import {
+  MAXIMO_DE_VALORES_EM_QUALQUER_DE,
+  filtroDeCampoAtivo,
+  operadorDeCampoSemValor,
+  valoresDeQualquerDe,
+  type OperadorDeCampo,
+} from "@/lib/schemas/contacts";
 import { cn } from "@/lib/utils";
 
 const CLASSE_DO_CAMPO = "h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm";
 const CHAVE_VALIDA = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
 
 type Escopo = "qualquer" | "contato" | "negocio";
+
+/** As condições na ordem da tela; o texto passa por `t()` na hora de mostrar. */
+const CONDICOES: ReadonlyArray<{ op: OperadorDeCampo; rotulo: string }> = [
+  { op: "contem", rotulo: "contém" },
+  { op: "nao_contem", rotulo: "não contém" },
+  { op: "igual", rotulo: "é igual a" },
+  { op: "diferente", rotulo: "é diferente de" },
+  { op: "qualquer_de", rotulo: "é qualquer um de" },
+  { op: "vazio", rotulo: "está vazio" },
+  { op: "preenchido", rotulo: "não está vazio" },
+];
 
 /** As chaves sugeridas: no escopo "qualquer", as do contato e as do negócio, sem repetir. */
 function sugestoesDoEscopo(
@@ -211,7 +229,7 @@ function FiltroDeCampo({
   const [aberto, setAberto] = useState(false);
   const [escopo, setEscopo] = useState<Escopo>(filtros.campo_escopo ?? "qualquer");
   const [campo, setCampo] = useState(filtros.campo ?? "");
-  const [operador, setOperador] = useState<"contem" | "igual">(filtros.campo_op ?? "contem");
+  const [operador, setOperador] = useState<OperadorDeCampo>(filtros.campo_op ?? "contem");
   const [valor, setValor] = useState(filtros.campo_valor ?? "");
 
   // "Limpar filtros" (ou voltar no navegador) muda a URL por fora: o formulário acompanha.
@@ -223,11 +241,19 @@ function FiltroDeCampo({
   }, [filtros.campo_escopo, filtros.campo, filtros.campo_op, filtros.campo_valor]);
 
   const sugestoes = sugestoesDoEscopo(opcoes, escopo);
-  const ativo = Boolean(filtros.campo && filtros.campo_valor);
+  const ativo = filtroDeCampoAtivo(filtros);
   const rotuloDoCampo = (chave: string) =>
     [...(opcoes?.campos.contato ?? []), ...(opcoes?.campos.negocio ?? [])].find((c) => c.key === chave)?.label ??
     chave;
-  const podeAplicar = CHAVE_VALIDA.test(campo.trim()) && valor.trim().length > 0;
+  const semValor = operadorDeCampoSemValor(operador);
+  const nDeValores = operador === "qualquer_de" ? valoresDeQualquerDe(valor).length : 0;
+  const valoresDemais = nDeValores > MAXIMO_DE_VALORES_EM_QUALQUER_DE;
+  const valorOk = semValor
+    ? true
+    : operador === "qualquer_de"
+      ? nDeValores > 0 && !valoresDemais
+      : valor.trim().length > 0;
+  const podeAplicar = CHAVE_VALIDA.test(campo.trim()) && valorOk;
 
   function aplicar() {
     if (!podeAplicar) return;
@@ -235,9 +261,32 @@ function FiltroDeCampo({
       campo_escopo: escopo,
       campo: campo.trim(),
       campo_op: operador,
-      campo_valor: valor.trim(),
+      // Sem valor nas condições que não o usam: o valor antigo não fica na URL.
+      campo_valor: semValor ? undefined : valor.trim(),
     });
     setAberto(false);
+  }
+
+  /** O texto do chip: "<Campo> contém X", "<Campo> está vazio", "<Campo> é um de: A, B". */
+  function descricaoDoFiltro(): string {
+    const nome = rotuloDoCampo(filtros.campo!);
+    const v = filtros.campo_valor ?? "";
+    switch (filtros.campo_op) {
+      case "vazio":
+        return `${nome} ${t("está vazio")}`;
+      case "preenchido":
+        return `${nome} ${t("não está vazio")}`;
+      case "qualquer_de":
+        return `${nome} ${t("é um de:")} ${valoresDeQualquerDe(v).join(", ")}`;
+      case "igual":
+        return `${nome} ${t("é igual a")} ${v}`;
+      case "diferente":
+        return `${nome} ${t("é diferente de")} ${v}`;
+      case "nao_contem":
+        return `${nome} ${t("não contém")} ${v}`;
+      default:
+        return `${nome} ${t("contém")} ${v}`;
+    }
   }
 
   return (
@@ -251,7 +300,7 @@ function FiltroDeCampo({
         >
           {t("Campo")}:{" "}
           {ativo
-            ? `${rotuloDoCampo(filtros.campo!)} ${filtros.campo_op === "igual" ? t("é igual a") : t("contém")} ${filtros.campo_valor}${
+            ? `${descricaoDoFiltro()}${
                 filtros.campo_escopo === "contato"
                   ? ` (${t("só do contato")})`
                   : filtros.campo_escopo === "negocio"
@@ -309,7 +358,7 @@ function FiltroDeCampo({
             <p className="text-xs text-error-fg">{t("Use só letras, números e _ (começando por letra).")}</p>
           )}
         </div>
-        <div className="grid grid-cols-[7rem_1fr] gap-2">
+        <div className="grid grid-cols-[8.5rem_1fr] gap-2">
           <div className="space-y-1">
             <Label htmlFor="contatos-campo-op" className="text-xs">
               {t("Condição")}
@@ -318,28 +367,44 @@ function FiltroDeCampo({
               id="contatos-campo-op"
               className={CLASSE_DO_CAMPO}
               value={operador}
-              onChange={(e) => setOperador(e.target.value as "contem" | "igual")}
+              onChange={(e) => setOperador(e.target.value as OperadorDeCampo)}
             >
-              <option value="contem">{t("contém")}</option>
-              <option value="igual">{t("é igual a")}</option>
+              {CONDICOES.map((c) => (
+                <option key={c.op} value={c.op}>
+                  {t(c.rotulo)}
+                </option>
+              ))}
             </select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="contatos-campo-valor" className="text-xs">
-              {t("Valor")}
-            </Label>
-            <input
-              id="contatos-campo-valor"
-              className={CLASSE_DO_CAMPO}
-              value={valor}
-              maxLength={200}
-              onChange={(e) => setValor(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") aplicar();
-              }}
-            />
-          </div>
+          {!semValor && (
+            <div className="space-y-1">
+              <Label htmlFor="contatos-campo-valor" className="text-xs">
+                {t("Valor")}
+              </Label>
+              <input
+                id="contatos-campo-valor"
+                className={CLASSE_DO_CAMPO}
+                value={valor}
+                maxLength={200}
+                aria-describedby={operador === "qualquer_de" ? "contatos-campo-valor-dica" : undefined}
+                onChange={(e) => setValor(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") aplicar();
+                }}
+              />
+            </div>
+          )}
         </div>
+        {operador === "qualquer_de" && (
+          <p
+            id="contatos-campo-valor-dica"
+            className={cn("text-xs", valoresDemais ? "text-error-fg" : "text-muted-foreground")}
+          >
+            {valoresDemais
+              ? t("Use no máximo 20 valores.")
+              : t("Separe os valores por vírgula.")}
+          </p>
+        )}
         <div className="flex justify-between">
           <Button
             variant="ghost"

@@ -13,7 +13,11 @@ import {
   somaDias,
   type FiltroDeData,
 } from "@/lib/kanban/datas-do-lead";
-import type { FiltrosDeContatos, FiltrosDeContatosEntrada } from "@/lib/schemas/contacts";
+import {
+  filtroDeCampoAtivo,
+  type FiltrosDeContatos,
+  type FiltrosDeContatosEntrada,
+} from "@/lib/schemas/contacts";
 
 export type ChaveDePeriodo = "criado" | "ativ";
 
@@ -109,7 +113,7 @@ export function temFiltro(f: Partial<FiltrosDeContatosEntrada>): boolean {
       f.ativ_ate ||
       f.funil ||
       (Array.isArray(f.etapa) ? f.etapa.length > 0 : f.etapa) ||
-      (f.campo && f.campo_valor),
+      filtroDeCampoAtivo(f),
   );
 }
 
@@ -117,6 +121,15 @@ export function temFiltro(f: Partial<FiltrosDeContatosEntrada>): boolean {
 * O filtro como vai para a auditoria: o que foi filtrado, NUNCA o texto digitado.
  * Busca e valor de campo podem ser dado pessoal (um nome, um telefone, um cargo). Fica o suficiente para reconstituir "que tipo de conjunto era".
  */
+/**
+ * A chave do filtro por campo quando ele está ligado (com valor ou numa condição sem valor), senão
+ * `null`. É o que as rotas passam a `recusaDoFiltroPorCampoRestrito` (1015): "está vazio" num campo
+ * restrito também é oráculo e também é recusado a quem não é administrador.
+ */
+export function campoDoFiltro(f: { campo?: string; campo_op?: string; campo_valor?: string }): string | null {
+  return filtroDeCampoAtivo(f) ? (f.campo ?? null) : null;
+}
+
 export function resumoDoFiltroParaAuditoria(f: FiltrosDeContatos): Record<string, unknown> {
   const criado = periodoDoFiltro(f, "criado");
   const ativ = periodoDoFiltro(f, "ativ");
@@ -128,7 +141,7 @@ export function resumoDoFiltroParaAuditoria(f: FiltrosDeContatos): Record<string
     ...(ativ ? { ultima_atividade: ativ } : {}),
     ...(f.funil ? { funil_id: f.funil } : {}),
     ...(f.etapa && f.etapa.length > 0 ? { etapa_ids: f.etapa } : {}),
-    ...(f.campo && f.campo_valor
+    ...(filtroDeCampoAtivo(f)
       ? { campo: { escopo: f.campo_escopo, chave: f.campo, operador: f.campo_op } }
       : {}),
   };

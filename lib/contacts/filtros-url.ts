@@ -8,7 +8,16 @@
  * `funil=abc` não pode virar 422 numa lista que parecia vazia.
  */
 import { PERIODOS_PREDEFINIDOS } from "@/lib/kanban/datas-do-lead";
-import { DIA_MAXIMO_DO_FILTRO, DIA_MINIMO_DO_FILTRO } from "@/lib/schemas/contacts";
+import {
+  DIA_MAXIMO_DO_FILTRO,
+  DIA_MINIMO_DO_FILTRO,
+  MAXIMO_DE_VALORES_EM_QUALQUER_DE,
+  OPERADORES_DE_CAMPO,
+  filtroDeCampoAtivo,
+  operadorDeCampoSemValor,
+  valoresDeQualquerDe,
+  type OperadorDeCampo,
+} from "@/lib/schemas/contacts";
 import { chaveSensivelDeCampo } from "@/lib/contacts/campos-sensiveis";
 import { MAXIMO_DE_ETIQUETAS_NO_FILTRO, marcadoresEscolhidos } from "@/lib/inbox/marcador-da-conversa";
 
@@ -37,7 +46,7 @@ export interface FiltrosDaTela {
   etapa?: string;
   campo_escopo?: "qualquer" | "contato" | "negocio";
   campo?: string;
-  campo_op?: "contem" | "igual";
+  campo_op?: OperadorDeCampo;
   campo_valor?: string;
 }
 
@@ -123,8 +132,21 @@ export function filtrosFromParams(sp: {
     .slice(0, MAXIMO_DE_ETAPAS)
     .join(",");
   const campo = sp.get("campo");
-  const valor = texto("campo_valor", 200);
-  const comCampo = campo && CHAVE_DE_CAMPO.test(campo) && !chaveSensivelDeCampo(campo) && valor;
+  const opDaUrl = sp.get("campo_op");
+  const operador: OperadorDeCampo = (OPERADORES_DE_CAMPO as readonly string[]).includes(opDaUrl ?? "")
+    ? (opDaUrl as OperadorDeCampo)
+    : "contem";
+  const semValor = operadorDeCampoSemValor(operador);
+  // Nas condições sem valor, um `campo_valor` que sobrou na URL é descartado (senão seria 422).
+  const valor = semValor ? undefined : texto("campo_valor", 200);
+  const nDeValores = operador === "qualquer_de" && valor ? valoresDeQualquerDe(valor).length : 1;
+  const comCampo =
+    campo &&
+    CHAVE_DE_CAMPO.test(campo) &&
+    !chaveSensivelDeCampo(campo) &&
+    (semValor || valor) &&
+    nDeValores > 0 &&
+    nDeValores <= MAXIMO_DE_VALORES_EM_QUALQUER_DE;
   const tags = marcadoresEscolhidos(sp.getAll("tag").map((t) => t.slice(0, 80))).slice(
     0,
     MAXIMO_DE_ETIQUETAS_NO_FILTRO,
@@ -146,9 +168,9 @@ export function filtrosFromParams(sp: {
     ...(comCampo
       ? {
           campo,
-          campo_valor: valor,
+          ...(valor ? { campo_valor: valor } : {}),
           campo_escopo: escopoDoCampo(sp.get("campo_escopo")),
-          campo_op: sp.get("campo_op") === "igual" ? ("igual" as const) : ("contem" as const),
+          campo_op: operador,
         }
       : {}),
   };
@@ -193,6 +215,6 @@ export function quantidadeDeFiltros(f: FiltrosDaTela): number {
     f.criado || f.criado_de || f.criado_ate,
     f.ativ || f.ativ_de || f.ativ_ate,
     f.funil || f.etapa,
-    f.campo && f.campo_valor,
+    filtroDeCampoAtivo(f),
   ].filter(Boolean).length;
 }

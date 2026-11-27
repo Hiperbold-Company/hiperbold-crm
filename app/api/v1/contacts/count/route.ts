@@ -17,6 +17,7 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { contarContatos } from "@/lib/contacts/consulta";
 import { recusaDoFiltroPorCampoRestrito } from "@/lib/campos/filtro-restrito";
+import { campoDoFiltro } from "@/lib/contacts/filtros";
 import { filtrosDeContatosSchema } from "@/lib/schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const recusaDoCampo = await recusaDoFiltroPorCampoRestrito(
     supabase,
     authz.org.orgId,
-    parsed.data.campo_valor ? parsed.data.campo : null,
+    campoDoFiltro(parsed.data),
     authz.org.role,
     requestId,
   );
