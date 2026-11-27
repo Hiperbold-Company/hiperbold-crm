@@ -25,29 +25,19 @@
  *     pacote não tem validade no banco (cai no saldo avulso, sem ciclo), então o e-mail não promete data.
  *     Sobe só com o evento `aplicado`, que é o que gravou o crédito dos tokens na mesma transação.
  *
- * PAYMENT_OVERDUE: COB-05, em dois casos que dependem de a organização JÁ TER PAGO (a mesma consulta do
- * `primeiraCompra` do COB-02: existe pedido de assinatura `pago` ou `estornado`; `current_period_end` NÃO serve, o
- * período de avaliação também o grava). Regra (a mesma no código de `pagamentoNaoAprovado`):
- *   - NUNCA PAGOU: a primeira cobrança venceu. O e-mail sai, na variante dos Planos ("Sua assinatura não foi
- *     concluída", botão "Assinar de novo", sem fatura e sem promessa de acesso), com o plano do pedido (ou do
- *     contrato). Só não sai se o pedido vencido não for de assinatura (pacote de tokens) ou se o banco não o deixou
- *     ler (`aplicado` sem pedido).
- *   - JÁ PAGOU: só quando a cobrança vencida é a RENOVAÇÃO do plano vigente:
- *       · o contrato tem período pago (`current_period_end`) e está `ativa` ou `atrasada`;
- *       · esse período já acabou ou acaba em até 1 dia (a cobrança de renovação vence no último dia de acesso e o
- *         Asaas só a marca vencida depois dele): cobrança vencida com o período vigente longe do fim é pagamento
- *         ADIANTADO (Pix de renovação antecipada que outro pagamento já cobriu) e não manda nada;
- *       · e é uma destas duas: a cobrança da ASSINATURA VIVA do contrato (o banco a fecha como `ignorado`,
- *         `cobranca_de_renovacao`, com a organização e sem pedido) ou o PEDIDO de assinatura do MESMO plano (mesmo
- *         `code`, pois o contrato aponta para a versão) e do mesmo ciclo do contrato (o Pix ou parcelado da
- *         renovação, `aplicado`). Pedido de OUTRO plano ou ciclo (troca abandonada), pedido de pacote de tokens e
- *         pedido que o banco não deixou ler não são renovação do plano vigente e não mandam.
- * Pedido que venceu sem pagar (`aplicado`) sempre traz um alarme de remoção
- * (`remover_assinatura_pendente`/`remover_cobranca_pendente`, `lib/billing/asaas/alarmes-de-remocao.ts`): o CRM
- * remove a cobrança no Asaas logo depois, então o e-mail sai SEM a fatura (`cobrancaCancelada`), com o botão para os
- * Planos. Quem já pagava recebe "Sua assinatura precisa ser renovada"; quem nunca pagou, "não foi concluída". A
- * cobrança da assinatura viva (`ignorado`, sem alarme) continua no Asaas e mantém o link da fatura (a da cobrança que
- * venceu; a guardada no pedido só entra se ela faltar).
+ * PAYMENT_OVERDUE: COB-05 só para a cobrança da ASSINATURA VIVA (renovação no cartão que venceu: o banco a fecha
+ * como `ignorado`, `cobranca_de_renovacao`, com a organização e sem pedido), e só para quem JÁ PAGOU (existe pedido
+ * de assinatura `pago` ou `estornado`; `current_period_end` NÃO serve, o período de avaliação também o grava):
+ *   · o contrato tem período pago (`current_period_end`) e está `ativa` ou `atrasada`;
+ *   · esse período já acabou ou acaba em até 1 dia (a cobrança de renovação vence no último dia de acesso e o
+ *     Asaas só a marca vencida depois dele): cobrança vencida com o período vigente longe do fim é pagamento
+ *     ADIANTADO e não manda nada;
+ *   · se a cobrança traz a referência de um pedido, ele é de assinatura, do MESMO plano (mesmo `code`, pois o
+ *     contrato aponta para a versão) e do mesmo ciclo do contrato.
+ * PEDIDO que venceu sem pagar (`aplicado`) NÃO manda nada aqui (migration 1026): quem avisa é a régua de cobrança
+ * (`regua-de-cobranca.ts`, cron `avisar-fatura-em-aberto`), com o link da fatura, que fica no Asaas até o prazo.
+ * O COB-05 da assinatura viva leva o link da fatura (a da cobrança que venceu; a guardada no pedido só entra se ela
+ * faltar).
  * "Acesso até" é o último dia da carência: `current_period_end + grace_days` (a mesma conta de
  * `fn_billing_conferir_vencimento`) menos um dia, porque o instante da suspensão já é o primeiro dia de leitura.
  * Carência que já passou não envia (a conta já está em modo só leitura; o aviso é o de conta suspensa, B2).
@@ -67,7 +57,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ultimoDiaDoPeriodo } from "@/lib/billing/assinatura/estado-da-assinatura";
-import { alarmesPedemRemoverACobranca } from "@/lib/billing/asaas/alarmes-de-remocao";
 import type { AvisosDeCobranca, EntradaDeAvisoDeCobranca } from "@/lib/billing/asaas/processar-eventos";
 import type { CicloDoPlano, FormaDePagamento } from "@/lib/email/templates/_layout-transacional";
 import { logger } from "@/lib/logger";
@@ -286,47 +275,23 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
 
   async function pagamentoNaoAprovado(e: EntradaDeAvisoDeCobranca, organizationId: string): Promise<void> {
     if (!e.idDoPagamento || !e.cobranca) return;
-    // O banco fecha como `aplicado` (pedido que venceu) ou `ignorado` com a organização (cobrança da assinatura
-    // viva, sem pedido). `ignorado` sem organização é "pagamento já recebido" e nunca chega aqui.
-    if (e.resultado !== "aplicado" && e.resultado !== "ignorado") return;
+    // 1026: `aplicado` é PEDIDO que venceu. A fatura fica no Asaas e quem avisa é a régua de cobrança
+    // (`regua-de-cobranca.ts`), com o link, nos marcos dela: nada sai daqui. Só a cobrança da assinatura viva
+    // (`ignorado` com a organização, sem pedido vencido) segue neste caminho.
+    if (e.resultado !== "ignorado") return;
 
     // A REGRA (o cabeçalho do arquivo explica o porquê de cada corte). "Já pagou" é pedido de assinatura pago, nunca
-    // `current_period_end`: o período de avaliação também o grava.
+    // `current_period_end`: o período de avaliação também o grava. Quem nunca pagou não tem renovação a avisar.
     const jaPagou = (await assinaturasPagas(organizationId)).length > 0;
+    if (!jaPagou) return;
     const doContrato = await contrato(organizationId);
 
     const idDoPedido = REFERENCIA_DE_PEDIDO.exec(e.cobranca.externalReference ?? "")?.[1] ?? null;
     const doPedido = idDoPedido ? await pedido(organizationId, idDoPedido) : null;
-    if (doPedido) {
-      // Pacote de tokens (e qualquer pedido que não seja assinatura) não é assinatura nem renovação.
-      if (doPedido.tipo !== "assinatura" || !doPedido.plan_id) return;
-    } else if (e.resultado !== "ignorado") {
-      // `aplicado` é pedido que venceu; sem o pedido legível não há como saber de que compra se trata.
-      return;
-    }
+    // Pacote de tokens (e qualquer pedido que não seja assinatura) não é assinatura nem renovação.
+    if (doPedido && (doPedido.tipo !== "assinatura" || !doPedido.plan_id)) return;
 
     const valor = Math.round(e.cobranca.valorConfirmado * 100);
-
-    if (!jaPagou) {
-      // Nunca pagou: a primeira cobrança venceu e não há renovação nem período pago a prometer. O e-mail sai, mas
-      // leva aos Planos para assinar de novo (nunca ao texto de renovação, nunca à fatura).
-      // `ignorado` é a cobrança da assinatura viva, SEM alarme de remoção: ela segue no Asaas, e dizer ao cliente
-      // para assinar de novo (cobrança "cancelada") seria falso. Só `aplicado` (pedido que venceu, com o alarme de
-      // remoção) leva esta variante; no resto não sai nada, porque não existe outro e-mail para quem nunca pagou.
-      if (e.resultado !== "aplicado") return;
-      const planoId = doPedido?.plan_id ?? doContrato?.plan_id ?? null;
-      const doPlano = planoId ? await plano(planoId) : null;
-      if (!doPlano) return;
-      await enfileirar({
-        organizationId,
-        emailId: "COB-05",
-        chave: `pagamento:${e.idDoPagamento}`,
-        destino: "admins",
-        copiaParaOperador: true,
-        dados: { plano: doPlano.name, valor, faturaUrl: null, cobrancaCancelada: true, nuncaPagou: true },
-      });
-      return;
-    }
 
     if (!doContrato?.current_period_end) return;
     if (doContrato.status !== "ativa" && doContrato.status !== "atrasada") return;
@@ -349,15 +314,11 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
     if (fimDaCarencia.getTime() <= agora().getTime()) return;
     const acessoAte = ultimoDiaDoPeriodo(fimDaCarencia).toISOString();
 
-    // Cobrança que o próprio CRM remove no Asaas logo depois do evento (pedido de assinatura que venceu sem
-    // pagar: mesmo alarme que dispara `tentarRemoverAssinatura`/`tentarRemoverCobranca`): a fatura vai deixar de
-    // existir, então o e-mail NÃO a leva. O botão leva aos Planos do CRM, para renovar.
-    const cobrancaCancelada = alarmesPedemRemoverACobranca(e.alarmes);
-    // O link da cobrança que venceu e o do pedido passam pela mesma regra (https no domínio do Asaas); fora dela, sem
-    // link. A cobrança que venceu vale mais: é a que o cliente vai pagar.
-    const fatura = cobrancaCancelada
-      ? null
-      : ([e.cobranca.invoiceUrl, doPedido?.invoice_url].find((u): u is string => !!u && FATURA_DO_ASAAS.test(u)) ?? null);
+    // A cobrança da assinatura viva continua no Asaas (o CRM não a remove). O link da cobrança que venceu e o do
+    // pedido passam pela mesma regra (https no domínio do Asaas); fora dela, sem link. A cobrança que venceu vale
+    // mais: é a que o cliente vai pagar.
+    const fatura =
+      [e.cobranca.invoiceUrl, doPedido?.invoice_url].find((u): u is string => !!u && FATURA_DO_ASAAS.test(u)) ?? null;
 
     await enfileirar({
       organizationId,
@@ -370,7 +331,6 @@ export function criarAvisosDeCobrancaSobre(admin: SupabaseClient, deps: DepsDosG
         valor,
         acessoAte,
         faturaUrl: fatura,
-        cobrancaCancelada,
       },
     });
   }
