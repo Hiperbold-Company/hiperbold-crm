@@ -8,6 +8,26 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [2.8.0] — 2026-11-27
+
+### Adicionado
+
+- **Marcar conversa como não lida** Agora dá para marcar uma conversa como não lida e voltar a ela depois. Na caixa de entrada, selecione as conversas e use "Marcar como não lida" em "Mais ações"; com uma conversa aberta, use o botão "Marcar como não lida" no cabeçalho dela. A conversa volta para a lista com o selo azul de não lida, sem avisar o cliente. Não é preciso mudar nada para atualizar.
+
+### Alterado
+
+- **A compra do plano pede o cadastro completo de quem paga** Ao assinar um plano ou comprar um pacote de tokens, os dados de quem paga agora
+  pedem também e-mail, celular com DDD e endereço completo (CEP, rua, número,
+  bairro, cidade e UF; só o complemento é opcional). O formulário já abre
+  preenchido com o nome e o CPF ou CNPJ da empresa e com o e-mail de quem está
+  comprando, e tudo pode ser corrigido. Esses dados vão para a ficha do cliente no
+  Asaas, e quem já comprou antes tem a ficha completada na próxima compra. Não é
+  preciso mudar nada para atualizar.
+
+- **Etapas do funil sem números de uso** A tela de configuração das etapas do funil ficou só para editar: saíram os textos com a contagem de negócios que passaram por cada etapa, a taxa de ganho sugerida e o tempo médio na etapa. Não é preciso mudar nada para atualizar.
+
+- **Assinatura não paga recebe lembretes com o link da fatura** Quando um pedido de assinatura não é pago, a fatura não é mais apagada no dia do vencimento. Ela continua disponível, e quem administra a empresa recebe um e-mail com o botão "Pagar agora" dois dias antes do vencimento, no dia, dois dias depois e um dia antes de a assinatura ser suspensa (ou de a fatura sair do ar). Só o aviso mais recente é enviado, e quem já pagou não recebe nada. A fatura antiga só é retirada depois da suspensão da conta, ou no fim do prazo do plano quando não há suspensão a caminho. Fazer um pedido novo retira antes a fatura vencida, para ninguém pagar duas vezes. A atualização aplica uma migration no banco. Não é preciso mudar nada para atualizar.
+
 ## [2.7.1] — 2026-11-26
 
 ### Corrigido
@@ -14921,7 +14941,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.1...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.1...v2.8.0
 [2.7.1]: https://github.com/melgarafael/DeskcommCRM/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/melgarafael/DeskcommCRM/compare/v2.5.1...v2.6.0
