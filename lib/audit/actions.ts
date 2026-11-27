@@ -236,6 +236,8 @@ export const AUDIT_ACTIONS = [
   "platform_admin.impersonate_misconfigured",
   "tenant.suspended",
   "tenant.reactivated",
+  // Liga/desliga o novo visual (redesign) de UMA empresa, pelo admin da plataforma.
+  "tenant.redesign_changed",
   "platform_admin.audit_listed",
   "platform_admin.audit_entry_viewed",
   "platform_admin.lgpd_listed",

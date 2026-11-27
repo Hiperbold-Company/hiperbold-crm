@@ -14,10 +14,12 @@ import { STATUS_BADGE_VARIANT, STATUS_LABEL, tipoDeCasoLabel } from "@/lib/ai/ca
 import { CaretLeft, Robot } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaIa } from "@/lib/redesign/ia";
 import { CaseDetail } from "./CaseDetail";
 
 export function CaseList({ heading }: { heading?: ReactNode } = {}) {
   const t = useT();
+  const rd = useMarcaDaIa();
   const [tab, setTab] = useState<"open" | "resolved">("open");
   // Deep link: o aviso "um atendimento espera decisão" na Central manda para cá
   // com o id do caso. Sem isto ele abriria a LISTA, e quem clicou teria que
@@ -55,7 +57,7 @@ export function CaseList({ heading }: { heading?: ReactNode } = {}) {
         <div ref={listRef} data-testid="case-list" className={cn("min-h-0 w-full flex-col gap-4 md:max-w-xs md:shrink-0", selectedId === null ? "flex" : "hidden md:flex")}>
 
           <Tabs value={tab} onValueChange={(v) => setTab(v as "open" | "resolved")}>
-            <TabsList>
+            <TabsList data-rd-ia={rd("pilulas")}>
               <TabsTrigger value="open">{t("Abertos")}{data ? ` (${data.open_count})` : ""}</TabsTrigger>
               <TabsTrigger value="resolved">{t("Concluídos")}</TabsTrigger>
             </TabsList>

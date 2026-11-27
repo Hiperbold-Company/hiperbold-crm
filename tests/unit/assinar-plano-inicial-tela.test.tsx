@@ -14,6 +14,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), refres
 import { AssinarPlanoPassoAPasso } from "@/app/app/settings/plano/assinar/_passo-a-passo";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import type { PlanoParaVenda } from "@/lib/billing/asaas/leitura";
+import { PAGADOR_INICIAL_COMPLETO } from "./helpers/pagador-completo";
 
 const plano = (
   code: string,
@@ -45,7 +46,7 @@ function tela(planoInicial: string | null | undefined, cicloInicial?: "monthly" 
         pixDisponivel
         opcoesDeParcelas={{}}
         taxaMensalPercentual={null}
-        precisaPagador={false}
+        pagadorInicial={PAGADOR_INICIAL_COMPLETO}
         planoAtualCode={null}
         planoInicial={planoInicial}
         cicloInicial={cicloInicial}

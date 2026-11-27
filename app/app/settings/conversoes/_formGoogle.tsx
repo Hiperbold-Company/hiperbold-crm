@@ -29,6 +29,7 @@ import {
 } from "@/lib/conversoes/regras-google";
 
 import { CriarAcaoNoGoogle } from "./_criarAcaoGoogle";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 const MODOS_DE_VALOR: Array<{ valor: ModoDeValorDaVenda; rotulo: string }> = [
   { valor: "quando_houver", rotulo: "Enviar a venda; o valor vai quando estiver preenchido" },
@@ -63,6 +64,7 @@ export function FormularioDeConversoesGoogle({
   falta: string[];
   dataManagerConfigurado?: boolean;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -118,7 +120,7 @@ export function FormularioDeConversoesGoogle({
    */
   if (!configurado) {
     return (
-      <Card className="p-6" data-testid="google-ads-nao-configurado">
+      <Card data-rd-ajustes={rd("secao")} className="p-6" data-testid="google-ads-nao-configurado">
         <div className="flex flex-col gap-2">
           <h3 className="font-medium">{t("Google Ads")}</h3>
           {api === "google_ads" && dataManagerConfigurado && (
@@ -151,7 +153,7 @@ export function FormularioDeConversoesGoogle({
 
   if (!estado.temRefreshToken) {
     return (
-      <Card className="p-6">
+      <Card data-rd-ajustes={rd("secao")} className="p-6">
         <div className="flex flex-col gap-3">
           <h3 className="font-medium">{t("Google Ads")}</h3>
           {api === "google_ads" && dataManagerConfigurado && (
@@ -176,7 +178,7 @@ export function FormularioDeConversoesGoogle({
   }
 
   return (
-    <Card className="p-6">
+    <Card data-rd-ajustes={rd("secao")} className="p-6">
       <form onSubmit={salvar} className="flex flex-col gap-5">
         <p className="text-sm text-muted-foreground">
           {t(

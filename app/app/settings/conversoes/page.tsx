@@ -85,6 +85,8 @@ import { RegrasDeConversaoGoogle, type EtapaAberta } from "./_regrasGoogle";
 import { listarRegrasGoogle } from "@/lib/conversoes/regras-google";
 import { RegrasDeConversaoMeta } from "./_regrasMeta";
 import { listarRegrasMeta } from "@/lib/conversoes/regras-meta";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const metadata = { title: "Conversões" };
 export const dynamic = "force-dynamic";
@@ -260,7 +262,7 @@ export default async function ConversoesPage({
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header>
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Conversões")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t(

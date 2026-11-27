@@ -2,7 +2,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/conversations/bulk — a camada de lote da Inbox (#2484, fatia F1).
  *
- * UMA rota para todas as ações em lote (`close`, `archive`, `mark-read`,
+ * UMA rota para todas as ações em lote (`close`, `archive`, `mark-read`, `mark-unread`,
  * `pause-ai`, `reactivate-bot`, `transfer`), discriminada por `action`.
  *
  * ── O desenho, e por que ele NÃO é o do `leads/bulk` ─────────────────────
@@ -30,7 +30,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *    no corpo, e a sessão é a única fonte;
  *  - AUDITORIA: cada rota escreve a sua própria entrada (`conversation.closed`,
  *    `conversation.transferred`, `conversation.ai_paused`, …), uma por
- *    conversa — exceto `mark-read`, que já não audita na rota individual.
+ *    conversa — exceto `mark-read` e `mark-unread`, que já não audita na rota individual.
  *    Não há auditoria do lote: uma entrada agregada apagaria qual conversa
  *    sofreu qual ação.
  *
@@ -65,6 +65,7 @@ import type { BulkConversationActionInput } from "@/lib/schemas";
 
 import { POST as fecharUmaConversa } from "../[id]/close/route";
 import { POST as marcarComoLida } from "../[id]/mark-read/route";
+import { POST as marcarComoNaoLida } from "../[id]/mark-unread/route";
 import { POST as pausarAutomatico } from "../[id]/pause-ai/route";
 import { POST as devolverAoAutomatico } from "../[id]/reactivate-bot/route";
 import { POST as transferirUmaConversa } from "../[id]/transfer/route";
@@ -163,6 +164,8 @@ async function executarNoItem(
       );
     case "mark-read":
       return marcarComoLida(requestDoItem(id, "/mark-read", "POST", {}), ctxDoItem(id));
+    case "mark-unread":
+      return marcarComoNaoLida(requestDoItem(id, "/mark-unread", "POST", {}), ctxDoItem(id));
     case "pause-ai":
       return pausarAutomatico(requestDoItem(id, "/pause-ai", "POST", {}), ctxDoItem(id));
     case "reactivate-bot":

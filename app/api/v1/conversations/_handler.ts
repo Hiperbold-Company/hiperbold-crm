@@ -769,3 +769,73 @@ export async function markConversationReadHandler(
   }
   return data as unknown as Conversation;
 }
+
+// ---------------------------------------------------------------------------
+// mark unread
+// ---------------------------------------------------------------------------
+
+/**
+ * O espelho do `markConversationReadHandler`: `unread_count_for_assignee`
+ * passa a `greatest(atual, 1)`. Com não lidas já contadas o número fica como
+ * está (3 continua 3); só o zero vira 1. É estado de TELA: nada vai ao
+ * WhatsApp ou à Meta, e, como a irmã, não audita.
+ */
+export async function markConversationUnreadHandler(
+  supabase: SB,
+  ctx: HandlerCtx,
+  conversationId: string,
+): Promise<Conversation> {
+  const { data: atual, error: erroDeLeitura } = await supabase
+    .from("conversations")
+    .select(SELECT_COLS)
+    .eq("id", conversationId)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+
+  if (erroDeLeitura) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroDeLeitura.message);
+  }
+  if (!atual) {
+    throw new ApiError(
+      404,
+      "not_found",
+      undefined,
+      ctx.requestId,
+      traduzir("Conversa não encontrada.", ctx.idioma ?? "pt-BR"),
+    );
+  }
+  const linha = atual as unknown as Conversation;
+  if ((linha.unread_count_for_assignee ?? 0) >= 1) return linha;
+
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ unread_count_for_assignee: 1 })
+    .eq("id", conversationId)
+    .eq("organization_id", ctx.organization_id)
+    .eq("unread_count_for_assignee", 0)
+    .select(SELECT_COLS)
+    .maybeSingle();
+
+  if (error) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, error.message);
+  }
+  if (data) return data as unknown as Conversation;
+  // `null` = a escrita não pegou linha. Ou chegou mensagem no meio (o contador já
+  // não é zero e o objetivo está cumprido), ou a RLS recusou a escrita (ex.:
+  // participante convidada). Relê para não responder "feito" sem ter feito.
+  const { data: relida } = await supabase
+    .from("conversations")
+    .select(SELECT_COLS)
+    .eq("id", conversationId)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+  const conv = relida as unknown as Conversation | null;
+  if (conv && (conv.unread_count_for_assignee ?? 0) >= 1) return conv;
+  throw new ApiError(
+    404,
+    "not_found",
+    undefined,
+    ctx.requestId,
+    traduzir("Conversa não encontrada.", ctx.idioma ?? "pt-BR"),
+  );
+}

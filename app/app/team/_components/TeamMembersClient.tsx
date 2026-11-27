@@ -44,6 +44,7 @@ import {
 import { rotuloDoPapel } from "@/lib/auth/types";
 import { ROLES, type Role } from "@/lib/schemas/team";
 import { DotsThree } from "@/lib/ui/icons";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 interface Props {
@@ -54,6 +55,7 @@ interface Props {
 export function TeamMembersClient({ currentUserId, canManage }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  const rd = useMarcaDosAjustes();
   const { data, isLoading, isError } = useTeamMembers();
   const changeRole = useChangeRole();
   const revoke = useRevokeMember();
@@ -75,7 +77,7 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
 
   return (
     <>
-      <div className="rounded-md border">
+      <div data-rd-ajustes={rd("lista")} className="rounded-md border">
         <Table className="max-md:block">
           <TableHeader className="max-md:hidden">
             <TableRow>

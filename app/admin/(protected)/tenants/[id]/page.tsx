@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { CartaoDaIaDoMolde, type IaDoMolde } from "@/components/admin/tenants/CartaoDaIaDoMolde";
+import { CartaoDoNovoVisual } from "@/components/admin/tenants/CartaoDoNovoVisual";
 import {
   CardDeCobranca,
   type AssinaturaDoCard,
@@ -15,6 +16,8 @@ import { loadAuthUser } from "@/lib/auth/server";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { moduloLigado } from "@/lib/instalacao/modulos";
+import { redesignDaEmpresa, redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { TenantOverviewClient } from "./_client";
@@ -49,15 +52,40 @@ export default async function TenantDetailPage({ params }: TenantDetailPageProps
     }),
   );
 
-  const [cobranca, iaDoMolde] = await Promise.all([lerCobrancaDoTenant(id), lerIaDoMolde(id)]);
+  const [cobranca, iaDoMolde, novoVisual] = await Promise.all([
+    lerCobrancaDoTenant(id),
+    lerIaDoMolde(id),
+    lerNovoVisual(id),
+  ]);
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rd-plataforma={rd("grade-de-cartoes")}>
       <TenantOverviewClient id={id} cobrancaLigada={cobranca !== null} />
       <MembrosDaAgencia organizationId={id} membros={membros} podeEscrever={platformAdmin.scope === "full"} />
+      {novoVisual !== null && (
+        <CartaoDoNovoVisual organizationId={id} ligado={novoVisual} podeEscrever={platformAdmin.scope === "full"} />
+      )}
       {iaDoMolde && <CartaoDaIaDoMolde ia={iaDoMolde} />}
       {cobranca && <CardDeCobranca orgId={id} {...cobranca} />}
     </div>
   );
+}
+
+/**
+ * O novo visual (redesign) está ligado para esta empresa? Lê
+ * `settings.redesign.ligado` com a mesma regra de `redesignNaRequisicao()`.
+ * `null` = id inválido, empresa inexistente ou leitura falhou: sem cartão, a
+ * página fica como era (não vale um 500, nem mostrar "desligado" sem ter lido).
+ */
+async function lerNovoVisual(orgId: string): Promise<boolean | null> {
+  if (!z.string().uuid().safeParse(orgId).success) return null;
+  const { data, error } = await createAdminClient()
+    .from("organizations")
+    .select("settings")
+    .eq("id", orgId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return redesignDaEmpresa((data as { settings?: unknown }).settings);
 }
 
 /**

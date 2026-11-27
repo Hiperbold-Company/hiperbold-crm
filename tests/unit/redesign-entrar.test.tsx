@@ -1,0 +1,180 @@
+/**
+ * AS TELAS DE ENTRADA NO REDESIGN — desligado é a tela de sempre, ligado é a nova.
+ *
+ * Nenhuma tela foi duplicada: o layout de `app/(public)` (Entrar, criar conta,
+ * convite, recuperar senha, MFA) e o de `app/onboarding` ganham
+ * `data-rd-entrar="<peça>"` SÓ com a chave ligada (`marcaDeEntrar`), e o bloco
+ * "redesign: entrar" de `app/globals.css` os desenha. Provado aqui:
+ *
+ *   1. DOM — desligada nenhum atributo é escrito; ligada, as peças principais
+ *      (página, cartão, logo) aparecem e o conteúdo segue intacto.
+ *   2. CSS — todo seletor do bloco começa por `[data-redesign="ligado"]`.
+ *
+ * NÃO prova a aparência: jsdom não pinta; a semelhança com o protótipo v49 só
+ * se confere na tela.
+ */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { cleanup, render, screen } from "@testing-library/react";
+import postcss from "postcss";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const h = vi.hoisted(() => ({ ligado: false, idioma: "pt-BR" }));
+
+vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => h.ligado }));
+vi.mock("@/lib/branding/saida", () => ({
+  marcaDaSaida: async () => ({ nome: "Marca X", logoUrl: "https://exemplo.test/logo.png", logoDarkUrl: null }),
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+}));
+vi.mock("@/lib/i18n/idiomaAnonimo", () => ({ idiomaDoVisitante: async () => h.idioma }));
+
+import PublicLayout from "@/app/(public)/layout";
+import { TOTPInput } from "@/components/auth/TOTPInput";
+import { marcaDeEntrar } from "@/lib/redesign/entrar";
+
+async function montar() {
+  const el = await PublicLayout({ children: <h1>Entrar</h1> });
+  return render(el);
+}
+
+afterEach(() => {
+  cleanup();
+  h.ligado = false;
+  h.idioma = "pt-BR";
+});
+
+describe("redesign: entrar, DOM", () => {
+  it("desligado, a casca das telas de acesso não escreve nenhum data-rd-entrar", async () => {
+    h.ligado = false;
+    const { container } = await montar();
+    expect(container.querySelectorAll("[data-rd-entrar]")).toHaveLength(0);
+    expect(screen.getByTestId("logo-da-fachada")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Entrar" })).toBeTruthy();
+  });
+
+  it("ligado, a casca marca página, cartão e logo e mantém o conteúdo", async () => {
+    h.ligado = true;
+    const { container } = await montar();
+    const pecas = Array.from(container.querySelectorAll("[data-rd-entrar]")).map((e) => e.getAttribute("data-rd-entrar"));
+    for (const p of ["pagina", "cartao", "logo"]) expect(pecas).toContain(p);
+    expect(screen.getByTestId("logo-da-fachada").getAttribute("alt")).toBe("Marca X");
+    expect(container.querySelector('[data-rd-entrar="cartao"] h1')?.textContent).toBe("Entrar");
+  });
+
+  it("o layout do primeiro acesso marca página, cabeçalho e conteúdo pela mesma regra", () => {
+    const fonte = readFileSync(join(process.cwd(), "app/onboarding/layout.tsx"), "utf8");
+    // A chave é lida uma vez (`const ligado = await redesignNaRequisicao()`) e
+    // decide também a casca do v49 (onda 2); o render das duas cascas é medido
+    // em `tests/unit/redesign-onda2-primeiro-acesso.test.tsx`.
+    expect(fonte).toContain("const ligado = await redesignNaRequisicao();");
+    expect(fonte).toContain("marcaDeEntrar(ligado)");
+    for (const p of ["pagina", "cabecalho", "conteudo"]) expect(fonte).toContain(`rd("${p}")`);
+  });
+
+  it("o painel de marca só existe com a chave ligada, com o nome da instalação (o logo fica no topo do formulário)", async () => {
+    h.ligado = false;
+    const off = await montar();
+    expect(off.container.querySelector("aside")).toBeNull();
+    off.unmount();
+    h.ligado = true;
+    const { container } = await montar();
+    const painel = container.querySelector('aside[data-rd-entrar="painel"]');
+    expect(painel).toBeTruthy();
+    expect(painel?.querySelector("p")?.textContent).toBe("Marca X");
+    expect(painel?.querySelector("h2")?.textContent).toBe("Todo o seu atendimento de WhatsApp, com IA, num lugar só");
+    expect(painel?.querySelectorAll("li")).toHaveLength(3);
+    expect(painel?.textContent).toContain("Marina Costa");
+    expect(painel?.textContent).not.toContain("Hiperbold");
+    expect(painel?.querySelector("img")).toBeNull();
+    // o logo testado pelos e2e continua único
+    expect(container.querySelectorAll('[data-testid="logo-da-fachada"]')).toHaveLength(1);
+  });
+
+  it("/get-started marca página, cartão e painel pela mesma regra", () => {
+    const fonte = readFileSync(join(process.cwd(), "app/get-started/page.tsx"), "utf8");
+    expect(fonte).toContain("marcaDeEntrar(await redesignNaRequisicao())");
+    for (const p of ["pagina", "cartao"]) expect(fonte).toContain(`rd("${p}")`);
+    expect(fonte).toContain("<PainelDeEntrar");
+  });
+
+  it("marcaDeEntrar: ligada devolve a peça, desligada undefined", () => {
+    expect(marcaDeEntrar(true)("cartao")).toBe("cartao");
+    expect(marcaDeEntrar(false)("cartao")).toBeUndefined();
+  });
+});
+
+describe("redesign: entrar, painel traduzido e dígitos do MFA", () => {
+  it("em inglês o título e os benefícios saem em inglês", async () => {
+    h.ligado = true;
+    h.idioma = "en";
+    const { container } = await montar();
+    const painel = container.querySelector('aside[data-rd-entrar="painel"]');
+    expect(painel?.querySelector("h2")?.textContent).toBe("All your WhatsApp support, with AI, in one place");
+    expect(painel?.textContent).toContain("All conversations in one place");
+  });
+
+  it("desligado, os dígitos não têm data-rd-entrar", async () => {
+    h.ligado = false;
+    const { container } = await montar();
+    cleanup();
+    const r = render(<TOTPInput value="" onChange={() => {}} />);
+    expect(r.container.querySelectorAll("input")).toHaveLength(6);
+    expect(r.container.querySelectorAll("[data-rd-entrar]")).toHaveLength(0);
+    expect(container).toBeTruthy();
+  });
+
+  it("ligado, a casca provê a chave e os 6 dígitos recebem a peça", async () => {
+    h.ligado = true;
+    const { container } = await montar();
+    cleanup();
+    const el = await PublicLayout({ children: <TOTPInput value="" onChange={() => {}} /> });
+    const r = render(el);
+    expect(r.container.querySelectorAll('input[data-rd-entrar="digito"]')).toHaveLength(6);
+    expect(container).toBeTruthy();
+  });
+});
+
+describe("redesign: entrar, CSS escopado pela chave", () => {
+  const CSS = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+  const INICIO = "/* redesign: entrar ";
+  const FIM = "/* redesign: entrar — fim";
+  const ESCOPO = '[data-redesign="ligado"]';
+
+  function bloco(css: string): string {
+    const i = css.indexOf(INICIO);
+    const f = css.indexOf(FIM);
+    if (i < 0 || f < i) throw new Error("marcadores do bloco não encontrados");
+    return css.slice(i, f);
+  }
+
+  function erros(css: string): { regras: number; erros: string[] } {
+    const out: string[] = [];
+    let regras = 0;
+    postcss.parse(css).walkAtRules((at) => {
+      if (at.name !== "media") out.push(`@${at.name} não é permitido`);
+    });
+    postcss.parse(css).walkRules((r) => {
+      regras++;
+      for (const p of r.selectors) if (!p.trim().startsWith(ESCOPO)) out.push(`seletor sem escopo: ${p}`);
+    });
+    postcss.parse(css).walkDecls((d) => {
+      if (d.important) out.push(`!important em ${d.prop}`);
+    });
+    return { regras, erros: out };
+  }
+
+  it('o bloco existe e todo seletor começa por [data-redesign="ligado"]', () => {
+    const r = erros(bloco(CSS));
+    expect(r.regras).toBeGreaterThan(15);
+    expect(r.erros).toEqual([]);
+  });
+
+  it("controle negativo: a régua reprova seletor sem escopo", () => {
+    const r = erros(`.x { color: red; } ${ESCOPO} .a, .b { color: red; }`);
+    expect(r.erros).toContain("seletor sem escopo: .x");
+    expect(r.erros).toContain("seletor sem escopo: .b");
+  });
+});

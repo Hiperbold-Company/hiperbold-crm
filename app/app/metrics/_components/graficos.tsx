@@ -22,6 +22,7 @@ import {
 } from "recharts";
 
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
+import { useMarcaDasMetricas } from "@/lib/redesign/metricas";
 import { cn } from "@/lib/utils";
 
 export const COR = {
@@ -78,6 +79,7 @@ export function CartaoKpi({
   onClick?: () => void;
   testId?: string;
 }) {
+  const rd = useMarcaDasMetricas();
   const conteudo = (
     <>
       <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -94,11 +96,11 @@ export function CartaoKpi({
     ativo && "border-primary ring-1 ring-primary",
   );
   return onClick ? (
-    <button type="button" className={classe} onClick={onClick} aria-pressed={ativo} data-testid={testId}>
+    <button type="button" className={classe} onClick={onClick} aria-pressed={ativo} data-testid={testId} data-rd-metricas={rd("kpi")}>
       {conteudo}
     </button>
   ) : (
-    <div className={classe} data-testid={testId}>
+    <div className={classe} data-testid={testId} data-rd-metricas={rd("kpi")}>
       {conteudo}
     </div>
   );
@@ -326,8 +328,12 @@ export function Painel({
   children: ReactNode;
   className?: string;
 }) {
+  const rd = useMarcaDasMetricas();
   return (
-    <section className={cn("flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5", className)}>
+    <section
+      className={cn("flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5", className)}
+      data-rd-metricas={rd("painel")}
+    >
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">{titulo}</h2>

@@ -22,6 +22,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import type {
   NovaTarefa,
@@ -96,6 +97,7 @@ export function FormularioDeTarefa({
   compacto = false,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const usuario = useUser();
   const editando = Boolean(tarefa);
   // As opções vêm da MESMA régua que a rota usa para aceitar o responsável
@@ -170,7 +172,7 @@ export function FormularioDeTarefa({
           <DialogTitle>{editando ? t("Editar tarefa") : t("Nova tarefa")}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={enviar} className="space-y-4">
+        <form onSubmit={enviar} className="space-y-4" data-rd-inicio={rd("tarefas-formulario")}>
           <div className="space-y-1.5">
             <Label htmlFor="tarefa-titulo">{t("O que precisa ser feito")}</Label>
             <Input

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
-import { AcoesNoCelular } from "@/components/shell/AcoesNoCelular";
+import { AcoesNoCelular, MenuDeAcoes } from "@/components/shell/AcoesNoCelular";
 import { FiltrosNoCelular } from "@/components/shell/FiltrosNoCelular";
 import { ArrowsClockwise, Columns, DownloadSimple, Plus, MagnifyingGlass, UploadSimple, UsersThree } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,8 @@ import { useContactFilterOptions } from "@/hooks/contacts/useContactFilterOption
 import { useBulkDeleteContacts } from "@/hooks/contacts/useBulkDeleteContacts";
 import { useBuscaNaUrl } from "@/hooks/contacts/useBuscaNaUrl";
 import { useBulkContacts, type AcaoEmLoteDeContatos } from "@/hooks/contacts/useBulkContacts";
+import { useMarcaDoRedesign } from "@/components/contacts/useMarcaDoRedesign";
+import { useRedesign } from "@/lib/redesign/contexto";
 import { ContactsTable } from "@/components/contacts/ContactsTable";
 import { BarraDeContatosEmLote } from "@/components/contacts/BarraDeContatosEmLote";
 import { PontoDaEtiqueta } from "@/components/tags/PontoDaEtiqueta";
@@ -69,6 +71,8 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export function ContactsListClient() {
   const t = useT();
+  const rd = useMarcaDoRedesign();
+  const ligado = useRedesign();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
   const router = useRouter();
   const pathname = usePathname();
@@ -334,12 +338,42 @@ export function ContactsListClient() {
     [search, tags, tagMode, source, soPessoais, orderBy, orderDir],
   );
 
+  const menuExportar = (
+    <>
+            {/*
+              A porta de VOLTA do mesmo dado: importar sem exportar deixava o CRM
+              como saída única (SSH + psql), e o celular nem importa CSV — importa
+              vCard. Os dois formatos moram num menu porque são dois arquivos
+              diferentes para dois destinos diferentes, e um botão por formato
+              dobraria a largura do header numa tela de 390px.
+            */}
+            {podeExportar && !filtrosAvancadosLigados && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <DownloadSimple size={16} weight="bold" aria-hidden />
+                    <span>{t("Exportar")}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportarArquivo("csv")}>
+                    {t("Exportar CSV")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportarArquivo("vcf")}>
+                    {t("Exportar vCard")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+    </>
+  );
+
   return (
-    <div className="space-y-4 md:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+    <div className="space-y-4 md:p-6" data-rd-contatos={rd("lista")}>
+      <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4" data-rd-contatos={rd("cabecalho")}>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Contatos")}</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight" data-rd-contatos={rd("titulo")}>{t("Contatos")}</h1>
+          <p className="text-sm text-muted-foreground" data-rd-contatos={rd("subtitulo")}>
             {t("Customer 360 — busque, filtre e gerencie contatos.")}
           </p>
           <LinkDeAjudaDaTela />
@@ -378,55 +412,54 @@ export function ContactsListClient() {
                 : []),
             ]}
           >
-          <Button variant="outline" onClick={() => setColunasOpen(true)} data-acao="personalizar-colunas">
-            <Columns size={16} weight="bold" aria-hidden />
-            <span>{t("Personalizar colunas")}</span>
-          </Button>
-          <Button variant="outline" onClick={() => setDuplicadosOpen(true)}>
-            <UsersThree size={16} weight="bold" aria-hidden />
-            <span>{t("Duplicados")}</span>
-          </Button>
-          {podeImportar ? (
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <UploadSimple size={16} weight="bold" aria-hidden />
-              <span>{t("Importar CSV")}</span>
+          {ligado ? (
+            <>
+              {/* Onda 3: as ações raras vão para o "⋯"; as do dia a dia ficam à vista.
+                  As mesmas ações, que abrem os mesmos diálogos. */}
+              <MenuDeAcoes
+                acoes={[
+                  { rotulo: t("Personalizar colunas"), icone: Columns, onSelect: () => setColunasOpen(true) },
+                  { rotulo: t("Duplicados"), icone: UsersThree, onSelect: () => setDuplicadosOpen(true) },
+                  { rotulo: t("Sincronizar agenda"), icone: ArrowsClockwise, onSelect: () => setSyncOpen(true) },
+                ]}
+              />
+            {podeImportar ? (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadSimple size={16} weight="bold" aria-hidden />
+                <span>{t("Importar CSV")}</span>
+              </Button>
+            ) : null}
+              {menuExportar}
+            </>
+          ) : (
+            <>
+            <Button variant="outline" onClick={() => setColunasOpen(true)} data-acao="personalizar-colunas">
+              <Columns size={16} weight="bold" aria-hidden />
+              <span>{t("Personalizar colunas")}</span>
             </Button>
-          ) : null}
-          {/*
-            O lado de cá do mesmo gesto (#2736): a base que a equipe já tem
-            mora na agenda do celular pareado, e ela não passa por CSV nenhum.
-            Colado ao "Importar CSV" de propósito — os dois são "trazer base de
-            fora", e separá-los em cantos diferentes da tela faria cada um
-            parecer um recurso que o outro não é.
-          */}
-          <Button variant="outline" onClick={() => setSyncOpen(true)}>
-            <ArrowsClockwise size={16} weight="bold" aria-hidden />
-            <span>{t("Sincronizar agenda")}</span>
-          </Button>
-          {/*
-            A porta de VOLTA do mesmo dado: importar sem exportar deixava o CRM
-            como saída única (SSH + psql), e o celular nem importa CSV — importa
-            vCard. Os dois formatos moram num menu porque são dois arquivos
-            diferentes para dois destinos diferentes, e um botão por formato
-            dobraria a largura do header numa tela de 390px.
-          */}
-          {podeExportar && !filtrosAvancadosLigados && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <DownloadSimple size={16} weight="bold" aria-hidden />
-                  <span>{t("Exportar")}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => exportarArquivo("csv")}>
-                  {t("Exportar CSV")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportarArquivo("vcf")}>
-                  {t("Exportar vCard")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button variant="outline" onClick={() => setDuplicadosOpen(true)}>
+              <UsersThree size={16} weight="bold" aria-hidden />
+              <span>{t("Duplicados")}</span>
+            </Button>
+            {podeImportar ? (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadSimple size={16} weight="bold" aria-hidden />
+                <span>{t("Importar CSV")}</span>
+              </Button>
+            ) : null}
+            {/*
+              O lado de cá do mesmo gesto (#2736): a base que a equipe já tem
+              mora na agenda do celular pareado, e ela não passa por CSV nenhum.
+              Colado ao "Importar CSV" de propósito — os dois são "trazer base de
+              fora", e separá-los em cantos diferentes da tela faria cada um
+              parecer um recurso que o outro não é.
+            */}
+            <Button variant="outline" onClick={() => setSyncOpen(true)}>
+              <ArrowsClockwise size={16} weight="bold" aria-hidden />
+              <span>{t("Sincronizar agenda")}</span>
+            </Button>
+              {menuExportar}
+            </>
           )}
           </AcoesNoCelular>
           <Button onClick={() => setCreateOpen(true)}>
@@ -436,8 +469,8 @@ export function ContactsListClient() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
-        <div className="relative w-full sm:w-72">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2" data-rd-contatos={rd("filtros")}>
+        <div className="relative w-full sm:w-72" data-rd-contatos={rd("busca")}>
           <MagnifyingGlass
             size={16}
             className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -596,6 +629,7 @@ export function ContactsListClient() {
         <div
           role="status"
           data-faixa-selecionar-todos
+          data-rd-contatos={rd("faixa-todos")}
           className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
         >
           {todosDoFiltro ? (
@@ -674,7 +708,7 @@ export function ContactsListClient() {
               {t("Selecionar todos os contatos visíveis")}
             </Button>
           )}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden" data-rd-contatos={rd("tabela")}>
             <ContactsTable
               contacts={allContacts}
               selecao={
@@ -689,7 +723,7 @@ export function ContactsListClient() {
               rotulosDeCampo={rotulosDeCampo}
             />
           </Card>
-          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between" data-rd-contatos={rd("rodape")}>
             <p className="text-sm text-muted-foreground">
               {totalDoFiltro !== undefined && totalDoFiltro > allContacts.length
                 ? `${allContacts.length.toLocaleString("pt-BR")} ${t("de")} ${totalDoFiltro.toLocaleString("pt-BR")} ${t("contatos")}`

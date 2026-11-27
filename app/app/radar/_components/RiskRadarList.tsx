@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaAgenda } from "@/lib/redesign/agenda";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,6 +57,7 @@ export function destinoDaDemandaSemPasso(demanda: {
 
 export function RiskRadarList() {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const { data, isLoading } = useAtRiskLeads();
 
   if (isLoading) {
@@ -80,6 +82,7 @@ export function RiskRadarList() {
       <div
         className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center"
         data-testid="radar-empty"
+        data-rd-agenda={rd("radar-vazio")}
       >
         <CheckCircle size={28} className="text-success-fg/70" aria-hidden />
         <p className="text-sm font-medium">{t("Nenhuma demanda em risco")}</p>
@@ -99,6 +102,7 @@ export function RiskRadarList() {
         <section
           className="rounded-lg border border-warning-border bg-warning-bg/40 p-3"
           data-testid="radar-sem-proximo-passo"
+          data-rd-agenda={rd("radar-aviso")}
         >
           <p className="text-sm font-medium">
             {semPasso.length}{" "}
@@ -137,6 +141,7 @@ export function RiskRadarList() {
         <section
           className="rounded-lg border border-warning-border bg-warning-bg/40 p-3"
           data-testid="radar-propostas-vencidas"
+          data-rd-agenda={rd("radar-aviso")}
         >
           <p className="text-sm font-medium">
             {vencidas.length}{" "}
@@ -169,6 +174,7 @@ export function RiskRadarList() {
         <section
           className="rounded-lg border border-warning-border bg-warning-bg/40 p-3"
           data-testid="radar-propostas-esperando-revisao"
+          data-rd-agenda={rd("radar-aviso")}
         >
           <p className="text-sm font-medium">
             {esperandoRevisao.length}{" "}
@@ -194,7 +200,7 @@ export function RiskRadarList() {
         </section>
       ) : null}
 
-      <div className="flex flex-wrap gap-2" data-testid="radar-counts">
+      <div className="flex flex-wrap gap-2" data-testid="radar-counts" data-rd-agenda={rd("radar-contagem")}>
         <Badge variant="error">
           {data.counts.critico} {t("crítico")}
         </Badge>
@@ -206,7 +212,7 @@ export function RiskRadarList() {
         </Badge>
       </div>
 
-      <ul className="divide-y divide-border rounded-lg border border-border">
+      <ul className="divide-y divide-border rounded-lg border border-border" data-rd-agenda={rd("radar-lista")}>
         {data.items.map((lead) => (
           <RadarRow key={lead.id} lead={lead} />
         ))}
@@ -217,6 +223,7 @@ export function RiskRadarList() {
 
 function RadarRow({ lead }: { lead: AtRiskLead }) {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const meta = RISK_META[lead.risk as Exclude<RiskBucket, "em_dia">] ?? RISK_META.em_risco;
   // Sem conversa não há inbox para abrir: o destino é o QUADRO do funil onde o
   // negócio está — e com o `?lead=` junto, porque sem ele o board abre no funil
@@ -264,6 +271,7 @@ function RadarRow({ lead }: { lead: AtRiskLead }) {
     <li
       data-testid="radar-item"
       data-risk={lead.risk}
+      data-rd-agenda={rd("radar-item")}
       className="flex items-start gap-2 pr-3 transition-colors hover:bg-accent/50 max-md:flex-wrap"
     >
       <Link href={href} className="flex min-w-0 flex-1 items-start gap-3 px-4 py-3">

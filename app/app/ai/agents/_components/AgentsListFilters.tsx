@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaIa } from "@/lib/redesign/ia";
 import type { AgentStatus } from "./AgentStatusBadge";
 
 export type StatusFilter = AgentStatus | "all";
@@ -31,8 +32,9 @@ export function AgentsListFilters({
   onShowArchivedChange,
 }: Props) {
   const t = useT();
+  const rd = useMarcaDaIa();
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2" data-rd-ia={rd("filtros")}>
       <Input
         placeholder={t("Buscar por nome…")}
         value={query}

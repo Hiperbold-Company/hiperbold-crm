@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 const ERRO: Record<string, string> = {
   validation_failed: "Confira os campos: algum valor não está no formato esperado.",
@@ -48,6 +49,7 @@ export function IdentidadeDaConversao({
   whatsappBusinessAccountId: string | null;
   idioma: Idioma;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
   const [pagina, setPagina] = useState(pageId ?? "");
@@ -71,7 +73,7 @@ export function IdentidadeDaConversao({
   }
 
   return (
-    <Card className="p-6">
+    <Card data-rd-ajustes={rd("secao")} className="p-6">
       <form onSubmit={salvar} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <h3 className="text-sm font-semibold">

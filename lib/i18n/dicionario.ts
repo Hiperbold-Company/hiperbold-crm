@@ -40,6 +40,27 @@ import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // Moldura do redesign exclusivo Hiperbold (`components/shell/redesign/`).
+  "Saia do acompanhamento para trocar de organização": { es: "Salga del acompañamiento para cambiar de organización", en: "Leave support mode to switch organizations" },
+  "Suas empresas": { es: "Sus empresas", en: "Your companies" },
+  "Atual": { es: "Actual", en: "Current" },
+  "Com ferramentas": { es: "Con herramientas", en: "With tools" },
+  "Só conhecimento": { es: "Solo conocimiento", en: "Knowledge only" },
+  "Meu perfil": { es: "Mi perfil", en: "My profile" },
+  "Claro": { es: "Claro", en: "Light" },
+  "Escuro": { es: "Oscuro", en: "Dark" },
+  "Igual ao sistema": { es: "Igual al sistema", en: "Match system" },
+  "Buscar seção": { es: "Buscar sección", en: "Search sections" },
+  "Buscar seção…": { es: "Buscar sección…", en: "Search sections…" },
+  "Nenhuma seção com esse nome.": { es: "Ninguna sección con ese nombre.", en: "No section with that name." },
+  "Recolher menu": { es: "Contraer menú", en: "Collapse menu" },
+  "Abrir menu": { es: "Abrir menú", en: "Expand menu" },
+  "Todas as seções": { es: "Todas las secciones", en: "All sections" },
+  "Ajustes": { es: "Ajustes", en: "Settings" },
+  "Seções da área": { es: "Secciones del área", en: "Area sections" },
+  "Trocar de empresa": { es: "Cambiar de empresa", en: "Switch company" },
+  "Todas as telas que você pode abrir, por área.": { es: "Todas las pantallas que puede abrir, por área.", en: "Every screen you can open, by area." },
+  "Sua conta, todas as seções, ajuda, tema e idioma.": { es: "Su cuenta, todas las secciones, ayuda, tema e idioma.", en: "Your account, all sections, help, theme and language." },
   // Interruptor "Transcrever áudios" da empresa e o desconto da transcrição no plano (migration 1025, 25/11/2026).
   "Transcrever áudios": { es: "Transcribir audios", en: "Transcribe audio messages" },
   "Os áudios recebidos viram texto na conversa, e o agente de IA lê a transcrição. Desligado, o áudio fica sem texto e não gasta tokens.": { es: "Los audios recibidos se convierten en texto en la conversación, y el agente de IA lee la transcripción. Desactivado, el audio queda sin texto y no consume tokens.", en: "Received audio messages become text in the conversation, and the AI agent reads the transcript. When off, the audio stays without text and uses no tokens." },
@@ -3284,6 +3305,10 @@ export const DICIONARIO: Traducoes = {
   "1 conversa selecionada": { es: "1 conversación seleccionada" },
   "conversas selecionadas": { es: "conversaciones seleccionadas" },
   "Marcar como lida": { es: "Marcar como leída" },
+  "Marcar como não lida": { es: "Marcar como no leída" },
+  "Volta a conversa para a lista com o selo de não lida, para você retomar depois.": {
+    es: "Devuelve la conversación a la lista con el indicador de no leída, para retomarla después.",
+  },
   "Mais ações": { es: "Más acciones" },
   "Pausar IA": { es: "Pausar IA" },
   "Transferir para…": { es: "Transferir a…" },
@@ -12703,6 +12728,27 @@ export const DICIONARIO: Traducoes = {
   "Você não tem acesso a essa área.": { es: "No tienes acceso a esta área." },
   "Voltar pra Inbox": { es: "Volver a Inbox" },
   "404 — Página não encontrada": { es: "404 — Página no encontrada" },
+  "Progresso do primeiro acesso": { es: "Progreso del primer acceso" },
+  "Seu primeiro acesso": { es: "Tu primer acceso" },
+  "Pode sair a qualquer momento: o que você já fez fica salvo.": { es: "Puedes salir en cualquier momento: lo que ya hiciste queda guardado." },
+  "Este link não é válido ou já passou da janela de 24h.": { es: "Este enlace no es válido o ya pasó la ventana de 24 h." },
+  "Peça um novo convite a quem administra a sua empresa.": { es: "Pide una nueva invitación a quien administra tu empresa." },
+  "A conta está pausada": { es: "La cuenta está en pausa" },
+  "Você não tem acesso a esta tela": { es: "No tienes acceso a esta pantalla" },
+  "Esta parte do sistema é liberada só para alguns papéis da equipe.": { es: "Esta parte del sistema solo está habilitada para algunos roles del equipo." },
+  "Se precisa dela, fale com quem administra a sua empresa.": { es: "Si la necesitas, habla con quien administra tu empresa." },
+  "Voltar ao Início": { es: "Volver al Inicio" },
+  "Voltar à página anterior": { es: "Volver a la página anterior" },
+  "Não achamos esta página": { es: "No encontramos esta página" },
+  "O link pode estar errado ou a página mudou de lugar.": { es: "El enlace puede estar mal o la página cambió de lugar." },
+  "Confira o endereço ou siga para o Início.": { es: "Revisa la dirección o ve al Inicio." },
+  "Ir para o Início": { es: "Ir al Inicio" },
+  "Algo deu errado do nosso lado": { es: "Algo salió mal de nuestro lado" },
+  "Não é nada que você fez. Já registramos o ocorrido.": { es: "No es nada que hayas hecho. Ya lo registramos." },
+  "Tente de novo em instantes.": { es: "Intenta de nuevo en unos instantes." },
+  "Estamos em manutenção": { es: "Estamos en mantenimiento" },
+  "Estamos atualizando o sistema. Seus dados estão seguros.": { es: "Estamos actualizando el sistema. Tus datos están seguros." },
+  "Atualizar a página": { es: "Actualizar la página" },
   "Verifique o link ou volte pra inbox.": { es: "Verifica el enlace o vuelve a la bandeja." },
   "500 — Erro interno": { es: "500 — Error interno" },
   "Algo quebrou do nosso lado. Já registramos o ocorrido; tente de novo em instantes.": {
@@ -26885,6 +26931,16 @@ export const DICIONARIO: Traducoes = {
     es: "No se pudo completar la compra ahora. Intenta de nuevo en instantes.",
   },
   "Informe o nome de quem paga.": { es: "Informa el nombre de quien paga." },
+  "Nome ou razão social": { es: "Nombre o razón social" },
+  "Celular com DDD": { es: "Celular con código de área" },
+  "Complemento (opcional)": { es: "Complemento (opcional)" },
+  "Endereço de quem paga": { es: "Dirección de quien paga" },
+  "Já vem com os dados da empresa e do seu perfil. Confira e complete o que faltar.": { es: "Ya viene con los datos de la empresa y de tu perfil. Revisa y completa lo que falte." },
+  "Informe um celular com DDD.": { es: "Indica un celular con código de área." },
+  "Informe um CEP com 8 dígitos.": { es: "Indica un CEP de 8 dígitos." },
+  "Preencha o endereço completo: rua, número, bairro e cidade.": { es: "Completa la dirección: calle, número, barrio y ciudad." },
+  "Informe a UF (sigla do estado, como SP).": { es: "Indica la UF (sigla del estado, como SP)." },
+  "Preencha os dados de quem paga: nome, CPF ou CNPJ, e-mail, celular com DDD e endereço completo (CEP, rua, número, bairro, cidade e UF).": { es: "Completa los datos de quien paga: nombre, CPF o CNPJ, correo, celular con código de área y dirección completa (CEP, calle, número, barrio, ciudad y UF)." },
   "Informe um e-mail válido, ou deixe em branco.": {
     es: "Informa un correo válido, o déjalo en blanco.",
   },
@@ -27152,6 +27208,33 @@ export const DICIONARIO: Traducoes = {
   },
   "Sua assinatura precisa ser renovada": {
     es: "Tu suscripción necesita renovarse",
+  },
+  "Sua fatura vence em {data}": {
+    es: "Tu factura vence el {data}",
+  },
+  "Sua fatura venceu em {data}": {
+    es: "Tu factura venció el {data}",
+  },
+  "Sua assinatura será suspensa em {data}": {
+    es: "Tu suscripción será suspendida el {data}",
+  },
+  "Último dia para pagar sua fatura": {
+    es: "Último día para pagar tu factura",
+  },
+  "A fatura de {valor} do plano {plano} ainda não foi paga. Pague pelo botão abaixo para concluir sua assinatura.": {
+    es: "La factura de {valor} del plan {plano} todavía no fue pagada. Paga con el botón de abajo para completar tu suscripción.",
+  },
+  "A fatura de {valor} do plano {plano} ainda não foi paga. Pague pelo botão abaixo para manter seu plano.": {
+    es: "La factura de {valor} del plan {plano} todavía no fue pagada. Paga con el botón de abajo para mantener tu plan.",
+  },
+  "Sem o pagamento, a assinatura é suspensa em {data}.": {
+    es: "Sin el pago, la suscripción será suspendida el {data}.",
+  },
+  "A fatura fica disponível até {data}.": {
+    es: "La factura estará disponible hasta el {data}.",
+  },
+  "A cobrança de {valor} do plano {plano} ainda não foi paga. Pague pela fatura para concluir sua assinatura.": {
+    es: "El cobro de {valor} del plan {plano} todavía no fue pagado. Paga la factura para completar tu suscripción.",
   },
   "A cobrança de {valor} do plano {plano} não foi paga no prazo. Para continuar usando o CRM, assine novamente pelos Planos.":
     {
@@ -29258,6 +29341,47 @@ export const DICIONARIO: Traducoes = {
   "A escolha das páginas expirou. Clique em Conectar de novo.": { es: "La selección de páginas expiró. Haz clic en Conectar de nuevo." },
   "Esta escolha foi aberta em outra empresa. Volte para ela, ou clique em Conectar de novo nesta empresa.": { es: "Esta selección se abrió en otra empresa. Vuelve a ella o haz clic en Conectar de nuevo en esta empresa." },
   "Não foi possível carregar as páginas. Tente de novo.": { es: "No fue posible cargar las páginas. Inténtalo de nuevo." },
+  // Painel de marca das telas de entrada (`components/auth/PainelDeEntrar.tsx`).
+  "Todo o seu atendimento de WhatsApp, com IA, num lugar só": { es: "Toda su atención de WhatsApp, con IA, en un solo lugar", en: "All your WhatsApp support, with AI, in one place" },
+  "Todas as conversas num só lugar": { es: "Todas las conversaciones en un solo lugar", en: "All conversations in one place" },
+  "O WhatsApp da equipe inteira, sem trocar de celular.": { es: "El WhatsApp de todo el equipo, sin cambiar de celular.", en: "The whole team's WhatsApp, without switching phones." },
+  "IA que atende e agenda por você": { es: "IA que atiende y agenda por usted", en: "AI that answers and schedules for you" },
+  "Responde na hora e chama a equipe quando precisa.": { es: "Responde al instante y llama al equipo cuando hace falta.", en: "Replies instantly and calls the team when needed." },
+  "Vendas sempre em dia": { es: "Ventas siempre al día", en: "Sales always up to date" },
+  "Cada conversa vira um negócio no funil, sem anotar nada.": { es: "Cada conversación se vuelve un negocio en el embudo, sin anotar nada.", en: "Every conversation becomes a deal in the funnel, no note-taking." },
+  "WhatsApp · agora": { es: "WhatsApp · ahora", en: "WhatsApp · now" },
+  "Oi! Vocês têm horário amanhã de manhã?": { es: "¡Hola! ¿Tienen horario mañana por la mañana?", en: "Hi! Do you have a slot tomorrow morning?" },
+  "Respondido pela IA": { es: "Respondido por la IA", en: "Answered by AI" },
+  "Tenho 9h30 ou 10h. Qual fica melhor para você?": { es: "Tengo a las 9:30 o a las 10:00. ¿Cuál le queda mejor?", en: "I have 9:30 or 10:00. Which works better for you?" },
+  "9h30 está ótimo!": { es: "¡9:30 está perfecto!", en: "9:30 is great!" },
+  "Consulta marcada e negócio movido para \"Agendado\"": { es: "Cita agendada y negocio movido a \"Agendado\"", en: "Appointment booked and deal moved to \"Scheduled\"" },
+  // Painel da plataforma › empresa › Novo visual (redesign por empresa).
+  "Novo visual": { es: "Nuevo diseño" },
+  "Liga o novo visual só para esta empresa. As outras continuam no visual atual.": { es: "Activa el nuevo diseño solo para esta empresa. Las demás siguen con el diseño actual." },
+  "Novo visual ligado para esta empresa.": { es: "Nuevo diseño activado para esta empresa." },
+  "Novo visual desligado para esta empresa.": { es: "Nuevo diseño desactivado para esta empresa." },
+  "Erro ao alterar o novo visual": { es: "Error al cambiar el nuevo diseño" },
+
+  // ─── Listas da onda 1 do redesign (ListaPadrao) ───
+  "Quem fez o quê e quando no sistema.": { es: "Quién hizo qué y cuándo en el sistema." },
+  "Ações carregadas": { es: "Acciones cargadas" },
+  "Pessoas distintas": { es: "Personas distintas" },
+  "Feitas pelo sistema ou integrações": { es: "Hechas por el sistema o integraciones" },
+  "Buscar por ação, recurso ou quem fez": { es: "Buscar por acción, recurso o quién la hizo" },
+  "Onde": { es: "Dónde" },
+  "Chamadas na lista": { es: "Llamadas en la lista" },
+  "Atendidas": { es: "Atendidas" },
+  "Feitas pela IA": { es: "Hechas por la IA" },
+  "Buscar por contato ou transcrição": { es: "Buscar por contacto o transcripción" },
+  "Passos no total": { es: "Pasos en total" },
+  "Com descrição": { es: "Con descripción" },
+  "Buscar por nome": { es: "Buscar por nombre" },
+  "Sem descrição": { es: "Sin descripción" },
+  "Seções da IA": { es: "Secciones de la IA" },
+  "Seções das Configurações": { es: "Secciones de la configuración" },
+  "Métricas": { es: "Métricas" },
+  "Montar": { es: "Montar" },
+  "Ensinar": { es: "Enseñar" },
 };
 
 /**

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -43,6 +44,7 @@ export function CanalPorSessaoClient({
   aoMudar: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const podeConectar = usePermission("settings.write");
   const [criando, setCriando] = useState(false);
   const [sessao, setSessao] = useState<string | null>(null);
@@ -90,11 +92,11 @@ export function CanalPorSessaoClient({
 
   return (
     <div className="flex flex-col gap-3" data-testid="criar-por-sessao">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground" data-rd-dialogos={rd("nota")}>
         {t("Novos canais começam em modo de teste, sem respostas automáticas até você autorizar números ou liberar o público.")}
       </p>
       {podeConectar ? (
-        <div>
+        <div data-rd-dialogos={rd("acoes")}>
           <Button
             onClick={() => void conectar()}
             disabled={criando || Boolean(bloqueio?.desabilitado)}

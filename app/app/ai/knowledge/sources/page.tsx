@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { montarEstadoDaChave } from "@/lib/ai/embeddings/estado";
 import { listarAgentesQueUsam } from "@/lib/ai/knowledge/agentes-que-usam";
 import type { SourceRow } from "@/hooks/ai/useKnowledgeSources";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaIa } from "@/lib/redesign/ia";
 import { AcervoClient } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -57,12 +59,13 @@ export default async function AcervoPage() {
   ]);
 
   const initialSources = (sourcesRaw ?? []) as unknown as SourceRow[];
+  const rd = marcaDaIa(await redesignNaRequisicao());
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("O que o agente sabe")}</h1>
-        <p className="text-sm text-text-muted">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-ia={rd("pagina")}>
+      <header className="space-y-1" data-rd-ia={rd("cabecalho")}>
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-ia={rd("titulo")}>{t("O que o agente sabe")}</h1>
+        <p className="text-sm text-text-muted" data-rd-ia={rd("descricao")}>
           {t(
             "O material do seu negócio que os assistentes consultam antes de responder. Cada assistente escolhe, na tela dele, o que pode ler daqui.",
           )}

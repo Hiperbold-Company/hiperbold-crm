@@ -13,6 +13,7 @@ const cena = vi.hoisted(() => ({
   platformAdmin: false,
   modoSuporte: null as { reason: string } | null,
   semOrgAtiva: false,
+  ligado: false,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -52,6 +53,7 @@ vi.mock("@/lib/supabase/admin", () => ({
     }),
   }),
 }));
+vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => cena.ligado }));
 vi.mock("@/lib/branding/saida", () => ({ emailDeSuporte: async () => cena.suporte }));
 vi.mock("@/app/actions/auth/signOut", () => ({ signOut: vi.fn() }));
 vi.mock("@/app/app/lgpd/requests/RequestsTable", () => ({
@@ -75,6 +77,7 @@ async function montar(pedido?: string) {
 }
 
 beforeEach(() => {
+  cena.ligado = false;
   cena.papel = "admin";
   cena.status = { [cena.B]: "suspended", [cena.C]: "active", [cena.D]: "suspended" };
   cena.statusNaSessao = undefined;
@@ -195,5 +198,24 @@ describe("/account-suspended: o hub de quem está numa empresa suspensa", () => 
   it("leitura do estado que falha LANÇA: nem hub nem redirect por palpite", async () => {
     cena.falhaNaLeitura = true;
     await expect(montar()).rejects.toThrow(/account_suspended_status_indisponivel/);
+  });
+});
+
+describe("onda 2 do redesign: a conta pausada no v49", () => {
+  it("ligada: ícone de pausa decorativo e o título que diz o estado", async () => {
+    cena.ligado = true;
+    const { container } = await montar();
+    const icone = container.querySelector('[data-rd-sistema="icone"]');
+    expect(icone?.getAttribute("data-tom")).toBe("pausa");
+    expect(icone?.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("A conta está pausada");
+    // O nome da empresa parada continua no cartão.
+    expect(screen.getByText("Empresa B")).toBeTruthy();
+  });
+
+  it("desligada: o título de sempre e nenhum ícone", async () => {
+    const { container } = await montar();
+    expect(container.querySelector('[data-rd-sistema]')).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Conta suspensa");
   });
 });

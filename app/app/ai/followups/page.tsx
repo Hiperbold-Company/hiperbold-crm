@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import type { FollowupFlowPointerRow } from "@/hooks/followup/useFollowupFlows";
@@ -19,6 +21,7 @@ export default async function FollowupFlowsPage() {
   // idioma vem resolvido em `user.idioma` (a cadeia pessoa → organização →
   // padrão vive em `lib/auth/server.ts`).
   const t = (texto: string) => traduzir(texto, user.idioma);
+  const rd = marcaDasAutomacoes(await redesignNaRequisicao());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
   // Fluxos (edição) segue exigindo manager+; a Fila (leitura) é de qualquer
@@ -38,17 +41,17 @@ export default async function FollowupFlowsPage() {
   const canWrite = ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-2">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-automacoes={rd("pagina")}>
+      <header className="flex flex-wrap items-end justify-between gap-2" data-rd-automacoes={rd("cabecalho")}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Follow-ups</h1>
-          <p className="text-sm text-text-muted">
+          <h1 className="text-2xl font-semibold tracking-tight" data-rd-automacoes={rd("titulo")}>Follow-ups</h1>
+          <p className="text-sm text-text-muted" data-rd-automacoes={rd("descricao")}>
             {t("Fluxos automáticos de reengajamento — silêncio, etapa, webhook ou resposta do contato, sem intervenção em cada mensagem.")}
           </p>
         </div>
       </header>
       <Tabs defaultValue="fluxos" className="flex flex-1 flex-col">
-        <TabsList>
+        <TabsList data-rd-automacoes={rd("abas")}>
           <TabsTrigger value="fluxos">{t("Fluxos")}</TabsTrigger>
           <TabsTrigger value="fila">{t("Fila")}</TabsTrigger>
         </TabsList>

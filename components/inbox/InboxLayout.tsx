@@ -15,6 +15,7 @@ import { AvisoDeConexao, useBloqueioPelaConexao } from "@/components/inbox/Aviso
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
 import { useMarkAsRead } from "@/hooks/inbox/useMarkAsRead";
+import { useMarkAsUnread } from "@/hooks/inbox/useMarkAsUnread";
 import { gravarFiltrosLembrados, lerFiltrosLembrados } from "@/lib/inbox/filtros-lembrados";
 import {
   useConversationsRealtime,
@@ -53,6 +54,8 @@ import type { AvisoDeRascunho } from "@/lib/inbox/rascunho-sugerido";
 import { buscaValeConsulta } from "@/lib/inbox/termo-de-busca";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 import { useAlturaVisivel } from "@/lib/ui/altura-visivel";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
+import { CabecalhoDaLista } from "@/components/inbox/redesign/CabecalhoDaLista";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import {
   LIMITES_FICHA,
@@ -294,6 +297,7 @@ export function InboxLayout({
   modulosDaLateral,
 }: InboxLayoutProps = {}) {
   const t = useT();
+  const rd = useMarcaDoChat();
   const { activeOrg, user } = useAuth();
   useParticipacoesRealtime(user.id, activeOrg?.orgId ?? null);
   const supportReadonly = user.support?.access_mode === "support_readonly";
@@ -642,6 +646,15 @@ export function InboxLayout({
       setSelectedId(id);
     }
   }, [selectedId, searchParams, pathname]);
+  // "Marcar como não lida" na conversa aberta: marca E volta para a lista. Com a
+  // conversa em foco, a leitura automática (1,5s) a zeraria de novo; trocar a
+  // seleção desarma esse timer (ver `useMarkAsRead`).
+  const { mutate: marcarNaoLida } = useMarkAsUnread();
+  const marcarAbertaComoNaoLida = useCallback(() => {
+    if (!selectedId) return;
+    marcarNaoLida(selectedId);
+    handleSelect(null);
+  }, [selectedId, marcarNaoLida, handleSelect]);
   const handleVisibleChange = useCallback((ids: string[]) => setVisibleIds(ids), []);
   const handleFocusReply = useCallback(() => composerRef.current?.focus(), []);
   const handleClaim = useCallback(() => {
@@ -916,6 +929,7 @@ export function InboxLayout({
     <OpenConversationProvider conversationId={selectedId}>
     <div
       ref={gradeRef}
+      data-rd-chat={rd("grade")}
       className={cn(
         "grid relative h-[calc(100dvh-var(--faixas-de-cima,0px)-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] w-full grid-cols-1 md:grid-cols-[300px_1fr]",
         // Recolhido (issue #3004), a terceira trilha vira o trilho estreito do
@@ -965,12 +979,13 @@ export function InboxLayout({
       */}
       <div
         ref={listaRef}
+        data-rd-chat={rd("lista")}
         className={cn(
           "h-full min-h-0 flex-col border-r border-border md:flex",
           colunas.lista,
         )}
       >
-        <BotaoIniciarConversa />
+        {rd("lista") ? <CabecalhoDaLista /> : <BotaoIniciarConversa />}
         <InboxFilters value={filterValue} onChange={setFilterValue} />
         {podeAgirEmLote && (
           <BarraDeAcoesEmLote
@@ -979,6 +994,12 @@ export function InboxLayout({
             onFechar={() => rodarLote("close")}
             onArquivar={() => rodarLote("archive")}
             onMarcarComoLida={() => rodarLote("mark-read")}
+            onMarcarComoNaoLida={() => {
+              // A conversa aberta dentro da seleção sai da tela primeiro: com ela
+              // em foco, a leitura automática (1,5s) desfaria a marcação.
+              if (selectedId && selecao.selecionados.has(selectedId)) handleSelect(null);
+              rodarLote("mark-unread");
+            }}
             onPausarIa={() => rodarLote("pause-ai")}
             onDevolverAoAutomatico={() => rodarLote("reactivate-bot")}
             onTransferir={(toUserId, reason) => rodarLote("transfer", toUserId, reason)}
@@ -1023,6 +1044,7 @@ export function InboxLayout({
       <div
         ref={conversaRef}
         data-teclado-aberto={tecladoAberto ? "" : undefined}
+        data-rd-chat={rd("conversa")}
         className={cn(
           "h-full min-h-0 min-w-0 flex-col md:flex group/conversa",
           colunas.conversa,
@@ -1035,7 +1057,7 @@ export function InboxLayout({
           conversa, e só aparece quando há uma.
         */}
         {selectedId && (
-          <div className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
+          <div data-rd-chat={rd("barra-celular")} className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
             <Button
               variant="ghost"
               size="sm"
@@ -1074,6 +1096,7 @@ export function InboxLayout({
               key={selectedConversation.id}
               conversation={selectedConversation}
               onAbrirConversa={handleSelect}
+              onMarcarComoNaoLida={podeAgirEmLote ? marcarAbertaComoNaoLida : undefined}
               onBuscar={() =>
                 buscaAberta
                   ? fecharBusca()
@@ -1212,7 +1235,7 @@ export function InboxLayout({
             {t("Conversa não encontrada ou fora do seu acesso.")}
           </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+          <div data-rd-chat={rd("vazio")} className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
             <ChatCircle size={36} weight="thin" className="text-text-subtle" aria-hidden />
             <p className="text-sm font-medium text-text-muted">{t("Selecione uma conversa")}</p>
             <p className="text-xs text-text-muted">{t("Ou navegue com J e K")}</p>

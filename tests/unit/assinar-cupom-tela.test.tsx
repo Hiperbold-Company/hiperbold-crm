@@ -27,6 +27,7 @@ import { MENSAGEM_AGUARDE_ESPELHO } from "@/app/app/settings/plano/_logica-compr
 import { opcoesDeParcelamento } from "@/lib/billing/asaas/parcelamento";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import type { PlanoParaVenda } from "@/lib/billing/asaas/leitura";
+import { PAGADOR_INICIAL_COMPLETO } from "./helpers/pagador-completo";
 
 const PARAMETROS = { taxaMensal: 0.0199, semJurosAte: 3, maxSemestral: 6, maxAnual: 12 };
 
@@ -83,7 +84,7 @@ function tela(extra: { pacotes?: never[] } = {}) {
         planos={[PRO]}
         pixDisponivel
         pacotes={extra.pacotes ?? []}
-        precisaPagador={false}
+        pagadorInicial={PAGADOR_INICIAL_COMPLETO}
         leituraFalhou={false}
         opcoesDeParcelas={OPCOES}
         taxaMensalPercentual={1.99}

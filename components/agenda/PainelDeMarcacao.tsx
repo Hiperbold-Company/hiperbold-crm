@@ -15,6 +15,7 @@ import { dataDeParede, instanteDe } from "@/lib/agenda/fuso";
 import { ApiError } from "@/lib/api/types";
 import { CaretLeft, CaretRight, CheckCircle, Clock, MapPin, Warning } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
+import { useMarcaDaAgenda } from "@/lib/redesign/agenda";
 
 import { AvatarDaPessoa } from "./AvatarDaPessoa";
 import type { HorarioLivre, Pessoa } from "./tipos";
@@ -256,6 +257,7 @@ export function PainelDeMarcacao({
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDaAgenda();
   // `horarioInicial` vem do PR #382 (a grade interativa): quem clica num
   // horário na grade chega aqui com ele já escolhido. Os dois lados somam —
   // os hooks são apresentação, o estado inicial é comportamento.
@@ -873,6 +875,7 @@ export function PainelDeMarcacao({
           formulário cego: a pessoa escolhe um horário sem lembrar de quê. */}
       <aside
         data-testid="contexto-da-marcacao"
+        data-rd-agenda={rd("marcar-contexto")}
         className="shrink-0 border-b border-border bg-surface-elevated/50 p-4 lg:w-[280px] lg:border-b-0 lg:border-r"
       >
         <div className="flex items-center gap-2">

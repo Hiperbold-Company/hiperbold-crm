@@ -26,6 +26,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         ref={interno}
         type="checkbox"
         aria-checked={indeterminado ? "mixed" : undefined}
+        data-slot="checkbox"
         className={cn(
           "size-4 shrink-0 cursor-pointer rounded-sm border border-border-strong accent-[var(--color-accent)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
           className,

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { bloqueioDoBotaoDeCriacao } from "@/lib/billing/planos/limite-de-agentes-e-automacoes";
@@ -34,6 +36,7 @@ const LIMITE_POR_TIPO = 500;
 export default async function AutomacoesPage() {
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
+  const rd = marcaDasAutomacoes(await redesignNaRequisicao());
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
   if (ROLE_RANK[activeOrg.role] < ROLE_RANK.manager) redirect("/403");
@@ -101,18 +104,18 @@ export default async function AutomacoesPage() {
   const bloqueio = await bloqueioDoBotaoDeCriacao(createAdminClient(), activeOrg.orgId, "automacoes", user.idioma, logger);
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-automacoes={rd("pagina")}>
+      <header className="flex flex-wrap items-start justify-between gap-3" data-rd-automacoes={rd("cabecalho")}>
         <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Automações")}</h1>
-        <p className="text-sm text-text-muted">
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-automacoes={rd("titulo")}>{t("Automações")}</h1>
+        <p className="text-sm text-text-muted" data-rd-automacoes={rd("descricao")}>
           {t(
             "Tudo o que trabalha sozinho num lugar só: automações, follow-ups e as regras antigas. Quando um lead chega ou muda de etapa, a automação cria negócio, põe tag, preenche campo, define responsável e cria tarefa.",
           )}
         </p>
         </div>
         {/* Porta da tela de chaves (lote 4): o bloco Requisição HTTP usa as chaves daqui. */}
-        <Link href="/app/automacoes/chaves" className="text-sm font-medium text-accent underline-offset-4 hover:underline" data-testid="link-chaves-secretas">
+        <Link href="/app/automacoes/chaves" className="text-sm font-medium text-accent underline-offset-4 hover:underline" data-testid="link-chaves-secretas" data-rd-automacoes={rd("link-secundario")}>
           {t("Chaves secretas")}
         </Link>
       </header>

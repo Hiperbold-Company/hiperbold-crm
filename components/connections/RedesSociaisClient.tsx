@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { apiClient } from "@/lib/api/client";
 import { fraseDoMotivo } from "@/lib/channels/meta-social/motivos";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -177,6 +178,7 @@ export function RedesSociaisClient({
   semContas?: boolean;
 } = {}) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const tagDeIdioma = useTagDeIdioma();
   const params = useSearchParams();
   const caminho = usePathname();
@@ -274,11 +276,12 @@ export function RedesSociaisClient({
                 key={plataforma}
                 className="flex flex-col gap-3 p-4"
                 data-testid={`cartao-${plataforma}`}
+                data-rd-dialogos={rd("secao")}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold">{titulo}</h3>
-                    <p className="text-sm text-muted-foreground">{t(DESCRICAO_DO_CARTAO[plataforma])}</p>
+                    <h3 className="font-semibold" data-rd-dialogos={rd("secao-titulo")}>{titulo}</h3>
+                    <p className="text-sm text-muted-foreground" data-rd-dialogos={rd("secao-texto")}>{t(DESCRICAO_DO_CARTAO[plataforma])}</p>
                   </div>
                   {configurado && !bloqueado ? (
                     <Button asChild>
@@ -373,7 +376,7 @@ export function RedesSociaisClient({
         </div>
       )}
 
-      <details className="rounded-lg border p-3 text-sm" data-testid="requisitos-redes-sociais">
+      <details className="rounded-lg border p-3 text-sm" data-testid="requisitos-redes-sociais" data-rd-dialogos={rd("avancado")}>
         <summary className="cursor-pointer font-medium">{t("O que é preciso para conectar")}</summary>
         <div className="mt-3 flex flex-col gap-3">
           <div>

@@ -1,3 +1,5 @@
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import type { Metadata } from "next";
 
 import { Card } from "@/components/ui/card";
@@ -40,12 +42,13 @@ export default async function ExclusaoDeDadosPage({
     idiomaDoVisitante(null),
   ]);
   const t = (texto: string) => traduzir(texto, idioma);
+  const rd = marcaDoSistema(await redesignNaRequisicao());
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/40 p-6">
-      <Card className="w-full max-w-lg space-y-4 p-8 text-sm leading-relaxed">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.nome}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Exclusão de dados")}</h1>
+    <main className="flex min-h-screen items-center justify-center bg-muted/40 p-6" data-rd-sistema={rd("pagina")}>
+      <Card className="w-full max-w-lg space-y-4 p-8 text-sm leading-relaxed" data-rd-sistema={rd("cartao")}>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground" data-rd-sistema={rd("marca")}>{marca.nome}</p>
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-sistema={rd("titulo")}>{t("Exclusão de dados")}</h1>
         <p>
           {t(
             "Recebemos o pedido de exclusão dos dados ligados à sua conta do Instagram ou do Facebook.",
@@ -54,7 +57,7 @@ export default async function ExclusaoDeDadosPage({
         {codigo && (
           <p>
             {t("Código do pedido:")}{" "}
-            <code className="rounded-md bg-muted px-1.5 py-0.5" data-testid="codigo-do-pedido">
+            <code className="rounded-md bg-muted px-1.5 py-0.5" data-rd-sistema={rd("codigo")} data-testid="codigo-do-pedido">
               {codigo}
             </code>
           </p>

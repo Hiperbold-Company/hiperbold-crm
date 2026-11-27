@@ -5,6 +5,8 @@ import { haAvisoDeTrocaDeModo } from "@/lib/auth/aviso-da-troca-de-modo";
 import { modoDeCadastro } from "@/lib/auth/politica-de-cadastro";
 import { listPendingRegistrationRequests } from "@/lib/auth/registration-requests";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 import { FormularioDeCadastro } from "./_form";
 import { PedidosPendentes } from "./_pedidos";
@@ -57,8 +59,9 @@ export default async function Page() {
   const kitSincroniza = process.env.SINGLE_SERVER === "1";
   const alvoDoGoTrue = modo === "so_convite" ? "true" : "false";
 
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rd-plataforma={rd("formulario")}>
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           {traduzir("Cadastro", usuario.idioma)}

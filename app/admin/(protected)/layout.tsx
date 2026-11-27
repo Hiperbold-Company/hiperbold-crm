@@ -7,6 +7,8 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { instalacaoSemSmtp } from "@/lib/email/estado";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
 
 export default async function ProtectedAdminLayout({ children }: { children: ReactNode }) {
   const { user } = await requirePlatformAdmin();
@@ -33,9 +35,13 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       {/* O admin também abre formulários do app (ex.: TenantForm no "Editar tenant"),
           que confirmam pela confirmação do produto. */}
       <ProvedorDeConfirmacao>
-        <AdminShell userEmail={user.email ?? ""} modulosLigados={modulos} semSmtp={semSmtp}>
-          {children}
-        </AdminShell>
+        {/* O painel fica fora de `/app`: o provedor do redesign precisa ser
+            montado aqui, com o booleano lido no servidor. */}
+        <ProvedorDoRedesign ligado={await redesignNaRequisicao()}>
+          <AdminShell userEmail={user.email ?? ""} modulosLigados={modulos} semSmtp={semSmtp}>
+            {children}
+          </AdminShell>
+        </ProvedorDoRedesign>
       </ProvedorDeConfirmacao>
     </IdiomaProvider>
   );

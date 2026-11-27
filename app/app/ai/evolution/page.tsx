@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaIa } from "@/lib/redesign/ia";
 import { EvolutionClient } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -29,12 +31,13 @@ export default async function EvolutionPage() {
     redirect("/403");
   }
   const idioma = user.idioma;
+  const rd = marcaDaIa(await redesignNaRequisicao());
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Evolução da IA", idioma)}</h1>
-        <p className="text-sm text-text-muted">
+    <div className="flex h-full flex-col gap-6 p-6" data-rd-ia={rd("pagina")}>
+      <header data-rd-ia={rd("cabecalho")}>
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-ia={rd("titulo")}>{traduzir("Evolução da IA", idioma)}</h1>
+        <p className="text-sm text-text-muted" data-rd-ia={rd("descricao")}>
           {traduzir(
             "O que seu agente aprendeu no período, o que ele fez com isso, o que mudou no seu resultado — e o que ainda está travando.",
             idioma,

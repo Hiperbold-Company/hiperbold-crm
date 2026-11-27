@@ -4,6 +4,63 @@ Toda pendência do fork da Hiperbold (técnica, conta, custo, terceiro) fica aqu
 
 ## Abertas
 
+- [ ] **D-246 · Redesign onda 5 (Configurações, Plataforma e celular): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 5 é só visual.
+  - **Configurações:**
+    - "Aparência" no grupo Você (não há destino no catálogo);
+    - Equipe: aba Setores; colunas Setores, Capacidade e Carga agora; "N pessoas com acesso de M do plano"; legenda dos papéis;
+    - Tags: botão "Nova etiqueta"; colunas Criada por e "IA aplica sozinha"; contador; ações destrutivas em vermelho;
+    - Meu plano: "Uso do plano" com descrição; preço e renovação no cartão do plano atual; comparação Mensal, Semestral e Anual;
+    - Conversões: cartões "Para onde avisar" (Meta e Google) e "Últimos envios" com filtro;
+    - trilha "Configurações › Empresa" dentro do cabeçalho da página (hoje fica na barra do topo).
+  - **Plataforma (/admin):**
+    - números no topo de cada tela: Empresas (total, em teste grátis, com pagamento atrasado), Usuários (pessoas, % com verificação em 2 etapas, convites pendentes), Cobrança (MRR, inadimplência, cancelamentos no mês), Cadastro (novos, ativados na semana, recusados), Marca (itens, definidos por você, no padrão), Sistema (componentes, funcionando bem, com atenção);
+    - pílulas por estado com contador e "N de N" em todas as listas (hoje o filtro é um seletor);
+    - colunas novas: Empresas (Plano, Pessoas, Conexões); Usuários (2 etapas, estado Convite pendente/Bloqueado, Empresas); Cobrança (valor, próxima cobrança, meio);
+    - outro formato: Cadastro como lista de pedidos (segmento, origem, quando, estado); Marca como tabela de itens com origem Banco/Padrão; Sistema como lista de componentes com versão, estado, último sinal e observação, e a faixa "Atualização X disponível";
+    - nomes: Tenants → Empresas, Users → Usuários, Marca → Marca da instalação, Recursos opcionais → Sistema;
+    - menu agrupado (Visão geral, Clientes, Produto, Canais) com o selo PLATAFORMA e o rodapé "Voltar para o CRM";
+    - Incidentes e Auditoria ainda sem a faixa de filtro e a tabela do molde (só o estilo geral).
+  - **Celular:**
+    - barra inferior do v49: Pipeline, Conversas, Contatos, Métricas, Mais (hoje: Chat, Pipeline, Desempenho, Contatos, Mais);
+    - "Mais" curto (Início, Agenda "2 hoje", Tarefas com contador, Central de ajuda, Relatar problema, Configurações, Trocar de empresa) em vez do inventário inteiro, com sino no cabeçalho;
+    - aviso "IA, Automações e Conexões ficam só no computador" e Radar fora do celular;
+    - "+" de criar na barra de cima (Contatos e outras) e título só na barra de cima, sem o título repetido na página;
+    - filtros rápidos em pílula em Contatos (Todos, Com negócio aberto, Sem resposta) e selo de etiqueta à direita da linha;
+    - listas como cartões (Contatos, Tarefas, Conversas).
+- [ ] **D-245 · Redesign onda 4 (IA e Automações): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 4 é só visual. O v49 não tem tela de celular para IA nem Automações, nem tela do editor do agente.
+  - **Automações:**
+    - cartões de resumo no topo (Ligadas agora, Rodaram este mês, Negócios criados, Precisam de atenção);
+    - no cartão: "Quando … Então …" e "N vezes este mês";
+    - no editor: o aviso "Alterações não salvas" e o painel "Como esta automação roda", que resume o fluxo em texto.
+  - **Agentes:**
+    - interruptor liga/desliga no cartão;
+    - "N conversas atendidas no mês" e o nicho no cartão;
+    - filtros Todos, Ligados, Desligados e Arquivados com contadores (o CRM tem um seletor e "Incluir arquivados").
+  - **Follow-ups:** Retomadas, Responderam e Pararam no STOP em cada régua; as linhas Agente, Começa quando e Tentativas no cartão.
+  - **Roteadores:** conversas roteadas no mês, e Conexão, Caminhos e Se nenhum servir no cartão.
+  - **Conhecimento:** cartões de topo (materiais, trechos aprendidos, perguntas respondidas no mês) e a tabela com "Agentes que usam", situação e progresso da leitura.
+  - **Casos e Execuções da IA:**
+    - números do topo (casos no mês, % que terminaram em venda, % que passaram para humano; execuções no mês, % que deram certo, falharam hoje);
+    - as tabelas com Assunto, Desfecho, Duração e Resultado (hoje Casos é lista com detalhe ao lado e Execuções é lista explicada).
+    - busca por texto nas duas telas.
+  - **Em várias telas:**
+    - interruptor liga/desliga também no cartão do roteador e do follow-up;
+    - "N agentes" / "N réguas na lista" ao lado dos filtros;
+    - faixas informativas azuis com a explicação da tela ("Uma régua é…", "Cada conexão usa um roteador…");
+    - rótulos do v49 ("Novo agente", "Nova régua", "Ligado/Desligado" em vez de "Criar novo", "Novo fluxo", "Ativo/Desativado"): troca de texto do produto, decidir junto com a central de ajuda.
+  - **Notas baixas da revisão da onda 4 (sem correção):** onde a ação sobe para a faixa do título, a ordem do Tab difere da visual (Automações, Agentes, Conhecimento, Roteadores); o teste da grade só lê o CSS, sem medir posição; "Adicionar nó" no sheet do celular × "Adicionar caixa" na paleta; falta a chave zh-CN dos textos novos.
+- [ ] **D-244 · Redesign onda 3 (Conversas, Pipeline, Contatos): funções novas que o v49 mostra e o CRM não tem (24/11/2026).** Mesma regra do D-243: resolver só depois da conferência de telas; nada disto bloqueia as ondas. A onda 3 foi só visual.
+  - **Pipeline:** resumo "N em aberto · R$ total" no cabeçalho do funil; filtro pronto "Parados há mais de 7 dias" (o CRM tem "Apenas atrasados", que é outra regra); "Mais filtros" recolhendo os filtros raros (hoje viram uma linha que rola de lado); "Novo negócio" e as visões como no v49, mas sem o resumo.
+  - **Contatos:** filtros prontos "Só clientes" e "Com mensagem sem ler"; rodapé paginado "Página 1 de 12 · 284 contatos" (o CRM carrega rolando); na ficha, os cartões "Negócios" (com etapa e valor) e "Memória do contato" na coluna da direita.
+  - **Conversas:** "Sugerir resposta" no compositor; na ficha ao lado do chat, as seções "Negócio" (etapa com barra de progresso e próximo passo), "Memória do contato" e "Atividade"; selo "Em atendimento · você" no cabeçalho.
+  - **Dados de teste:** 4 contatos "Onda3 …" e 4 negócios no funil Pedidos da organização de e2e, marcados com `source_metadata.seed = 'onda3'`, no banco de desenvolvimento; apagar na limpeza final.
+- [ ] **D-243 · Redesign: pendências do v49 deixadas para depois da conferência de telas (24/11/2026, decisão do Filipe).** Resolver só depois que a conferência de telas terminar e todos os pontos de design estiverem corrigidos. Nada disto bloqueia as ondas.
+  - **Funções novas que o v49 mostra e o CRM não tem:** 403 com "Pedir acesso" e o bloco do admin; 500 com "Relatar"; 404 com busca; 503 com previsão de volta e "Ver status"; convite com o nome da empresa e de quem convidou (exige ler o banco numa página aberta: passar pelo auditor); primeiro acesso com "Fazer depois", cartões de tipo de negócio e rodapé fixo Voltar/Continuar; cadastro com campo de WhatsApp, selo "3 dias" e os textos do v49 (título, subtítulo, botão).
+  - **Telas que ainda estão no cartão antigo:** SegmentError (onde entram o código de erro com "Copiar" e o "Tentar de novo" do v49), acesso revogado, admin/forbidden e fim do suporte. get-started e a tela "pronto" do onboarding ficaram como estavam.
+  - **Achado de produto:** com ASAAS_ENABLED ligado, o assistente do primeiro acesso tem no máximo um passo e a casca nova mostra só o conteúdo, sem o trilho "Seu primeiro acesso". Decidir se o trilho aparece com a compra ligada.
+  - **Não conferido:** tema escuro nas telas da onda 2 (LogoDaMarca não usa logoDarkUrl); conta suspensa só vista nos testes, não no navegador; /legal/data-deletion sem medir o lang; o cabeçalho do onboarding esconde o nome da empresa no celular.
+  - **Da onda 1:** o painel Histórico corta a coluna "Quando".
+  - **Prévia:** usuária onda2-onb@exemplo.test e empresa onda2-primeiro-acesso criadas no banco de desenvolvimento do WSL para as capturas; apagar quando a conferência terminar.
 - [ ] **D-242 · Conectar Messenger/Instagram liga TODAS as páginas que o usuário autorizou na Meta (19/11/2026, alto, bug).** Na CBEXS, o Filipe marcou "todas as páginas atuais e futuras" no passo da Meta e o CRM criou 66 conexões de Messenger, com páginas de outros clientes (Kardosh, MIIND, Home Duo...): as mensagens dessas páginas cairiam no Chat da CBEXS. As 66 foram desconectadas pela tela no mesmo dia (DELETE `/api/v1/channels/meta-social/[id]`, todas 200 e desassinadas); ficaram só os 2 números UAZAPI. A página da própria CBEXS saiu junto e precisa ser reconectada depois do conserto. Causa: `paginasMessenger`/`paginasComInstagram` (`lib/channels/meta-social/oauth.ts`) devolvem tudo de `/me/accounts` e o fluxo conecta tudo. Conserto: depois da volta da Meta, mostrar a lista de páginas e conectar só as marcadas (nenhuma pré-marcada quando houver mais de uma), com teto e aviso. Efeito colateral a conferir: o desconectar tirou a assinatura do app nessas 66 páginas na Meta; se algum cliente tiver Instagram conectado no CRM por uma delas, precisa reconectar.
 - [ ] **D-241 · Fixar os IPs da produção no Asaas e na Meta, depois da migração para o servidor final (18/11/2026, baixo, ação do Filipe).** Hoje as duas aceitam qualquer IP: no Asaas, "Endereços IP autorizados na API" (Integrações) está vazia; na Meta, o app Hiperbold CRM (803080829518569) e o wa-app (2450499855387022) estão com `server_ip_allowlist` e `update_ip_allowlist` vazios (conferido em 18/11 pelo MCP da Meta). Com a lista, uma chave do Asaas ou um token da Meta que vazar deixa de servir fora do nosso servidor. Quando o CRM estiver no servidor final (v3, IP de saída 187.53.126.171), cadastrar esse IP nos dois lugares. **Cuidado:** a lista do Asaas vale para a conta inteira, inclusive para as chaves `hiper-track` e `hiper-studio`; só cadastrar quando HiperTrack e Studio também estiverem saindo por esse IP, ou incluir o IP deles. Na Meta a lista é por app: os apps do Track e do Studio são dos chats deles. Toda mudança futura de servidor exige atualizar as listas antes da virada. A chave `hiper-crm` do Asaas vence em 05/10/2027: renovar antes disso.
 - [ ] **D-240 · Webhook WAHA por sessão: pontos restantes da auditoria (18/11/2026, médio).** (1) `authenticated` pode reescrever `waha_session_name`/`webhook_path_token`/`webhook_secret_encrypted`/`provider` em `channel_sessions` pela REST (GRANT ALL + policy de update): um admin aponta a própria linha para uma sessão do WAHA sem linha (nome previsível, ex. `default`) e recebe as mensagens dela. Corrigir com gatilho que recuse essas colunas para anon/authenticated (migration). (2) Replay: `webhook_events_log` guarda corpo, assinatura e token, legíveis por manager+; guardar só hash e não gravar o token. (3) Rota `[token]` sem rate limit, lê 5 MB antes de autenticar. (4) Toggle de grupo pela tela (`lib/grupos/servico.ts` → `setGroupIntake`) faz PUT sem o webhook: se o WAHA mascarar `hmac.key` no GET, a máscara vira a chave até a próxima reconexão.

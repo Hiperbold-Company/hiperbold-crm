@@ -31,6 +31,7 @@ import type { PapelMinimoDeMfa } from "@/lib/auth/politica-mfa";
 import { PainelDeChamadaDeVoz } from "@/components/voice/PainelDeChamadaDeVoz";
 import { funcaoOculta } from "@/lib/hiperbold/funcoes-ocultas";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 export function SecurityClient({
   mfaEnrolled,
@@ -55,6 +56,7 @@ export function SecurityClient({
   /** Verificação ligada e nenhum código de recuperação por usar. */
   semCodigos?: boolean;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const tagDeIdioma = useTagDeIdioma();
   const [esquecendo, startEsquecer] = useTransition();
@@ -123,7 +125,7 @@ export function SecurityClient({
           Ele recarrega a página ao terminar, e o servidor reavalia o estado. */}
       {ativando ? <MfaEnrollModal motivo="escolha" /> : null}
 
-      <Card className="space-y-3 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold">{t("Verificação em duas etapas")}</h2>
@@ -172,7 +174,7 @@ export function SecurityClient({
       </Card>
 
       {podeExigirDaEquipe ? (
-        <Card className="space-y-3 p-6">
+        <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
           <h2 className="text-sm font-semibold">{t("Exigir da equipe")}</h2>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -233,7 +235,7 @@ export function SecurityClient({
         </Card>
       ) : null}
 
-      <Card className="space-y-3 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
         <h2 className="text-sm font-semibold">{t("Códigos de recuperação")}</h2>
         <p className="text-xs text-muted-foreground">
           {t("Use se perder acesso ao autenticador. Cada código é de uso único.")}
@@ -274,7 +276,7 @@ export function SecurityClient({
       {!funcaoOculta("voz-whatsapp") && <PainelDeChamadaDeVoz />}
 
       {mfaEnrolled ? (
-        <Card className="space-y-3 p-6">
+        <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
           <h2 className="text-sm font-semibold">{t("Dispositivos confiáveis")}</h2>
           <p className="text-xs text-muted-foreground">
             {t("Navegadores onde você marcou “Confiar neste dispositivo”. Neles o login não pede o código por 30 dias.")}
@@ -311,7 +313,7 @@ export function SecurityClient({
         </Card>
       ) : null}
 
-      <Card className="space-y-3 p-6">
+      <Card data-rd-ajustes={rd("secao")} className="space-y-3 p-6">
         <h2 className="text-sm font-semibold">{t("Sessões ativas")}</h2>
         <p className="text-xs text-muted-foreground">
           {t("Listagem de sessões — em breve. Por enquanto, deslogue todos os dispositivos:")}

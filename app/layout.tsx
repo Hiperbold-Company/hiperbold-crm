@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { headers } from "next/headers";
 import { Toaster } from "sonner";
 import { coresDaBarraDoNavegador } from "@/lib/branding/barra-do-navegador";
@@ -339,11 +340,15 @@ async function MarcaDosClientComponents({ children }: { children: React.ReactNod
   );
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="pt-BR"
       data-theme="light"
+      // Só existe com a chave geral `REDESIGN_HIPERBOLD=ligado` OU a chave da
+      // empresa ativa (`redesignNaRequisicao`, `lib/redesign/chave.ts`):
+      // desligado, `undefined` não escreve atributo e o documento é o de sempre.
+      data-redesign={(await redesignNaRequisicao()) ? "ligado" : undefined}
       suppressHydrationWarning
       className={`${inter.variable} ${assistant.variable} ${plexMono.variable}`}
     >

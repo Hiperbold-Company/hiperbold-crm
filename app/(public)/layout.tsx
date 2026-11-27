@@ -4,6 +4,11 @@ import { marcaDaSaida } from "@/lib/branding/saida";
 import { createClient } from "@/lib/supabase/server";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
+import { traduzir } from "@/lib/i18n/dicionario";
+import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
+import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 /**
  * A casca das telas de acesso — login, cadastro, recuperação, MFA, confirmar acesso.
@@ -44,6 +49,7 @@ import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const marca = await marcaDaSaida(null);
+  const rd = marcaDeEntrar(await redesignNaRequisicao());
   // A maioria destas telas roda ANTES do login (não há usuário nenhum), mas
   // duas — `/login/mfa` e, em parte, `/login/recovery` — rodam com uma sessão
   // parcial já criada (primeiro fator verificado, segundo pendente). Onde há
@@ -57,12 +63,19 @@ export default async function PublicLayout({ children }: { children: React.React
   } = await supabase.auth.getUser();
   const locale = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
+  const t = (texto: string) => traduzir(texto, locale);
+
   return (
     <IdiomaProvider locale={locale}>
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-sm space-y-6">
+      <ProvedorDoRedesign ligado={await redesignNaRequisicao()}>
+      <div
+        className="flex min-h-screen items-center justify-center bg-background p-6"
+        data-rd-entrar={rd("pagina")}
+      >
+        <PainelDeEntrar marca={marca} t={t} rd={rd} />
+        <div className="w-full max-w-sm space-y-6" data-rd-entrar={rd("cartao")}>
           {marca.logoUrl || marca.logoDarkUrl ? (
-            <div className="flex justify-center">
+            <div className="flex justify-center" data-rd-entrar={rd("logo")}>
               {/*
                 <img> em vez de next/image pelo mesmo motivo da barra lateral: a URL
                 é de quem hospeda e o `next/image` exige allowlist de domínios
@@ -113,13 +126,14 @@ export default async function PublicLayout({ children }: { children: React.React
               </div>
             </div>
           ) : marcaEhADoProduto({ name: marca.nome, logoUrl: null }) ? (
-            <div className="flex justify-center">
+            <div className="flex justify-center" data-rd-entrar={rd("logo")}>
               <LogotipoDoProduto nome={marca.nome} className="h-8 w-auto" />
             </div>
           ) : null}
           {children}
         </div>
       </div>
+      </ProvedorDoRedesign>
     </IdiomaProvider>
   );
 }

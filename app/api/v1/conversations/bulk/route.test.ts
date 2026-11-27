@@ -528,6 +528,23 @@ describe("POST /api/v1/conversations/bulk", () => {
     expect(estado.conversas.find((c) => c.id === CONV_B)?.unread_count_for_assignee).toBe(2);
   });
 
+  it("mark-unread é aceito, roteado ao handler individual e só vale para a org da sessão", async () => {
+    const zerada = conversa("aaaaaaaa-1111-4000-8000-000000000006", ORG_A, {
+      unread_count_for_assignee: 0,
+    });
+    estado.conversas.push(zerada);
+
+    const res = await POST(req({ action: "mark-unread", ids: [zerada.id, CONV_A, CONV_B] }));
+
+    const corpo = await corpoDe(res);
+    expect(corpo.data).toMatchObject({ acao: "mark-unread", feitos: 2, recusados: 1 });
+    expect(zerada.unread_count_for_assignee).toBe(1);
+    // Quem já tinha não lidas mantém o número (2 continua 2).
+    expect(linhaDe(estado.conversas, CONV_A).unread_count_for_assignee).toBe(2);
+    expect(linhaDe(estado.conversas, CONV_B).unread_count_for_assignee).toBe(2);
+    expect(audit).not.toHaveBeenCalled();
+  });
+
   it("pause-ai audita conversation.ai_paused por conversa", async () => {
     const res = await POST(req({ action: "pause-ai", ids: [CONV_A] }));
 

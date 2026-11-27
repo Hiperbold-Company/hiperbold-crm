@@ -1,4 +1,8 @@
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDoSistema } from "@/lib/redesign/sistema";
 import Link from "next/link";
+import { PaginaDoSistema } from "@/components/redesign/PaginaDoSistema";
+import { marcaDoSistemaComTeto } from "@/lib/redesign/marca-do-sistema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -28,18 +32,45 @@ export default async function InternalErrorPage() {
   } = await supabase.auth.getUser();
   const idioma = await idiomaDoVisitante((user?.user_metadata?.locale as string | undefined) ?? null);
 
+  const ligado = await redesignNaRequisicao();
+  const rd = marcaDoSistema(ligado);
+  const t = (texto: string) => traduzir(texto, idioma);
+
+  if (ligado) {
+    return (
+      <IdiomaProvider locale={idioma}>
+        <PaginaDoSistema
+          codigo="500"
+          tom="erro"
+          titulo={t("Algo deu errado do nosso lado")}
+          linhas={[
+            t("Não é nada que você fez. Já registramos o ocorrido."),
+            t("Tente de novo em instantes."),
+          ]}
+          // Voltar, e não recarregar: quem chega aqui por redirecionamento
+          // recarregaria a própria /500. A 503 recarrega porque é rewrite
+          // (proxy.ts) e mantém a URL da tela que falhou.
+          principal={{ tipo: "voltar", rotulo: t("Tentar de novo") }}
+          secundaria={{ tipo: "link", href: "/app/inicio", rotulo: t("Ir para o Início") }}
+          marca={await marcaDoSistemaComTeto()}
+          idioma={idioma}
+        />
+      </IdiomaProvider>
+    );
+  }
+
   return (
     <IdiomaProvider locale={idioma}>
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <Card className="w-full max-w-md p-8 text-center">
-          <h1 className="text-2xl font-semibold">{traduzir("500 — Erro interno", idioma)}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <main className="flex min-h-screen items-center justify-center p-8" data-rd-sistema={rd("pagina")}>
+        <Card className="w-full max-w-md p-8 text-center" data-rd-sistema={rd("cartao")}>
+          <h1 className="text-2xl font-semibold" data-rd-sistema={rd("titulo")}>{traduzir("500 — Erro interno", idioma)}</h1>
+          <p className="mt-2 text-sm text-muted-foreground" data-rd-sistema={rd("texto")}>
             {traduzir(
               "Algo quebrou do nosso lado. Já registramos o ocorrido; tente de novo em instantes.",
               idioma,
             )}
           </p>
-          <div className="mt-6 flex justify-center gap-2">
+          <div className="mt-6 flex justify-center gap-2" data-rd-sistema={rd("acoes")}>
             <Button asChild>
               <Link href="/">{traduzir("Voltar", idioma)}</Link>
             </Button>

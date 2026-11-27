@@ -8,7 +8,7 @@
  * (`tests/fixtures/nota.md` conta como). O teste renderiza o componente de
  * hoje com `grupos` vazio e compara BYTE A BYTE.
  *
- * ─── A única normalização, e por que ela é honesta ─────────────────────────
+ * ─── As normalizações, e por que elas são honestas ─────────────────────────
  *
  * `@hello-pangea/dnd` gera contadores de contexto (`_r_0_`, `_r_n_`) a cada
  * montagem — dois renders do MESMO componente divergem neles. A comparação
@@ -40,9 +40,18 @@ function referencia(arquivo: string): string {
   );
 }
 
-/** Contadores de contexto do dnd são por render; o resto do markup não é. */
+/**
+ * Contadores de contexto do dnd são por render; o resto do markup não é.
+ *
+ * `data-slot`, `data-variant` e `data-size` são ganchos de estilo que os
+ * componentes de `components/ui/` declaram para o redesign. Não mudam texto,
+ * ordem, classe nem comportamento — e saem dos DOIS lados, como os contadores.
+ */
 function normalizar(html: string): string {
-  return html.replace(/_r_[a-z0-9]+_/g, "_r_X_").trim();
+  return html
+    .replace(/_r_[a-z0-9]+_/g, "_r_X_")
+    .replace(/ data-(?:slot|variant|size)="[^"]*"/g, "")
+    .trim();
 }
 
 /**

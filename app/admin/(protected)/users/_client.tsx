@@ -15,6 +15,7 @@ import {
   UsersTableAdminSkeleton,
 } from "@/components/admin/users/UsersTableAdmin";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -22,6 +23,7 @@ import { useT } from "@/hooks/i18n/useT";
 
 export function UsersClient() {
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   const [filters, setFilters] = useState<AdminUsersFilters>({});
   const [inputValue, setInputValue] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,9 +71,9 @@ export function UsersClient() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Usuários")}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+      <div data-rd-plataforma={rd("cabecalho")}>
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-plataforma={rd("titulo")}>{t("Usuários")}</h1>
+        <p className="text-sm text-muted-foreground mt-1" data-rd-plataforma={rd("subtitulo")}>
           {isLoading
             ? t("Carregando...")
             : `${total} ${total !== 1 ? t("usuários") : t("usuário")}${hasNextPage ? "+" : ""}`}
@@ -79,7 +81,7 @@ export function UsersClient() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap" data-rd-plataforma={rd("filtros")}>
         <Input
           placeholder={t("Buscar por email ou nome...")}
           value={inputValue}

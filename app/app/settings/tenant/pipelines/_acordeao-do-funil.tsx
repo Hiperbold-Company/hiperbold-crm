@@ -26,6 +26,7 @@ import { badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
+import { useRedesign } from "@/lib/redesign/contexto";
 import { CaretDown, Copy } from "@/lib/ui/icons";
 import { ancoraDoMapeamento } from "./_mapping";
 import { ancoraDasEtapas } from "./_stages";
@@ -219,6 +220,7 @@ export function AcordeaoDoFunil({
   children: ReactNode;
 }) {
   const t = useT();
+  const redesign = useRedesign();
   const estado = useContext(Contexto);
   const aberto = estado ? estado.aberto(pipeline.id) : true;
   // Sem o provedor (uso isolado) ou com um funil só, não há o que recolher.
@@ -231,7 +233,13 @@ export function AcordeaoDoFunil({
     <span className="flex min-w-0 flex-wrap items-center gap-2">
       <span>{pipeline.name}</span>
       {pipeline.is_default && (
-        <span className={badgeVariants({ variant: "secondary", className: "text-2xs" })}>{t("Padrão")}</span>
+        <span
+          data-slot={redesign ? "badge" : undefined}
+          data-variant={redesign ? "secondary" : undefined}
+          className={badgeVariants({ variant: "secondary", className: "text-2xs" })}
+        >
+          {t("Padrão")}
+        </span>
       )}
       <span className="text-xs font-normal text-muted-foreground">
         {numeroDeEtapas === 1 ? t("1 etapa") : `${numeroDeEtapas} ${t("etapas")}`}

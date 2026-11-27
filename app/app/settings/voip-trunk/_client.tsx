@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 export interface TrunkSettingsRow {
   organization_id: string;
@@ -72,6 +73,7 @@ export function TrunkSettingsClient({
   initialData: TrunkSettingsRow | null;
   canWrite: boolean;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = useT();
   const [copiou, setCopiou] = useState<boolean | null>(null);
   const { data: trunk } = useTrunkSettings(initialData);
@@ -138,7 +140,7 @@ retry_interval=60`
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <Card>
+      <Card data-rd-ajustes={rd("secao")}>
         <CardHeader>
           <CardTitle>{t("Provedor SIP")}</CardTitle>
         </CardHeader>
@@ -218,7 +220,7 @@ retry_interval=60`
       </Card>
 
       {blocoParaColar && (
-        <Card>
+        <Card data-rd-ajustes={rd("secao")}>
           <CardHeader>
             <CardTitle>{t("Cole em asterisk/pjsip.conf")}</CardTitle>
           </CardHeader>

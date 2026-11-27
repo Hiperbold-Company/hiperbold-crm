@@ -29,10 +29,11 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
-import { compraLigada, configDoAsaas, ErroConfiguracaoAsaas, type AmbienteAsaas } from "@/lib/billing/asaas/config";
+import { compraLigada, configDoAsaas, ErroConfiguracaoAsaas } from "@/lib/billing/asaas/config";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 import { dadosDaCompraDePlano } from "./_dados";
 import { AssinarOuComprarClient } from "./_client";
@@ -63,11 +64,9 @@ export default async function AssinarPage() {
 
   let habilitado = false;
   let erroConfiguracao = false;
-  let ambiente: AmbienteAsaas = "sandbox";
   try {
     const config = configDoAsaas();
     habilitado = config.habilitado;
-    ambiente = config.ambiente;
   } catch (err) {
     erroConfiguracao = true;
     logger.error("[assinar] configuração do Asaas inválida", {
@@ -88,7 +87,12 @@ export default async function AssinarPage() {
     );
   }
 
-  const dados = await dadosDaCompraDePlano(admin, activeOrg.orgId, ambiente, logger);
+  // O formulário do pagador já chega com o e-mail e o celular de quem está logado. `getUser()` valida o JWT.
+  const { data: sessao } = await (await createClient()).auth.getUser();
+  const dados = await dadosDaCompraDePlano(admin, activeOrg.orgId, logger, {
+    email: user.email,
+    celular: sessao.user?.phone ?? null,
+  });
 
   return (
     <AssinarOuComprarClient
@@ -96,7 +100,7 @@ export default async function AssinarPage() {
       taxaMensalPercentual={dados.taxaMensalPercentual}
       planos={dados.planos}
       pacotes={dados.pacotes}
-      precisaPagador={dados.precisaPagador}
+      pagadorInicial={dados.pagadorInicial}
       leituraFalhou={dados.leituraFalhou}
       planoAtualCode={dados.planoAtualCode}
       pixDisponivel={dados.pixDisponivel}

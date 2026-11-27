@@ -22,6 +22,7 @@ import { cssDaExtensaoDeTema, linhaBrutaDeTema, temaAplicavel } from "@/lib/exte
 import { marcaDaInstalacao } from "@/lib/branding/instalacao";
 import { resolverMarcaDaOrganizacao } from "@/lib/branding/organizacao";
 import { env } from "@/lib/env";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 import { baseDaCentralDeAjuda } from "@/lib/ajuda/artigos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -341,6 +342,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           sidebarCollapsed={collapsed}
           podeAtender={Boolean(activeOrg && roleAtLeast(activeOrg.role, "agent"))}
           ajudaBase={baseDaCentralDeAjuda(env.HELP_CENTER_URL)}
+          redesign={await redesignNaRequisicao()}
         >
           {children}
         </AppShell>

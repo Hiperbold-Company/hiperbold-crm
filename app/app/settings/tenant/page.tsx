@@ -19,6 +19,8 @@ import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { camposDoNegocioDosFunis } from "@/lib/leads/compras-do-contato";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +73,7 @@ export default async function TenantSettingsPage() {
   // "O que a empresa faz" vive onde o onboarding o grava (`onboarding_state.welcome.o_que_faz`).
   const oQueFaz = row?.onboarding_state?.welcome?.o_que_faz;
   const idioma = user.idioma;
+  const rd = marcaDasConfiguracoes(await redesignNaRequisicao());
   // O bloco lido pela MESMA função que o relatório lê (`art15DoControlador`):
   // o que a tela mostra é o que o PDF vai imprimir, inclusive o `null` de quem
   // deixou a alínea em branco.
@@ -87,7 +90,7 @@ export default async function TenantSettingsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header>
+      <header data-rd-configuracoes={rd("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Organização", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
           {traduzir("Dados da empresa, retenção de mídia, DPO. Admin only.", idioma)}

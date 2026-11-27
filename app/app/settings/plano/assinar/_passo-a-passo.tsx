@@ -45,6 +45,7 @@ import {
   chaveParaProximaTentativaDeCompra,
   ciclosDisponiveis,
   classificarDesfechoDaTentativa,
+  camposIniciaisDoPagador,
   montarPagadorDoFormulario,
   precoDoCiclo,
   resumoDoCiclo,
@@ -56,7 +57,7 @@ import {
   type EscolhaDeCompra,
 } from "../_logica-compra";
 import { PixPendente, type DepoisDePago } from "./_pix-pendente";
-import { AceiteDosTermos, CAMPOS_VAZIOS, FormularioDoPagador, formatarReais } from "./_comuns";
+import { AceiteDosTermos, FormularioDoPagador, formatarReais } from "./_comuns";
 
 type Passo = 1 | 2 | 3 | 4;
 type Metodo = "CREDIT_CARD" | "PIX";
@@ -82,7 +83,7 @@ export function AssinarPlanoPassoAPasso({
   planos,
   opcoesDeParcelas,
   taxaMensalPercentual,
-  precisaPagador,
+  pagadorInicial,
   planoAtualCode,
   planoInicial,
   cicloInicial,
@@ -98,7 +99,8 @@ export function AssinarPlanoPassoAPasso({
   planos: PlanoParaVenda[];
   opcoesDeParcelas: Record<string, OpcoesDoPlano>;
   taxaMensalPercentual: number | null;
-  precisaPagador: boolean;
+  /** O formulário do pagador já preenchido (empresa e quem está logado). O formulário aparece em toda compra. */
+  pagadorInicial: Partial<CamposDoFormularioDoPagador> | null;
   planoAtualCode: string | null;
   /** A conta Asaas tem chave Pix ativa? Falso: só o cartão aparece (o servidor também recusa o Pix). */
   pixDisponivel: boolean;
@@ -116,7 +118,7 @@ export function AssinarPlanoPassoAPasso({
   });
   const [metodo, setMetodo] = useState<Metodo>("CREDIT_CARD");
   const [parcelas, setParcelas] = useState(1);
-  const [pagador, setPagador] = useState<CamposDoFormularioDoPagador>(CAMPOS_VAZIOS);
+  const [pagador, setPagador] = useState<CamposDoFormularioDoPagador>(() => camposIniciaisDoPagador(pagadorInicial));
   const [aceitouTermos, setAceitouTermos] = useState(false);
   const [pendente, setPendente] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -217,15 +219,13 @@ export function AssinarPlanoPassoAPasso({
     if (novo === "PIX") setParcelas(1);
   }
 
-  /** Do pagamento para o resumo: o formulário do pagador (primeira compra) é conferido já aqui, no passo dele. */
+  /** Do pagamento para o resumo: o formulário do pagador é conferido já aqui, no passo dele. */
   function avancarDoPagamento() {
-    if (precisaPagador) {
-      const montado = montarPagadorDoFormulario(pagador);
-      if (!montado.ok) {
-        setErro(t(montado.erro));
-        toast.error(t(montado.erro));
-        return;
-      }
+    const montado = montarPagadorDoFormulario(pagador);
+    if (!montado.ok) {
+      setErro(t(montado.erro));
+      toast.error(t(montado.erro));
+      return;
     }
     irPara(4);
   }
@@ -279,20 +279,16 @@ export function AssinarPlanoPassoAPasso({
     });
     if (chaveDestaTentativa !== chave) setChave(chaveDestaTentativa);
 
-    let entradaDoPagador: DadosDoPagador | undefined;
-
-    if (precisaPagador) {
-      const montado = montarPagadorDoFormulario(pagador);
-      if (!montado.ok) {
-        toast.error(t(montado.erro));
-        tentativaAnteriorRef.current = { escolha: escolhaAtual, desfecho: "terminal" };
-        // O erro é do formulário do pagador: a pessoa volta ao passo dele, onde o campo está.
-        setPasso(3);
-        setErro(t(montado.erro));
-        return;
-      }
-      entradaDoPagador = montado.pagador;
+    const montado = montarPagadorDoFormulario(pagador);
+    if (!montado.ok) {
+      toast.error(t(montado.erro));
+      tentativaAnteriorRef.current = { escolha: escolhaAtual, desfecho: "terminal" };
+      // O erro é do formulário do pagador: a pessoa volta ao passo dele, onde o campo está.
+      setPasso(3);
+      setErro(t(montado.erro));
+      return;
     }
+    const entradaDoPagador: DadosDoPagador = montado.pagador;
 
     setErro(null);
     setPendente(true);
@@ -584,9 +580,7 @@ export function AssinarPlanoPassoAPasso({
             </div>
           )}
 
-          {precisaPagador && (
-            <FormularioDoPagador pagador={pagador} onChange={setPagador} idPrefixo={`pagador-plano-${plano.code}`} />
-          )}
+          <FormularioDoPagador pagador={pagador} onChange={setPagador} idPrefixo={`pagador-plano-${plano.code}`} />
 
           <AceiteDosTermos id={`termos-plano-${plano.code}`} aceito={aceitouTermos} onChange={setAceitouTermos} />
 

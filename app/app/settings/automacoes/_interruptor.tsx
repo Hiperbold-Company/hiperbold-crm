@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 const ERRO: Record<string, string> = {
   unauthenticated: "Sua sessão expirou. Entre de novo.",
@@ -26,6 +27,7 @@ const ERRO: Record<string, string> = {
 };
 
 export function InterruptorAiDecide({ ligado, idioma }: { ligado: boolean; idioma: Idioma }) {
+  const rd = useMarcaDosAjustes();
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
   const [valor, setValor] = useState(ligado);
@@ -46,7 +48,7 @@ export function InterruptorAiDecide({ ligado, idioma }: { ligado: boolean; idiom
   }
 
   return (
-    <Card className="p-6">
+    <Card data-rd-ajustes={rd("secao")} className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <Label htmlFor="ai_decide_empresa">{t("A IA pode decidir entre as opções de uma regra")}</Label>

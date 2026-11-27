@@ -9,6 +9,8 @@ import { empresaExigeMfa, politicaDaEmpresa, type PapelMinimoDeMfa } from "@/lib
 import { listarDispositivosConfiaveis } from "@/lib/auth/dispositivo-confiavel";
 import { SecurityClient } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +78,7 @@ export default async function SecurityPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header>
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Segurança", idioma)}</h1>
         <p className="text-sm text-muted-foreground">
           {traduzir(

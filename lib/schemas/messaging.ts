@@ -191,7 +191,7 @@ export type PatchConversationInput = z.infer<typeof patchConversationSchema>;
  * `bulkLeadActionSchema`). O lote NÃO tem permissão própria, org própria nem
  * auditoria própria: cada id é encaminhado ao MESMO handler da conversa
  * individual (`POST [id]/close`, `PATCH [id]`, `POST [id]/transfer`,
- * `POST [id]/mark-read`, `POST [id]/pause-ai`, `POST [id]/reactivate-bot`), e
+ * `POST [id]/mark-read`, `POST [id]/mark-unread`, `POST [id]/pause-ai`, `POST [id]/reactivate-bot`), e
  * é ele que resolve role, organização da SESSÃO e auditoria — por item. A
  * organização portanto NUNCA vem do corpo: o schema não tem campo para ela.
  *
@@ -210,6 +210,10 @@ export const bulkConversationActionSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("mark-read"),
+    ids: z.array(z.string().uuid()).min(1),
+  }),
+  z.object({
+    action: z.literal("mark-unread"),
     ids: z.array(z.string().uuid()).min(1),
   }),
   z.object({

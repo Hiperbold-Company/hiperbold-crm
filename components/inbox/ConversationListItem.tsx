@@ -24,6 +24,7 @@ import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { iniciaisDoNome } from "@/lib/ui/iniciais";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
+import { corDoAvatar, useMarcaDoChat } from "@/components/inbox/redesign/marca";
 
 interface Props {
   conversation: ConversationWithContact;
@@ -173,6 +174,7 @@ export function ConversationListItem({
 }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoChat();
   const c = conversation.contacts ?? null;
   const displayName = rotuloParaAEquipe(c, t);
   const phoneFallback = c?.phone_number ? phoneForDisplay(c.phone_number) : "??";
@@ -270,6 +272,7 @@ export function ConversationListItem({
 
   return (
     <div
+      data-rd-chat={rd("linha")}
       className={cn(
         "relative flex w-full items-start border-b border-border/70",
         selecionado && "bg-accent-soft",
@@ -303,6 +306,7 @@ export function ConversationListItem({
       <button
         type="button"
         data-conversation-id={conversation.id}
+        data-rd-chat={rd("item")}
         onClick={() => onSelect(conversation.id)}
         className={cn(
           "group relative flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated",
@@ -322,10 +326,14 @@ export function ConversationListItem({
         aria-current={isSelected ? "true" : undefined}
       >
       {isSelected && (
-        <span className="absolute inset-y-0 left-0 w-0.5 bg-accent" aria-hidden />
+        <span data-rd-chat={rd("marca-aberta")} className="absolute inset-y-0 left-0 w-0.5 bg-accent" aria-hidden />
       )}
       <div className="relative shrink-0">
-        <Avatar className="h-10 w-10">
+        <Avatar
+          className="h-10 w-10"
+          data-rd-chat={rd("avatar")}
+          data-rd-cor={rd("avatar") && corDoAvatar(c?.id ?? conversation.id)}
+        >
           {/* Só monta a <img> quando existe arquivo: sem isso o browser pediria
               a rota para TODO contato da lista e levaria 404 em cada um sem
               foto — que é a maioria. O AvatarFallback do Radix já cobre o caso
@@ -346,6 +354,7 @@ export function ConversationListItem({
             "absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-background",
             dot,
           )}
+          data-rd-chat={rd("ponto")}
           role="img"
           aria-label={rotuloDoComando}
           title={rotuloDoComando}
@@ -353,9 +362,9 @@ export function ConversationListItem({
         <ChannelLogo channel={canal} size={16} className="absolute -bottom-1 -right-1 rounded-md bg-background ring-2 ring-background" />
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1" data-rd-chat={rd("item-corpo")}>
         {naFila && (
-          <div className="mb-1 flex items-center gap-1.5">
+          <div className="mb-1 flex items-center gap-1.5" data-rd-chat={rd("fila")}>
             {queuePosition !== undefined && (
               <span
                 className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-2xs font-medium tabular-nums text-accent"
@@ -375,6 +384,7 @@ export function ConversationListItem({
         <div className="flex items-baseline justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5">
             <span
+              data-rd-chat={rd("nome")}
               className={cn(
                 "truncate text-sm",
                 unread > 0 ? "font-semibold text-text" : "font-medium text-text",
@@ -397,13 +407,14 @@ export function ConversationListItem({
               </Badge>
             )}
           </span>
-          <span className="shrink-0 text-2xs tabular-nums text-text-muted">
+          <span data-rd-chat={rd("hora")} className="shrink-0 text-2xs tabular-nums text-text-muted">
             {time}
           </span>
         </div>
 
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p
+            data-rd-chat={rd("previa")}
             className={cn(
               "min-w-0 truncate text-sm",
               // Na aberta, `text-text`: `text-muted` sobre o `accent-soft` do
@@ -417,14 +428,14 @@ export function ConversationListItem({
             {truncated}
           </p>
           {unread > 0 && (
-            <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-2xs font-semibold tabular-nums text-accent-foreground">
+            <span data-rd-chat={rd("nao-lidas")} className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-2xs font-semibold tabular-nums text-accent-foreground">
               {unread}
             </span>
           )}
         </div>
 
         {temSelos && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <div data-rd-chat={rd("selos")} className="mt-1.5 flex flex-wrap items-center gap-1">
             {/* A CONEXÃO VEM PRIMEIRO (decisão de 17/11): diz por qual número a
                 conversa entrou, e a faixa de etiquetas corta do fim.
                 #2383: `min-w-0` + `max-w` + `truncate` — o mesmo tratamento do

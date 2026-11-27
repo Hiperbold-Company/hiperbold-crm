@@ -7,6 +7,7 @@ import type { CartaoDaConexao, StatusDaConexao, TipoDaConexao } from "@/hooks/ch
 import { useT } from "@/hooks/i18n/useT";
 import { ROTULO_DO_QR_POR_INSTANCIA, ROTULO_DO_QR_POR_SESSAO } from "@/lib/channels/rotulo-do-qr-por-sessao";
 import { InstagramLogo, MessengerLogo, Plug, QrCode, WhatsappLogo } from "@/lib/ui/icons";
+import { useMarcaDasConexoes } from "@/lib/redesign/conexoes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -59,8 +60,9 @@ export function tituloDaConexao(conexao: Pick<CartaoDaConexao, "tipo" | "via"> &
 
 export function StatusDaConexaoBadge({ status }: { status: StatusDaConexao }) {
   const t = useT();
+  const rd = useMarcaDasConexoes();
   return (
-    <span className="inline-flex items-center gap-2 text-xs font-medium" data-testid="status-da-conexao" data-status={status}>
+    <span className="inline-flex items-center gap-2 text-xs font-medium" data-testid="status-da-conexao" data-status={status} data-rd-conexoes={rd("status")}>
       <span aria-hidden className={cn("inline-block h-2 w-2 shrink-0 rounded-full", COR_DO_STATUS[status])} />
       {t(ROTULO_DO_STATUS[status])}
     </span>
@@ -78,6 +80,7 @@ export function CartaoDeConexao({
   destacado?: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDasConexoes();
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (destacado) ref.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -94,28 +97,29 @@ export function CartaoDeConexao({
       )}
       data-testid={`cartao-conexao-${conexao.id}`}
       data-destacado={destacado ? "true" : undefined}
+      data-rd-conexoes={rd("cartao")}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3" data-rd-conexoes={rd("cartao-topo")}>
         <StatusDaConexaoBadge status={conexao.status} />
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground" data-rd-conexoes={rd("icone")}>
           <Icone size={22} aria-hidden />
         </span>
       </div>
 
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-xs font-medium text-muted-foreground" data-testid="tipo-da-conexao">
+        <p className="text-xs font-medium text-muted-foreground" data-testid="tipo-da-conexao" data-rd-conexoes={rd("tipo")}>
           {titulo}
         </p>
-        <p className="truncate text-base font-semibold" title={nome} data-testid="nome-da-conexao">
+        <p className="truncate text-base font-semibold" title={nome} data-testid="nome-da-conexao" data-rd-conexoes={rd("nome")}>
           {nome}
         </p>
         {/* Sem nome, o número já é o título: a linha fica vazia (com altura, para os cartões alinharem). */}
-        <p className="min-h-5 truncate text-sm text-muted-foreground" data-testid="numero-da-conexao">
+        <p className="min-h-5 truncate text-sm text-muted-foreground" data-testid="numero-da-conexao" data-rd-conexoes={rd("numero")}>
           {conexao.numero_ou_handle === nome ? null : (conexao.numero_ou_handle ?? t("sem número informado"))}
         </p>
       </div>
 
-      <div className="mt-auto border-t pt-4">
+      <div className="mt-auto border-t pt-4" data-rd-conexoes={rd("rodape")}>
         <Button
           type="button"
           variant="outline"
@@ -123,6 +127,7 @@ export function CartaoDeConexao({
           onClick={aoGerenciar}
           aria-label={`${t("Gerenciar")} ${nome}`}
           data-testid={`gerenciar-${conexao.id}`}
+          data-rd-conexoes={rd("gerenciar")}
         >
           {t("Gerenciar")}
         </Button>

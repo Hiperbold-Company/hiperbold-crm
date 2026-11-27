@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDeEntrar } from "@/lib/redesign/entrar";
 import { cn } from "@/lib/utils";
 
 interface TOTPInputProps {
@@ -31,6 +32,7 @@ export function TOTPInput({
   className,
 }: TOTPInputProps) {
   const t = useT();
+  const rd = useMarcaDeEntrar();
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const [chars, setChars] = useState<string[]>(() =>
     Array.from({ length: LENGTH }, (_, i) => value[i] ?? ""),
@@ -116,6 +118,7 @@ export function TOTPInput({
           disabled={disabled}
           aria-invalid={hasError ? true : undefined}
           aria-label={`${t("Dígito")} ${i + 1}`}
+          data-rd-entrar={rd("digito")}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}

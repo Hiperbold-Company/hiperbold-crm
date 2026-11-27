@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
 import { RoteamentoResultados } from "./RoteamentoResultados";
 
@@ -55,6 +56,7 @@ interface Resumo {
 export function ExecucoesDeIa() {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
   const [execucoes, setExecucoes] = useState<Execucao[] | null>(null);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function ExecucoesDeIa() {
 
   if (erro) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-rd-automacoes={rd("pagina")}>
         <Card className="border-destructive/40 p-6">
           <h2 className="font-medium">{t("Não consegui carregar as execuções")}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{erro}</p>
@@ -120,15 +122,15 @@ export function ExecucoesDeIa() {
   }
 
   if (!execucoes || !resumo) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("Carregando…")}</div>;
+    return <div className="p-6 text-sm text-muted-foreground" data-rd-automacoes={rd("pagina")}>{t("Carregando…")}</div>;
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-6" data-testid="execucoes-de-ia">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Execuções de IA")}</h1>
-        <div className="mt-2 flex gap-3 text-sm"><span aria-current="page" className="font-medium">{t("Execuções")}</span><a href="/app/ai/runs?tab=roteamento" className="underline">{t("Roteamento")}</a></div>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+    <div className="mx-auto w-full max-w-5xl p-6" data-testid="execucoes-de-ia" data-rd-automacoes={rd("pagina")}>
+      <header className="mb-6" data-rd-automacoes={rd("cabecalho")}>
+        <h1 className="text-2xl font-semibold tracking-tight" data-rd-automacoes={rd("titulo")}>{t("Execuções de IA")}</h1>
+        <div className="mt-2 flex gap-3 text-sm" data-rd-automacoes={rd("abas")}><span aria-current="page" className="font-medium">{t("Execuções")}</span><a href="/app/ai/runs?tab=roteamento" className="underline">{t("Roteamento")}</a></div>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground" data-rd-automacoes={rd("descricao")}>
           {t(
             "Tudo que a inteligência artificial fez por aqui — e, quando algo falhou, o que aconteceu e o que fazer.",
           )}
@@ -136,7 +138,7 @@ export function ExecucoesDeIa() {
       </header>
 
       {/* O resumo responde "está tudo bem?" antes da lista. */}
-      <Card className="mb-6 p-4" data-testid="resumo">
+      <Card className="mb-6 p-4" data-testid="resumo" data-rd-automacoes={rd("resumo")}>
         {resumo.erros === 0 ? (
           <p className="text-sm">
             <span className="font-medium text-success-fg">
@@ -163,7 +165,7 @@ export function ExecucoesDeIa() {
         )}
       </Card>
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-2" data-rd-automacoes={rd("barra")}>
         <Button
           size="sm"
           variant={soErros ? "default" : "outline"}
@@ -189,7 +191,7 @@ export function ExecucoesDeIa() {
       </div>
 
       {execucoes.length === 0 ? (
-        <Card className="p-6 text-sm text-muted-foreground" data-testid="lista-vazia">
+        <Card className="p-6 text-sm text-muted-foreground" data-testid="lista-vazia" data-rd-automacoes={rd("vazio")}>
           {soErros
             ? t("Nenhuma falha registrada.")
             : soOJev
@@ -197,12 +199,13 @@ export function ExecucoesDeIa() {
               : t("Nenhuma execução ainda. Assim que o agente atender alguém, aparece aqui.")}
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2" data-rd-automacoes={rd("lista")}>
           {execucoes.map((e) => (
             <Card
               key={e.id}
               className={e.status === "erro" ? "border-destructive/40 p-4" : "p-4"}
               data-testid={`execucao-${e.id}`}
+              data-rd-automacoes={rd("item")}
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="flex items-center gap-2">

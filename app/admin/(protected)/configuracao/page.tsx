@@ -10,6 +10,8 @@ import {
 import { estadoParaTela, type EstadoParaTela } from "@/lib/instalacao/config";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 import { PainelDeConfiguracao } from "./_form";
 
@@ -103,8 +105,9 @@ export default async function Page() {
     linhas: linhas.filter((l) => l.definicao.grupo === g.grupo),
   })).filter((g) => g.linhas.length > 0);
 
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rd-plataforma={rd("formulario")}>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {traduzir("Configuração da instalação", idioma)}

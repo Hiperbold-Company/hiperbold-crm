@@ -35,7 +35,12 @@ import { Check } from "@/lib/ui/icons";
  * em vigor é metade da pergunta de quem procura este botão.
  */
 
-export function SeletorDeIdioma() {
+/**
+ * A troca de idioma em si — pintura otimista, gravação e recarga —, exportada
+ * para a moldura do redesign (`components/shell/redesign/`) usar o MESMO
+ * mecanismo em vez de reescrevê-lo. O seletor abaixo é o consumidor de sempre.
+ */
+export function useEscolherIdioma() {
   const t = useT();
   const idioma = useIdioma();
   // Comparar com o GRAVADO: quem tem espanhol salvo vê a tela em português
@@ -81,6 +86,13 @@ export function SeletorDeIdioma() {
       window.location.reload();
     });
   };
+
+  return { idioma, emVigor, escolher, salvando };
+}
+
+export function SeletorDeIdioma() {
+  const t = useT();
+  const { idioma, emVigor, escolher, salvando } = useEscolherIdioma();
 
   return (
     <DropdownMenu>

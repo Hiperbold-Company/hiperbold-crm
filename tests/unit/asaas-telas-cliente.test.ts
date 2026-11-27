@@ -4,11 +4,16 @@ import {
   chaveParaProximaTentativaDeCompra,
   classificarDesfechoDaTentativa,
   devePararDePollarPedido,
+  camposIniciaisDoPagador,
+  celularNormalizado,
+  cepNormalizado,
+  formatarCep,
   MENSAGEM_AGUARDE_ESPELHO,
   montarPagadorDoFormulario,
   pedidoEmEstadoFinal,
   podeCancelarAssinatura,
   TETO_DE_POLLING_MS,
+  ufValida,
   urlDeRedirecionamentoEhSegura,
   type EscolhaDeCompra,
 } from "@/app/app/settings/plano/_logica-compra";
@@ -82,24 +87,23 @@ describe("pedidoEmEstadoFinal / devePararDePollarPedido: parada em estado final 
   });
 });
 
-describe("montarPagadorDoFormulario: decisão 16, dados do pagador", () => {
-  const CAMPOS_VALIDOS = { nome: "Maria da Silva", documento: "123.456.789-09", email: "", celular: "" };
+describe("montarPagadorDoFormulario: cadastro completo de quem paga", () => {
+  const CAMPOS_VALIDOS = {
+    nome: "Maria da Silva",
+    documento: "123.456.789-09",
+    email: "maria@exemplo.com",
+    celular: "(11) 99999-8888",
+    cep: "01310-100",
+    rua: "Avenida Paulista",
+    numero: "1000",
+    complemento: "",
+    bairro: "Bela Vista",
+    cidade: "São Paulo",
+    uf: "sp",
+  };
 
-  it("monta o pagador com nome e documento, sem email/celular quando vazios", () => {
-    const r = montarPagadorDoFormulario(CAMPOS_VALIDOS);
-    expect(r).toEqual({
-      ok: true,
-      pagador: { nome: "Maria da Silva", documento: "123.456.789-09" },
-    });
-  });
-
-  it("inclui email e celular só quando preenchidos, já sem espaço nas pontas", () => {
-    const r = montarPagadorDoFormulario({
-      nome: "  Maria da Silva  ",
-      documento: "123.456.789-09",
-      email: " maria@exemplo.com ",
-      celular: " 11999998888 ",
-    });
+  it("monta o pagador inteiro, sem espaço nas pontas, com celular e CEP só em dígitos e UF em maiúsculas", () => {
+    const r = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, nome: "  Maria da Silva  ", email: " maria@exemplo.com " });
     expect(r).toEqual({
       ok: true,
       pagador: {
@@ -107,8 +111,21 @@ describe("montarPagadorDoFormulario: decisão 16, dados do pagador", () => {
         documento: "123.456.789-09",
         email: "maria@exemplo.com",
         celular: "11999998888",
+        cep: "01310100",
+        rua: "Avenida Paulista",
+        numero: "1000",
+        bairro: "Bela Vista",
+        cidade: "São Paulo",
+        uf: "SP",
       },
     });
+  });
+
+  it("o complemento é o único opcional: entra só quando preenchido", () => {
+    const sem = montarPagadorDoFormulario(CAMPOS_VALIDOS);
+    expect(sem.ok && sem.pagador.complemento).toBe(undefined);
+    const com = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, complemento: " Sala 12 " });
+    expect(com.ok && com.pagador.complemento).toBe("Sala 12");
   });
 
   it("aceita CNPJ (14 dígitos), com ou sem pontuação", () => {
@@ -132,15 +149,79 @@ describe("montarPagadorDoFormulario: decisão 16, dados do pagador", () => {
     expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, documento: "12.345.678/0001-99" })).toEqual({ ok: false, erro: "CNPJ inválido" });
   });
 
-  it("recusa e-mail em formato inválido", () => {
-    const r = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, email: "não-é-email" });
-    expect(r).toEqual({ ok: false, erro: "Informe um e-mail válido, ou deixe em branco." });
+  it("e-mail é obrigatório e precisa de formato válido", () => {
+    expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, email: "   " })).toEqual({ ok: false, erro: "Informe um e-mail válido." });
+    expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, email: "não-é-email" })).toEqual({ ok: false, erro: "Informe um e-mail válido." });
   });
 
-  it("e-mail em branco não é erro (é opcional)", () => {
-    const r = montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, email: "   " });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.pagador.email).toBeUndefined();
+  it("celular é obrigatório e precisa do DDD", () => {
+    for (const celular of ["", "99999-8888", "123"]) {
+      expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, celular })).toEqual({ ok: false, erro: "Informe um celular com DDD." });
+    }
+  });
+
+  it("CEP é obrigatório e precisa de 8 dígitos", () => {
+    for (const cep of ["", "0131-010", "013101000"]) {
+      expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, cep })).toEqual({ ok: false, erro: "Informe um CEP com 8 dígitos." });
+    }
+  });
+
+  it.each(["rua", "numero", "bairro", "cidade"] as const)("recusa o endereço sem %s", (campo) => {
+    expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, [campo]: "  " })).toEqual({
+      ok: false,
+      erro: "Preencha o endereço completo: rua, número, bairro e cidade.",
+    });
+  });
+
+  it("recusa UF vazia ou que não existe", () => {
+    for (const uf of ["", "XX", "São Paulo"]) {
+      expect(montarPagadorDoFormulario({ ...CAMPOS_VALIDOS, uf })).toEqual({ ok: false, erro: "Informe a UF (sigla do estado, como SP)." });
+    }
+  });
+});
+
+describe("formulário do pagador: pré-preenchimento e normalização", () => {
+  it("abre com o que o servidor sabe e deixa o resto em branco, sempre editável", () => {
+    expect(
+      camposIniciaisDoPagador({ nome: "Empresa Ltda", documento: "11.222.333/0001-81", email: "dono@empresa.com" }),
+    ).toEqual({
+      nome: "Empresa Ltda",
+      documento: "11.222.333/0001-81",
+      email: "dono@empresa.com",
+      celular: "",
+      cep: "",
+      rua: "",
+      numero: "",
+      complemento: "",
+      bairro: "",
+      cidade: "",
+      uf: "",
+    });
+  });
+
+  it("sem nada pré-preenchido, todos os campos começam vazios", () => {
+    expect(Object.values(camposIniciaisDoPagador(null)).every((v) => v === "")).toBe(true);
+  });
+
+  it("celular aceita +55 e máscara, e devolve só os dígitos com DDD", () => {
+    expect(celularNormalizado("+55 (11) 99999-8888")).toBe("11999998888");
+    expect(celularNormalizado("5511999998888")).toBe("11999998888");
+    expect(celularNormalizado("(11) 3333-4444")).toBe("1133334444");
+    expect(celularNormalizado("99999-8888")).toBeNull();
+  });
+
+  it("CEP: máscara de digitação e conferência de 8 dígitos", () => {
+    expect(formatarCep("01310100")).toBe("01310-100");
+    expect(formatarCep("013")).toBe("013");
+    expect(formatarCep("01310-1009999")).toBe("01310-100");
+    expect(cepNormalizado("01310-100")).toBe("01310100");
+    expect(cepNormalizado("0131010")).toBeNull();
+  });
+
+  it("UF: só as 27 siglas, em maiúsculas", () => {
+    expect(ufValida(" rj ")).toBe("RJ");
+    expect(ufValida("DF")).toBe("DF");
+    expect(ufValida("XX")).toBeNull();
   });
 });
 

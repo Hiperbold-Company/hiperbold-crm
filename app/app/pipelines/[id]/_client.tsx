@@ -1,4 +1,6 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
+import { useRedesign } from "@/lib/redesign/contexto";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -104,6 +106,8 @@ export function PipelinePageClient({
   etapasIniciais: Stage[];
 }) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
+  const ligado = useRedesign();
   // Permissões por perfil: renomear etapa é "Criar e editar funis e etapas".
   const activeOrgDasPermissoes = useActiveOrg();
   /**
@@ -294,6 +298,105 @@ export function PipelinePageClient({
   // Um funil só = nada para trocar: o seletor seria ruído permanente.
   const podeTrocar = funis.length > 1;
 
+  const tituloDoFunil = (
+    <>
+      {/*
+        O TÍTULO É O SELETOR. Com um funil só, `h1` puro (nada para trocar);
+        com vários, o gatilho do `Select` veste o título e o `h1` real vai
+        para `sr-only` — botão dentro de `h1` é HTML inválido, e sem o `h1`
+        o leitor de tela perde o título da página. Trocar zera a query
+        string: filtro de um funil aplicado no outro é resultado fantasma.
+      */}
+      <h1
+        className={
+          podeTrocar ? "sr-only" : "min-w-0 truncate text-2xl font-semibold tracking-tight"
+        }
+      >
+        {nomeAtual}
+      </h1>
+      {podeTrocar && (
+        <Select
+          value={funis.some((f) => f.id === pipelineId) ? pipelineId : undefined}
+          onValueChange={(id) => {
+            if (id !== pipelineId) router.push(`/app/pipelines/${id}`);
+          }}
+        >
+          <SelectTrigger
+            aria-label={`${t("Trocar de funil")}: ${nomeAtual}`}
+            data-testid="trocar-funil"
+            className="h-auto w-auto max-w-full min-w-0 gap-1.5 border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight shadow-none focus:ring-1 focus:ring-ring sm:max-w-[60%] [&>span]:truncate"
+          >
+            <SelectValue placeholder={nomeAtual} />
+          </SelectTrigger>
+          <SelectContent>
+            {funis.map((f) => (
+              <SelectItem key={f.id} value={f.id} data-testid={`trocar-funil-opcao-${f.id}`}>
+                {f.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </>
+  );
+  const abasDaVisao = (
+    <>
+      {/* Funil arquivado abre só no quadro, e o quadro é leitura (#1298):
+          a Lista e o Calendário têm ações de negócio, e oferecê-las num
+          funil que não recebe mais escrita seria a mesma promessa falsa
+          que o "Novo negócio" apagado. Por isso as abas nem aparecem. */}
+      {!arquivado && (
+        <div
+          className="flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
+          data-rd-pipeline={rd("visoes")}
+        >
+          <button
+            type="button"
+            data-testid="visao-quadro"
+            aria-pressed={visao === "quadro"}
+            onClick={() => mudarVisao("quadro")}
+            className={cn(
+              "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+              visao === "quadro"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("Quadro")}
+          </button>
+          <button
+            type="button"
+            data-testid="visao-lista"
+            aria-pressed={visao === "lista"}
+            onClick={() => mudarVisao("lista")}
+            className={cn(
+              "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+              visao === "lista"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("Lista")}
+          </button>
+          <button
+            type="button"
+            data-testid="visao-calendario"
+            aria-pressed={visao === "calendario"}
+            onClick={() => mudarVisao("calendario")}
+            className={cn(
+              "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+              visao === "calendario"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("Calendário")}
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div
       // O QUADRO CABE NA TELA. A página rolava com a janela: o quadro media o
@@ -319,6 +422,7 @@ export function PipelinePageClient({
       // `tests/unit/altura-fixa-le-a-reserva-do-rodape.test.ts` cobra: altura
       // fixa não desconta número próprio, lê a reserva.
       className="flex h-[calc(100dvh-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] min-h-[28rem] flex-col gap-4"
+      data-rd-pipeline={rd("tela")}
       // OBSERVÁVEL de propósito, e é a razão de existir desta linha: "a
       // assinatura morreu" e "nada aconteceu" produzem o MESMO silêncio na
       // tela, e sem este valor nem o produto nem o teste conseguem separar as
@@ -342,43 +446,17 @@ export function PipelinePageClient({
           limite curto) + botão na mesma linha sem quebra empurrava o botão pra
           fora da viewport em telas estreitas. De `sm:` pra cima volta a ser
           uma linha só, como sempre foi. */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/*
-          O TÍTULO É O SELETOR. Com um funil só, `h1` puro (nada para trocar);
-          com vários, o gatilho do `Select` veste o título e o `h1` real vai
-          para `sr-only` — botão dentro de `h1` é HTML inválido, e sem o `h1`
-          o leitor de tela perde o título da página. Trocar zera a query
-          string: filtro de um funil aplicado no outro é resultado fantasma.
-        */}
-        <h1
-          className={
-            podeTrocar ? "sr-only" : "min-w-0 truncate text-2xl font-semibold tracking-tight"
-          }
-        >
-          {nomeAtual}
-        </h1>
-        {podeTrocar && (
-          <Select
-            value={funis.some((f) => f.id === pipelineId) ? pipelineId : undefined}
-            onValueChange={(id) => {
-              if (id !== pipelineId) router.push(`/app/pipelines/${id}`);
-            }}
-          >
-            <SelectTrigger
-              aria-label={`${t("Trocar de funil")}: ${nomeAtual}`}
-              data-testid="trocar-funil"
-              className="h-auto w-auto max-w-full min-w-0 gap-1.5 border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight shadow-none focus:ring-1 focus:ring-ring sm:max-w-[60%] [&>span]:truncate"
-            >
-              <SelectValue placeholder={nomeAtual} />
-            </SelectTrigger>
-            <SelectContent>
-              {funis.map((f) => (
-                <SelectItem key={f.id} value={f.id} data-testid={`trocar-funil-opcao-${f.id}`}>
-                  {f.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <header
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        data-rd-pipeline={rd("cabecalho")}
+      >
+        {ligado ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-3" data-rd-pipeline={rd("identidade")}>
+            {tituloDoFunil}
+            {abasDaVisao}
+          </div>
+        ) : (
+          tituloDoFunil
         )}
         {/*
           AS ABAS DO FUNIL (#2770, #3172), ao lado do quadro. O seletor fica no
@@ -422,56 +500,7 @@ export function PipelinePageClient({
               linhas={linhasDoCartao(data?.pipeline.settings ?? funilInicial.settings)}
             />
           )}
-          {/* Funil arquivado abre só no quadro, e o quadro é leitura (#1298):
-              a Lista e o Calendário têm ações de negócio, e oferecê-las num
-              funil que não recebe mais escrita seria a mesma promessa falsa
-              que o "Novo negócio" apagado. Por isso as abas nem aparecem. */}
-          {!arquivado && (
-            <div className="flex items-center gap-0.5 rounded-md border bg-muted p-0.5">
-              <button
-                type="button"
-                data-testid="visao-quadro"
-                aria-pressed={visao === "quadro"}
-                onClick={() => mudarVisao("quadro")}
-                className={cn(
-                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  visao === "quadro"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("Quadro")}
-              </button>
-              <button
-                type="button"
-                data-testid="visao-lista"
-                aria-pressed={visao === "lista"}
-                onClick={() => mudarVisao("lista")}
-                className={cn(
-                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  visao === "lista"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("Lista")}
-              </button>
-              <button
-                type="button"
-                data-testid="visao-calendario"
-                aria-pressed={visao === "calendario"}
-                onClick={() => mudarVisao("calendario")}
-                className={cn(
-                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  visao === "calendario"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("Calendário")}
-              </button>
-            </div>
-          )}
+          {ligado ? null : abasDaVisao}
           {/* O portão do diálogo é a EXISTÊNCIA DE ETAPA, não a de quadro: numa
               tela aberta direto na Lista (#3172, item 4 do CR) não há quadro, e
               um botão apagado ao lado de uma lista que abriu seria dizer que a

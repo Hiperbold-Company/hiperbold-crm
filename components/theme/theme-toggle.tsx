@@ -19,15 +19,25 @@ import { useT } from "@/hooks/i18n/useT";
  * `className` existe para a tarja do Modo Plataforma, que tem 40px de altura e
  * não comporta os 44px de alvo de toque do `size="icon"`.
  */
-export function ThemeToggle({ className }: { className?: string }) {
-  const t = useT();
+/**
+ * O ciclo de tema e o atalho `mod+shift+l`, exportados para a moldura do
+ * redesign: lá o tema mora no menu do usuário, e o atalho tem de continuar
+ * existindo com o menu fechado.
+ */
+export function useCicloDoTema({ atalho = true }: { atalho?: boolean } = {}) {
   const { theme, setTheme } = useTheme();
 
   const cycle = () => {
     setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light");
   };
 
-  useHotkeys("mod+shift+l", cycle, { preventDefault: true }, [theme]);
+  useHotkeys("mod+shift+l", cycle, { preventDefault: true, enabled: atalho }, [theme]);
+  return { theme, setTheme, cycle };
+}
+
+export function ThemeToggle({ className }: { className?: string }) {
+  const t = useT();
+  const { theme, cycle } = useCicloDoTema();
 
   const Icon = theme === "dark" ? Moon : theme === "system" ? MonitorPlay : Sun;
 

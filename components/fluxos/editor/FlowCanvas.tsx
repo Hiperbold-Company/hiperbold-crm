@@ -43,6 +43,8 @@ import {
 import { rotuloDoRamo } from "@/lib/followup/rotulo-do-ramo";
 import { useFollowupFlow, type FollowupFlowDetailRow } from "@/hooks/followup/useFollowupFlow";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
+import { useMarcaDoEditor } from "@/lib/redesign/editor";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Plus, X } from "@/lib/ui/icons";
@@ -118,6 +120,8 @@ interface Props {
 
 function FlowCanvasInner({ flowId, initialData }: Props) {
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
+  const rdEditor = useMarcaDoEditor();
   const { nomes } = useEtapasDoFluxo();
   const { data: flow } = useFollowupFlow(flowId, { initialData });
   // `initial` seeds React Flow state ONCE on mount — it must NOT react to
@@ -389,7 +393,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
   );
 
   return (
-    <div className="flex h-full min-h-[600px] w-full flex-col">
+    <div className="flex h-full min-h-[600px] w-full flex-col" data-rd-automacoes={rd("editor")}>
       {flow && (
         <PublishBar
           flowId={flowId}
@@ -423,8 +427,9 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
           </SheetContent>
         </Sheet>
 
-        <div className="relative h-full flex-1" data-testid="flow-canvas" onDragOver={onDragOver} onDrop={onDrop}>
+        <div className="relative h-full flex-1" data-testid="flow-canvas" data-rd-automacoes={rd("tela")} onDragOver={onDragOver} onDrop={onDrop}>
           <ReactFlow
+            data-rd-editor={rdEditor("canvas")}
             nodes={nodes}
             edges={edgesForRender}
             nodeTypes={nodeTypes}
@@ -471,6 +476,7 @@ function FlowCanvasInner({ flowId, initialData }: Props) {
           <aside
             className="fixed inset-x-0 bottom-[var(--rodape-ocupado,0px)] z-40 flex max-h-[75vh] flex-col overflow-hidden rounded-t-lg border-t border-border bg-surface shadow-lg lg:static lg:z-auto lg:h-full lg:w-96 lg:max-h-none lg:shrink-0 lg:rounded-none lg:border-l lg:border-t-0 lg:shadow-none"
             data-testid="node-config-sheet"
+            data-rd-automacoes={rd("painel")}
           >
             {/* Barra própria pro X, não sobreposta ao conteúdo — um botão
                 flutuante por cima do cabeçalho do painel colidiria com rótulo

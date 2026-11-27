@@ -24,6 +24,11 @@ import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { rotuloDoPapel } from "@/lib/auth/types";
+import { PainelDeEntrar } from "@/components/auth/PainelDeEntrar";
+import { LogoDaMarca } from "@/components/redesign/LogoDaMarca";
+import { marcaDoSistemaComTeto, type MarcaDoSistema } from "@/lib/redesign/marca-do-sistema";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDeEntrar } from "@/lib/redesign/entrar";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +56,10 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
     (user?.user_metadata?.locale as string | undefined) ?? null,
   );
   const t = (texto: string) => traduzir(texto, idioma);
+  // Onda 2 do redesign: com a chave ligada, a casca das telas de entrada (logo
+  // e painel azul). Desligada, `marca` é null e `Shell` é a de sempre.
+  const ligado = await redesignNaRequisicao();
+  const marca = ligado ? await marcaDoSistemaComTeto() : null;
 
   // O gargalo de enumeração é AQUI, não no aceite: a rota é pública e cada
   // GET testa um token. Sem teto, varrer o espaço de tokens sai de graça
@@ -58,7 +67,7 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   // entre token válido e inválido para quem está varrendo.
   if (await authRateLimited("invite_accept", null, AUTH_LIMITS.invite_accept)) {
     return (
-      <Shell idioma={idioma}>
+      <Shell idioma={idioma} marca={marca} t={t}>
         <h1 className="text-xl font-semibold">{t("Muitas tentativas")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("Aguarde alguns minutos e abra o link do convite de novo.")}
@@ -71,12 +80,14 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
 
   if (!payload) {
     return (
-      <Shell idioma={idioma}>
+      <Shell idioma={idioma} marca={marca} t={t}>
         <h1 className="text-xl font-semibold">{t("Convite inválido ou expirado")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {t(
-            "Este link não é válido ou já passou da janela de 24h. Peça um novo convite ao admin do tenant.",
-          )}
+          {ligado
+            ? `${t("Este link não é válido ou já passou da janela de 24h.")} ${t("Peça um novo convite a quem administra a sua empresa.")}`
+            : t(
+                "Este link não é válido ou já passou da janela de 24h. Peça um novo convite ao admin do tenant.",
+              )}
         </p>
       </Shell>
     );
@@ -89,8 +100,12 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   if (!user) {
     const next = encodeURIComponent(`/team/accept-invite/${token}${prova ? `?v=${prova}` : ""}`);
     return (
-      <Shell idioma={idioma}>
-        <h1 className="text-xl font-semibold">{t("Você foi convidado")}</h1>
+      <Shell idioma={idioma} marca={marca} t={t}>
+        <h1 className="text-xl font-semibold">
+          {ligado
+            ? `${t("Você foi convidado para entrar como")} ${t(rotuloDoPapel(payload.role))}`
+            : t("Você foi convidado")}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("Use o e-mail")} <strong>{payload.email}</strong>{" "}
           {t(
@@ -107,6 +122,9 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
           <Link
             href={`/signup?invite=${encodeURIComponent(token)}${prova ? `&v=${encodeURIComponent(prova)}` : ""}`}
             className="inline-block rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
+            // Com a chave ligada, a regra de links da casca de entrada pintaria o
+            // texto de azul sobre o fundo azul; `button` a deixa de fora.
+            data-slot={ligado ? "button" : undefined}
           >
             {t("Criar minha conta")}
           </Link>
@@ -124,7 +142,7 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   const userEmail = (user.email ?? "").trim().toLowerCase();
   if (userEmail !== payload.email.trim().toLowerCase()) {
     return (
-      <Shell idioma={idioma}>
+      <Shell idioma={idioma} marca={marca} t={t}>
         <h1 className="text-xl font-semibold">{t("Email não corresponde")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("Você está logado como")} <strong>{user.email}</strong>,{" "}
@@ -148,7 +166,7 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   // chegou POR E-MAIL (com `v` válido): ele é a prova, e o aceite carimba o endereço.
   if (!emailVerificado(user.app_metadata) && !prova) {
     return (
-      <Shell idioma={idioma}>
+      <Shell idioma={idioma} marca={marca} t={t}>
         <h1 className="text-xl font-semibold">{t("Confirme seu e-mail para aceitar o convite")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("Enviamos um link de confirmação para")} <strong>{user.email}</strong>.{" "}
@@ -165,7 +183,7 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
   }
 
   return (
-    <Shell idioma={idioma}>
+    <Shell idioma={idioma} marca={marca} t={t}>
       <h1 className="text-xl font-semibold">{t("Aceitar convite")}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         {t("Você foi convidado para entrar como")} <strong>{t(rotuloDoPapel(payload.role))}</strong>.{" "}
@@ -180,7 +198,34 @@ export default async function AcceptInvitePage({ params, searchParams }: PagePro
 // `IdiomaProvider` — o único que acerta o `lang` do documento (ver
 // `admin/forbidden/page.tsx`). Sem ele, o convite em espanhol saía com
 // `lang="pt-BR"`, na primeira tela que o convidado vê.
-function Shell({ idioma, children }: { idioma: Idioma; children: React.ReactNode }) {
+function Shell({
+  idioma,
+  marca,
+  t,
+  children,
+}: {
+  idioma: Idioma;
+  /** Só existe com a chave do redesign ligada. */
+  marca: MarcaDoSistema | null;
+  t: (texto: string) => string;
+  children: React.ReactNode;
+}) {
+  if (marca) {
+    const rd = marcaDeEntrar(true);
+    return (
+      <IdiomaProvider locale={idioma}>
+        <div className="flex min-h-screen items-center justify-center bg-background p-6" data-rd-entrar={rd("pagina")}>
+          <PainelDeEntrar marca={marca} t={t} rd={rd} />
+          <div className="w-full max-w-sm space-y-6" data-rd-entrar={rd("cartao")}>
+            <div className="flex justify-center" data-rd-entrar={rd("logo")}>
+              <LogoDaMarca marca={marca} />
+            </div>
+            <div>{children}</div>
+          </div>
+        </div>
+      </IdiomaProvider>
+    );
+  }
   return (
     <IdiomaProvider locale={idioma}>
       <div className="flex min-h-screen items-center justify-center p-6">

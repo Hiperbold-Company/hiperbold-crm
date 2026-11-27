@@ -18,6 +18,8 @@ import { MODULOS_AINDA_NAO_LIGAVEIS, MODULOS_OPCIONAIS_POR_FLAG, modulosLigados,
 import type { TipoDeSuspensao } from "@/lib/organizacao/operante";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -166,8 +168,9 @@ export default async function Page() {
   );
   const doServidor = RECURSOS_OPCIONAIS.filter((r) => r.nivel === "servidor");
 
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-rd-plataforma={rd("formulario")}>
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Recursos opcionais", idioma)}</h1>
         <p className="text-sm text-muted-foreground">

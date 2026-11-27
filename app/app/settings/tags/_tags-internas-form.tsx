@@ -40,6 +40,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 
 const ERRO: Record<string, string> = {
   validation_failed: "Confira a lista: alguma etiqueta passou do tamanho ou do limite.",
@@ -82,6 +83,7 @@ export function TagsInternasForm({
   /** `interna` (padrão, #2353) ou `equipe` (#3534). */
   variante?: Variante;
 }) {
+  const rd = useMarcaDosAjustes();
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
   const [texto, setTexto] = useState(tags.join("\n"));
@@ -112,7 +114,7 @@ export function TagsInternasForm({
   }
 
   return (
-    <Card className="p-6">
+    <Card data-rd-ajustes={rd("secao")} className="p-6">
       <form onSubmit={salvar} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <h3 className="text-sm font-semibold">{t(textos.titulo)}</h3>

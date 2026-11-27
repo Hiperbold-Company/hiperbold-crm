@@ -55,6 +55,8 @@ import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { AtalhosDoNegocio } from "@/components/kanban/AtalhosDoCard";
 import type { AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
+import { corDoAvatar, useMarcaDoChat } from "@/components/inbox/redesign/marca";
+import { iniciaisDoNome } from "@/lib/ui/iniciais";
 
 interface Props {
   conversation: ConversationWithContact | null;
@@ -819,6 +821,7 @@ export function CRMSidePanel({
   const podeVerCarteira = (user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "agent");
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const rd = useMarcaDoChat();
   const contact = conversation?.contacts ?? null;
   const contactId = contact?.id ?? null;
   const [desfechoDraft, setDesfechoDraft] = useState<DesfechoDraft | null>(null);
@@ -1066,12 +1069,22 @@ export function CRMSidePanel({
    */
   const conteudo: Record<IdModuloDaLateral, ReactNode> = {
     contato: (
-      <section data-testid="inbox-contato">
+      <section data-testid="inbox-contato" data-rd-chat={rd("contato")}>
         <h3 className="text-xs font-semibold text-text">
           {t("Contato")}
         </h3>
-        <Card className="mt-2 space-y-2 p-3 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
+        <Card className="mt-2 space-y-2 p-3 text-sm" data-rd-chat={rd("contato-cartao")}>
+          {/* Onda 3 (v49): a identidade do contato, avatar centralizado. */}
+          {rd("contato-avatar") ? (
+            <span
+              data-rd-chat={rd("contato-avatar")}
+              data-rd-cor={corDoAvatar(contactId ?? conversation.id)}
+              aria-hidden
+            >
+              {iniciaisDoNome(displayName) ?? "?"}
+            </span>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2" data-rd-chat={rd("contato-nome")}>
             <div className="font-medium">{displayName}</div>
             {/*
               O TIPO DO CONTATO (issue 3005, fatia 1): lido da COLUNA
@@ -1098,7 +1111,7 @@ export function CRMSidePanel({
             lead={negocioAtivo}
             contactId={contactId}
           />
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1" data-rd-chat={rd("contato-acoes")}>
             {contactId&&conversation?<Link className="underline" href={`/app/agenda?contato=${contactId}&conversa=${conversation.id}`}>{t("Marcar compromisso")}</Link>:null}
             <Button
               size="sm"
@@ -1452,7 +1465,7 @@ export function CRMSidePanel({
   };
 
   return (
-    <aside className="flex h-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-4">
+    <aside data-rd-chat={rd("ficha")} className="flex h-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-4">
       {/* A FAIXA DO ALTO (#3004/#3008): o recolher do painel, no mesmo lugar do
           recolher do menu da esquerda, e o botão que abre a personalização da
           lateral. `sticky` para não rolar para fora com o conteúdo, e o
@@ -1466,6 +1479,7 @@ export function CRMSidePanel({
       <div
         className="sticky top-0 z-10 -mx-4 -mt-4 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4 py-1"
         data-testid="inbox-cabecalho-do-painel"
+        data-rd-chat={rd("ficha-topo")}
       >
         <DialogoDosModulos modulos={modulos} onSalvos={setModulos} />
         {onAlternarRecolhido ? (

@@ -88,11 +88,14 @@ export default async function PlanoPage({
     );
   }
 
-  const dados = await dadosDaCompraDePlano(admin, activeOrg.orgId, ambiente, logger);
-
   // Pré-seleção: `?plano=` e, na falta, o que o cadastro guardou. `getUser()` valida o JWT no servidor.
   const { plano: planoDaUrl, ciclo: cicloDaUrl } = await searchParams;
   const { data: sessao } = await (await createClient()).auth.getUser();
+  // O formulário do pagador já chega com o e-mail e o celular de quem está logado.
+  const dados = await dadosDaCompraDePlano(admin, activeOrg.orgId, logger, {
+    email: user.email,
+    celular: sessao.user?.phone ?? null,
+  });
   const planoInicial = planoPreSelecionado(
     dados.planos.map((p) => p.code),
     [planoDaUrl, sessao.user?.user_metadata?.plano_escolhido],
@@ -133,7 +136,7 @@ export default async function PlanoPage({
           planos={dados.planos}
           opcoesDeParcelas={dados.opcoesDeParcelas}
           taxaMensalPercentual={dados.taxaMensalPercentual}
-          precisaPagador={dados.precisaPagador}
+          pagadorInicial={dados.pagadorInicial}
           planoAtualCode={dados.planoAtualCode}
           pixDisponivel={dados.pixDisponivel}
           planoInicial={planoInicial}

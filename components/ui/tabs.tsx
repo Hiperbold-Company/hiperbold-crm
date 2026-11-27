@@ -13,6 +13,7 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
+    data-slot="tabs-list"
     className={cn(
       // `max-w-full overflow-x-auto` porque uma fila de abas cresce com o
       // produto e nunca encolhe: no detalhe do agente são SEIS, e em 390px de
@@ -45,6 +46,7 @@ const TabsTrigger = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
+    data-slot="tabs-trigger"
     className={cn(
       // `transition-[background-color,color,box-shadow]` em vez de
       // `transition-all`: o que muda ao ativar a aba é exatamente isto —
@@ -77,6 +79,7 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
+    data-slot="tabs-content"
     className={cn(
       "mt-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden",
       className,

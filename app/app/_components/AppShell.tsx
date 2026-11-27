@@ -12,6 +12,11 @@ import { useNotifyOpenFromServiceWorker } from "@/lib/notifications/notify_open"
 import { ensureNotifyServiceWorker } from "@/lib/notifications/service_worker";
 import { estiloDaReserva, useOcupacaoDoRodape } from "@/lib/ui/rodape-ocupado";
 import { ProvedorDaCentralDeAjuda } from "@/lib/ajuda/contexto";
+import { MenuLateral } from "@/components/shell/redesign/MenuLateral";
+import { BarraDaArea } from "@/components/shell/redesign/BarraDaArea";
+import { ColunaDaIA } from "@/components/shell/redesign/ColunaDaIA";
+import { BarraInferiorNova } from "@/components/shell/redesign/BarraInferiorNova";
+import { ProvedorDoRedesign } from "@/lib/redesign/contexto";
 
 interface AppShellProps {
   sidebarCollapsed: boolean;
@@ -26,6 +31,13 @@ interface AppShellProps {
   podeAtender: boolean;
   /** Endereço da central de ajuda desta instalação (`HELP_CENTER_URL`); `null` esconde o botão. */
   ajudaBase?: string | null;
+  /**
+   * Moldura do redesign exclusivo Hiperbold (`REDESIGN_HIPERBOLD`, lida no
+   * servidor pelo layout). Ausente ou `false`: a casca de sempre, sem mudança.
+   * Só os três encaixes trocam — menu lateral, topo e barra do celular; os
+   * hooks, o `<main>` e os provedores são os mesmos nas duas.
+   */
+  redesign?: boolean;
   children: ReactNode;
 }
 
@@ -33,6 +45,7 @@ export function AppShell({
   sidebarCollapsed,
   podeAtender,
   ajudaBase = null,
+  redesign = false,
   children,
 }: AppShellProps) {
   useInboundMessageAlerts();
@@ -56,6 +69,15 @@ export function AppShell({
   // o `p-6` inteiro é rodapé. Com o painel de chamada na tela, é ele que
   // decide a faixa que o conteúdo perde, e ninguém mais mede isso por fora.
   const ocupacaoDoRodape = useOcupacaoDoRodape();
+  const principal = (classe: string) => (
+    <main
+      className={classe}
+      style={estiloDaReserva(ocupacaoDoRodape)}
+      data-rodape-ocupado={ocupacaoDoRodape}
+    >
+      {children}
+    </main>
+  );
   return (
     /*
       `min-h-dvh`, e não `min-h-screen`: `100vh` no celular é a janela com a
@@ -71,13 +93,18 @@ export function AppShell({
       topo ficam ACIMA da casca, e sem o desconto o documento media a tela
       mais a faixa — rolável justo quando o WhatsApp está desconectado.
     */
-    <ProvedorDaCentralDeAjuda base={ajudaBase}>
-    <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] w-full bg-background">
-      <BarraDeProgressoNavegacao />
-      <div className="hidden md:block">
-        <Sidebar collapsed={sidebarCollapsed} />
-      </div>
-      {/*
+    <ProvedorDoRedesign ligado={redesign}>
+      <ProvedorDaCentralDeAjuda base={ajudaBase}>
+        <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] w-full bg-background">
+          <BarraDeProgressoNavegacao />
+          <div className="hidden md:block">
+            {redesign ? (
+              <MenuLateral collapsed={sidebarCollapsed} />
+            ) : (
+              <Sidebar collapsed={sidebarCollapsed} />
+            )}
+          </div>
+          {/*
         `min-w-0` é o que permite a coluna de conteúdo ENCOLHER. Um flex item
         nasce com `min-width: auto`, ou seja, nunca fica menor que o conteúdo —
         então qualquer bloco largo (uma fila de abas, uma tabela) empurrava a
@@ -89,16 +116,16 @@ export function AppShell({
         cabeçalho, presente também em telas que não têm abas (a lista de agentes
         estoura 236px). Isolado ancestral por ancestral: é este o que decide.
       */}
-        {/*
+          {/*
         Sem `md:ml-*`: a barra voltou a ocupar lugar na linha (ver o comentário
         em `Sidebar.tsx`), então o que sobra para esta coluna é exatamente o que
         ela não usou. A margem existia para compensar uma barra `fixed`, e era a
         SEGUNDA medida da mesma coisa — a que discordava e deixava a barra por
         cima da lista.
       */}
-      <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] min-w-0 flex-1 flex-col">
-        <TopBar ajudaBase={ajudaBase} />
-        {/*
+          <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] min-w-0 flex-1 flex-col">
+            {redesign ? <BarraDaArea ajudaBase={ajudaBase} /> : <TopBar ajudaBase={ajudaBase} />}
+            {/*
           O RODAPÉ DESCONTA O QUE AS PEÇAS FIXAS OCUPAM (issue #1305).
 
           `estiloDaReserva` devolve `undefined` quando não há peça registrada —
@@ -118,15 +145,16 @@ export function AppShell({
           tela cheia o fim do conteúdo ficava atrás do indicador de home — e com
           peça fixa quem cobre isso é o terceiro termo do `max()` do contrato.
         */}
-        <main
-          className="flex-1 overflow-auto p-4 pb-area-segura sm:p-6"
-          style={estiloDaReserva(ocupacaoDoRodape)}
-          data-rodape-ocupado={ocupacaoDoRodape}
-        >
-          {children}
-        </main>
-      </div>
-      {/*
+            {redesign ? (
+              <div className="flex min-h-0 flex-1">
+                <ColunaDaIA />
+                {principal("min-w-0 flex-1 overflow-auto p-4 pb-area-segura sm:p-6")}
+              </div>
+            ) : (
+              principal("flex-1 overflow-auto p-4 pb-area-segura sm:p-6")
+            )}
+          </div>
+          {/*
         A BARRA DE ABAS DO CELULAR, irmã do `<main>` e não filha dele.
 
         Ela é `fixed`, então o lugar na árvore não decide onde ela desenha — mas
@@ -139,8 +167,9 @@ export function AppShell({
         Ela própria se esconde acima de `md` — o mesmo corte em que a barra
         lateral aparece, logo acima.
       */}
-      <BarraInferior />
-    </div>
-    </ProvedorDaCentralDeAjuda>
+          {redesign ? <BarraInferiorNova /> : <BarraInferior />}
+        </div>
+      </ProvedorDaCentralDeAjuda>
+    </ProvedorDoRedesign>
   );
 }

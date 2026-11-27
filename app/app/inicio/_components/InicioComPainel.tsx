@@ -20,6 +20,7 @@ import { LinkDeAjudaDaTela } from "@/components/ajuda/LinkDeAjudaDaTela";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import type { ContagemDosPassos, PassoDoInicio } from "@/lib/inicio/primeiros-passos";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { X } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export function InicioComPainel({
   userId: string;
 }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const [escondido, setEscondido] = useState(false);
   const [gaveta, setGaveta] = useState(false);
   const [desktop, setDesktop] = useState(true);
@@ -87,8 +89,8 @@ export function InicioComPainel({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-screen-2xl min-w-0 flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="mx-auto flex w-full max-w-screen-2xl min-w-0 flex-col gap-6 p-4 sm:p-6" data-rd-inicio={rd("tela")}>
+      <header className="flex flex-wrap items-start justify-between gap-3" data-rd-inicio={rd("cabecalho")}>
         <div className="min-w-0 space-y-3">
           <h1 className="text-2xl font-semibold tracking-tight">{t("Início")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -129,6 +131,7 @@ export function InicioComPainel({
           aria-label={t("Primeiros passos")}
           data-testid="inicio-barra-lateral"
           data-visivel={visivel ? "sim" : "nao"}
+          data-rd-inicio={rd("barra")}
           className={cn(
             // Celular: gaveta fixa à direita, nunca mais larga que a tela.
             "fixed inset-y-0 right-0 z-40 w-[min(22rem,100vw)] max-w-full overflow-y-auto border-l bg-background p-4 shadow-xl",

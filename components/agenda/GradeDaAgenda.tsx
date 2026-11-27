@@ -33,6 +33,7 @@ import type { FechamentoDaGrade } from "@/lib/agenda/fechamentos-na-grade";
 import { diaLocalISO, instanteDe, partesNoFuso } from "@/lib/agenda/fuso";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDaAgenda } from "@/lib/redesign/agenda";
 
 import { corDaTrilha, fundoDaTrilha } from "./paleta";
 import type { Agendamento, Pessoa, VisaoDaAgenda } from "./tipos";
@@ -485,6 +486,7 @@ function BlocoDeAgendamento({
   };
 }) {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const comeca = new Date(agendamento.comeca);
   const termina = new Date(agendamento.termina);
   const duracao = Math.max(differenceInMinutes(termina, comeca), 15);
@@ -496,6 +498,7 @@ function BlocoDeAgendamento({
     <button
       type="button"
       data-testid={`agendamento-${agendamento.id}`}
+      data-rd-agenda={rd("compromisso")}
       data-origem={agendamento.origem}
       data-trilha={trilha}
       data-situacao={agendamento.situacao}
@@ -844,6 +847,7 @@ function VisaoDeMes({
   pessoas: Pessoa[];
 }) {
   const t = useT();
+  const rd = useMarcaDaAgenda();
   const localeDaData = useLocaleDeData();
   // O mesmo período que `_client.tsx` BUSCA — ver `lib/agenda/recorte-da-grade.ts`.
   const primeiro = primeiroDiaDaVisaoDeMes(ancora);
@@ -879,6 +883,7 @@ function VisaoDeMes({
             <div
               key={d.toISOString()}
               data-testid={`celula-mes-${format(d, "yyyy-MM-dd")}`}
+              data-rd-agenda={rd(doMes ? "mes-celula" : "mes-celula-fora")}
               className={cn(
                 "min-h-20 border-b border-r border-border p-1",
                 !doMes && "bg-surface-elevated/30",
@@ -886,6 +891,13 @@ function VisaoDeMes({
             >
               <div className="mb-1 flex items-center justify-between px-0.5">
                 <span
+                  data-rd-agenda={rd(
+                    chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)
+                      ? "mes-numero-hoje"
+                      : doMes
+                        ? "mes-numero"
+                        : "mes-numero-fora",
+                  )}
                   className={cn(
                     "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs tabular-nums",
                     chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)
@@ -898,7 +910,10 @@ function VisaoDeMes({
                   {format(d, "d")}
                 </span>
                 {doDia.length > 2 && (
-                  <span className="text-2xs tabular-nums text-text-subtle">
+                  <span
+                    data-rd-agenda={rd("mes-mais")}
+                    className="text-2xs tabular-nums text-text-subtle"
+                  >
                     +{doDia.length - 2}
                   </span>
                 )}
@@ -913,6 +928,7 @@ function VisaoDeMes({
                     <div
                       key={`fechamento-${f.id}`}
                       data-testid={`fechamento-mes-${f.id}`}
+                      data-rd-agenda={rd("mes-fechado")}
                       className="truncate rounded-sm px-1 py-0.5 text-2xs leading-4 text-text-muted"
                       style={{ background: HACHURA_DO_FECHAMENTO }}
                     >
@@ -940,6 +956,7 @@ function VisaoDeMes({
                       // AFIRMA, e um seletor que repete a asserção não prova
                       // nada.
                       data-origem={c.origem}
+                      data-rd-agenda={rd("mes-chip")}
                       className="flex items-center gap-1 rounded-sm px-1 py-0.5"
                       style={{ background: fundoDaTrilha(trilha, 14) }}
                     >
@@ -1007,6 +1024,7 @@ export function GradeDaAgenda({
   interacao?: InteracaoDaGrade;
   className?: string;
 }) {
+  const rd = useMarcaDaAgenda();
   const dias = visao === "dia" ? [ancora] : diasDaSemanaDe(ancora);
 
   const gradeRef = React.useRef<HTMLDivElement>(null);
@@ -1209,6 +1227,7 @@ export function GradeDaAgenda({
   return (
     <div
       data-testid="grade-da-agenda"
+      data-rd-agenda={rd("grade")}
       data-visao={visao}
       className={cn(
         "flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface",

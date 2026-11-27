@@ -23,6 +23,8 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { PedidoClient } from "./_client";
+import { marcaDosAjustes } from "@/lib/redesign/ajustes";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
 
 export const metadata = { title: "Pedido" };
 export const dynamic = "force-dynamic";
@@ -61,7 +63,7 @@ export default async function PedidoPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <header className="space-y-1">
+      <header data-rd-ajustes={marcaDosAjustes(await redesignNaRequisicao())("cabecalho")} className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Seu pedido")}</h1>
         <p className="text-sm text-muted-foreground">
           {data.tipo === "assinatura" ? t("Assinatura") : t("Pacote de tokens")}

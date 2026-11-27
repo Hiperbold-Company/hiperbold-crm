@@ -3,6 +3,7 @@
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { useState } from "react";
 import Link from "next/link";
 
@@ -52,6 +53,7 @@ const HANDOFF_EM_PALAVRA: Record<string, string> = {
 export function FlowsList({ initialData, canWrite, surface }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
   const { data } = useFollowupFlows({ initialData, ...(surface ? { surface } : {}) });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modelosOpen, setModelosOpen] = useState(false);
@@ -115,7 +117,7 @@ export function FlowsList({ initialData, canWrite, surface }: Props) {
   if (flows.length === 0) {
     return (
       <>
-        <Card className="flex flex-col items-center gap-3 p-10 text-center">
+        <Card className="flex flex-col items-center gap-3 p-10 text-center" data-rd-automacoes={rd("vazio")}>
           <FlowArrow size={36} aria-hidden className="text-text-muted" />
           <h2 className="font-medium">
             {deAtendimento ? t("Nenhum fluxo de atendimento ainda") : t("Nenhum fluxo de follow-up ainda")}
@@ -149,20 +151,20 @@ export function FlowsList({ initialData, canWrite, surface }: Props) {
     <>
     <div className="flex flex-col gap-4">
       {canWrite && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end" data-rd-automacoes={rd("barra")}>
           {!deAtendimento && modelosButton}
           {newFlowButton}
           {importButton}
         </div>
       )}
 
-      <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-rd-automacoes={rd("grade")}>
         {flows.map((flow) => (
           <li key={flow.id}>
-            <Card className="flex h-full flex-col gap-3 p-4 transition-colors hover:border-accent-400">
-              <Link href={`${baseHref}/${flow.id}`} className="flex flex-1 flex-col gap-3">
+            <Card className="flex h-full flex-col gap-3 p-4 transition-colors hover:border-accent-400" data-rd-automacoes={rd("cartao")}>
+              <Link href={`${baseHref}/${flow.id}`} className="flex flex-1 flex-col gap-3" data-rd-automacoes={rd("cartao-corpo")}>
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="min-w-0 flex-1 truncate font-medium" title={flow.name}>
+                  <h3 className="min-w-0 flex-1 truncate font-medium" title={flow.name} data-rd-automacoes={rd("cartao-nome")}>
                     {flow.name}
                   </h3>
                   <FlowStatusBadge status={flow.status} />
@@ -184,7 +186,7 @@ export function FlowsList({ initialData, canWrite, surface }: Props) {
                 </p>
               </Link>
               {canWrite && (
-                <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-2">
+                <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-2" data-rd-automacoes={rd("cartao-rodape")}>
                   <RenameFollowupFlowButton flowId={flow.id} flowName={flow.name} />
                   <DuplicateFollowupFlowButton flowId={flow.id} />
                   <ExportFollowupFlowButton flowId={flow.id} />

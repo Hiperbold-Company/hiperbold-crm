@@ -6,6 +6,9 @@ import { papelPode } from "@/lib/permissoes/resolver";
 import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
 
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDasMetricas } from "@/lib/redesign/metricas";
+
 import { MetricsClient } from "./_components/MetricsClient";
 
 export const dynamic = "force-dynamic";
@@ -48,10 +51,11 @@ export default async function MetricsPage() {
     }
   }
   const t = (texto: string) => traduzir(texto, idioma);
+  const rd = marcaDasMetricas(await redesignNaRequisicao());
 
   return (
-    <div className="flex h-full flex-col gap-4 sm:gap-6 md:p-6">
-      <header>
+    <div className="flex h-full flex-col gap-4 sm:gap-6 md:p-6" data-rd-metricas={rd("tela")}>
+      <header data-rd-metricas={rd("cabecalho")}>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Desempenho")}</h1>
         <p className="text-sm text-muted-foreground">
           {canCompare

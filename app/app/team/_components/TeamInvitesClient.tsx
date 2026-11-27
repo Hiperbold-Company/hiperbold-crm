@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ArrowsClockwise, Copy, DotsThree, Warning } from "@/lib/ui/icons";
+import { useMarcaDosAjustes } from "@/lib/redesign/ajustes";
 import { copyToClipboard } from "@/lib/clipboard";
 import type { StatusConvite } from "@/lib/team/convite-status";
 
@@ -51,6 +52,7 @@ const BADGE_VARIANT: Record<StatusConvite, "default" | "outline" | "secondary" |
 
 export function TeamInvitesClient({ canManage }: Props) {
   const t = useT();
+  const rd = useMarcaDosAjustes();
   const tagDoIdioma = useTagDeIdioma();
   const { data, isLoading, isError } = useTeamInvites();
   const resend = useResendInvite();
@@ -80,7 +82,7 @@ export function TeamInvitesClient({ canManage }: Props) {
   const invites = data?.data ?? [];
 
   return (
-    <section className="flex flex-col gap-3">
+    <section data-rd-ajustes={rd("convites")} className="flex flex-col gap-3">
       <div>
         <h2 className="text-sm font-semibold">{t("Convites")}</h2>
         <p className="text-xs text-muted-foreground">
@@ -91,7 +93,7 @@ export function TeamInvitesClient({ canManage }: Props) {
       {invites.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("Nenhum convite enviado.")}</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div data-rd-ajustes={rd("lista")} className="overflow-x-auto rounded-md border">
           <Table className="max-md:block">
             <TableHeader className="max-md:hidden">
               <TableRow>

@@ -92,6 +92,9 @@ import { linhasDeTokensDeIA, type LinhasDeTokensDeIA } from "@/lib/billing/token
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
+import { marcaDosAjustes, type MarcaDosAjustes } from "@/lib/redesign/ajustes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assinaturaCancelada, estadoDoReembolso, type EstadoDoReembolso } from "@/lib/billing/reembolso/regras";
 import { pagamentosReembolsaveis } from "@/lib/billing/reembolso/elegiveis";
@@ -232,9 +235,13 @@ export default async function PlanoEUsoPage() {
         })
       : { tipo: "oculto" };
 
+  const redesign = await redesignNaRequisicao();
+  const rd = marcaDasConfiguracoes(redesign);
+  const ra = marcaDosAjustes(redesign);
+
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header className="space-y-1">
+      <header data-rd-configuracoes={rd("cabecalho")} className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{t("Meu plano e consumo de IA")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t("Quanto sua organização usa de cada item do plano contratado, e quantos tokens de IA já consumiu no mês.")}
@@ -248,10 +255,11 @@ export default async function PlanoEUsoPage() {
         )}
       </header>
 
-      <CartaoDaAssinatura assinatura={assinatura} t={t} tagDoIdioma={tagDoIdioma} />
+      <CartaoDaAssinatura ra={ra} assinatura={assinatura} t={t} tagDoIdioma={tagDoIdioma} />
 
       {souAdminDaOrganizacao && chavesAsaas && asaasOrg && !asaasOrg.leituraFalhou && (
         <CartaoDeAssinaturaEPagamento
+          ra={ra}
           chaves={chavesAsaas}
           assinaturaAsaas={asaasOrg.assinatura}
           pedidos={asaasOrg.pedidos}
@@ -282,31 +290,31 @@ export default async function PlanoEUsoPage() {
         </div>
       )}
 
-      <Card>
+      <Card data-rd-ajustes={ra("cartao-de-uso")}>
         <CardContent className="divide-y divide-border/60 p-6">
           {linhas.map((linha) => (
-            <LinhaDeUso key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
+            <LinhaDeUso ra={ra} key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
           ))}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-rd-ajustes={ra("cartao-de-uso")}>
         <CardHeader>
           <CardTitle>{t("O que o plano inclui")}</CardTitle>
         </CardHeader>
         <CardContent className="divide-y divide-border/60">
           {linhasDosRecursos.map((linha) => (
-            <LinhaDoRecurso key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
+            <LinhaDoRecurso ra={ra} key={linha.chave} linha={linha} t={t} tagDoIdioma={tagDoIdioma} />
           ))}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-rd-ajustes={ra("cartao-de-uso")}>
         <CardHeader>
           <CardTitle>{t("Tokens de IA")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <SecaoTokensDeIA linhas={linhasTokens} t={t} tagDoIdioma={tagDoIdioma} />
+          <SecaoTokensDeIA ra={ra} linhas={linhasTokens} t={t} tagDoIdioma={tagDoIdioma} />
         </CardContent>
       </Card>
     </div>
@@ -346,10 +354,12 @@ const ESTADO_DA_ASSINATURA_VARIANT: Record<string, "success" | "info" | "warning
  * `fn_billing_avisar_assinatura`).
  */
 function CartaoDaAssinatura({
+  ra,
   assinatura,
   t,
   tagDoIdioma,
 }: {
+  ra: MarcaDosAjustes;
   assinatura: ResultadoEstadoDaAssinatura;
   t: (texto: string) => string;
   tagDoIdioma: string;
@@ -370,7 +380,7 @@ function CartaoDaAssinatura({
   const semPlano = contratoSemPlano(contrato);
 
   return (
-    <Card>
+    <Card data-rd-ajustes={ra("cartao-do-plano")}>
       <CardHeader>
         <CardTitle>{t("Assinatura")}</CardTitle>
       </CardHeader>
@@ -454,6 +464,7 @@ function CartaoDaAssinatura({
  * componente recebe).
  */
 function CartaoDeAssinaturaEPagamento({
+  ra,
   chaves,
   assinaturaAsaas,
   pedidos,
@@ -464,6 +475,7 @@ function CartaoDeAssinaturaEPagamento({
   tagDoIdioma,
   t,
 }: {
+  ra: MarcaDosAjustes;
   chaves: EstadoDasChavesAsaas;
   assinaturaAsaas: AssinaturaAsaasDaOrganizacao | null;
   pedidos: PedidoAsaas[];
@@ -496,7 +508,7 @@ function CartaoDeAssinaturaEPagamento({
   });
 
   return (
-    <Card>
+    <Card data-rd-ajustes={ra("cartao-do-plano")}>
       <CardHeader>
         <CardTitle>{t("Assinatura e pagamento")}</CardTitle>
       </CardHeader>
@@ -654,10 +666,12 @@ function BannerDoBloqueio({
 }
 
 function LinhaDeUso({
+  ra,
   linha,
   t,
   tagDoIdioma,
 }: {
+  ra: MarcaDosAjustes;
   linha: LinhaDaTelaDePlano;
   t: (texto: string) => string;
   tagDoIdioma: string;
@@ -665,7 +679,7 @@ function LinhaDeUso({
   const rotulo = t(ROTULO_DA_CHAVE[linha.chave]);
 
   return (
-    <div className="space-y-1.5 py-3 first:pt-0">
+    <div data-rd-ajustes={ra("linha-de-uso")} className="space-y-1.5 py-3 first:pt-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium">{rotulo}</span>
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -685,7 +699,12 @@ function LinhaDeUso({
       </div>
 
       {linha.percentual !== null && (
-        <Progress valor={linha.percentual} rotulo={rotulo} tom={linha.estourou ? "erro" : "marca"} />
+        <Progress
+          data-rd-ajustes={ra("barra-de-uso")}
+          valor={linha.percentual}
+          rotulo={rotulo}
+          tom={linha.estourou ? "erro" : "marca"}
+        />
       )}
 
       {linha.chave === "etapas_por_funil" && (
@@ -731,16 +750,19 @@ function textoDoRecurso(
 }
 
 function LinhaDoRecurso({
+  ra,
   linha,
   t,
   tagDoIdioma,
 }: {
+  ra: MarcaDosAjustes;
   linha: LinhaDoRecursoDoPlano;
   t: (texto: string) => string;
   tagDoIdioma: string;
 }) {
   return (
     <div
+      data-rd-ajustes={ra("linha-de-uso")}
       className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0"
       data-testid={`recurso-do-plano-${linha.chave}`}
     >
@@ -772,10 +794,12 @@ function rotuloDoAgente(linha: LinhaExtratoPorAgente, t: (texto: string) => stri
 }
 
 function SecaoTokensDeIA({
+  ra,
   linhas,
   t,
   tagDoIdioma,
 }: {
+  ra: MarcaDosAjustes;
   linhas: LinhasDeTokensDeIA;
   t: (texto: string) => string;
   tagDoIdioma: string;
@@ -823,7 +847,12 @@ function SecaoTokensDeIA({
         )}
 
         {carteira.percentual !== null && (
-          <Progress valor={carteira.percentual} rotulo={t("Consumo do mês")} tom={carteira.estourou ? "erro" : "marca"} />
+          <Progress
+            data-rd-ajustes={ra("barra-de-uso")}
+            valor={carteira.percentual}
+            rotulo={t("Consumo do mês")}
+            tom={carteira.estourou ? "erro" : "marca"}
+          />
         )}
 
         {carteira.saldoNegativo && (

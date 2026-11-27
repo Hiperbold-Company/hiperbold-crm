@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { updateTenant } from "@/app/actions/settings/updateTenant";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasConfiguracoes } from "@/lib/redesign/configuracoes";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
 import { IDIOMAS_COM_TEXTO, IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import { MOEDAS_SERVIDAS, simboloDaMoeda, type MoedaServida } from "@/lib/money";
@@ -41,6 +42,7 @@ const TIMEZONES = FUSOS_OFERECIDOS.map((f) => f.codigo);
 
 export function TenantForm({ initial, onSave, onSaved }: Props) {
   const t = useT();
+  const rd = useMarcaDasConfiguracoes();
   const { confirmar } = useConfirmar();
   const [form, setForm] = useState<TenantInput>(initial);
   const [isPending, startTransition] = useTransition();
@@ -74,7 +76,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl">
-      <Card className="space-y-4 p-6">
+      <Card data-rd-configuracoes={rd("cartao")} className="space-y-4 p-6">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="display_name">{t("Nome de exibição")}</Label>
@@ -280,7 +282,7 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
           </div>
         </div>
 
-        <div className="flex sm:justify-end">
+        <div data-rd-configuracoes={rd("barra-de-salvar")} className="flex sm:justify-end">
           <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending ? t("Salvando…") : t("Salvar")}
           </Button>

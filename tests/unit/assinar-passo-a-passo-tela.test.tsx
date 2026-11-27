@@ -23,6 +23,8 @@ import { opcoesDeParcelamento } from "@/lib/billing/asaas/parcelamento";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import type { PlanoParaVenda } from "@/lib/billing/asaas/leitura";
 
+import { PAGADOR_INICIAL_COMPLETO } from "./helpers/pagador-completo";
+
 const PARAMETROS = { taxaMensal: 0.0199, semJurosAte: 3, maxSemestral: 6, maxAnual: 12 };
 
 const PRO: PlanoParaVenda = {
@@ -68,14 +70,17 @@ const OPCOES = {
   },
 };
 
-function tela(extra: { planoAtualCode?: string | null; precisaPagador?: boolean; pacotes?: never[] } = {}) {
+/** `pagadorInicial` ausente = o formulário chega completo; `{}` = chega vazio (nada a pré-preencher). */
+function tela(
+  extra: { planoAtualCode?: string | null; pagadorInicial?: Record<string, string>; pacotes?: never[] } = {},
+) {
   return render(
     <IdiomaProvider locale="pt-BR">
       <AssinarOuComprarClient
         planos={[PRO, MAX, ESCALE]}
         pixDisponivel
         pacotes={extra.pacotes ?? []}
-        precisaPagador={extra.precisaPagador ?? false}
+        pagadorInicial={extra.pagadorInicial ?? PAGADOR_INICIAL_COMPLETO}
         leituraFalhou={false}
         opcoesDeParcelas={OPCOES}
         taxaMensalPercentual={1.99}
@@ -437,8 +442,8 @@ describe("mensagens de erro no passo certo", () => {
     expect(screen.getByTestId("assinar-pro")).not.toBeDisabled();
   });
 
-  it("primeira compra: o formulário do pagador é conferido no passo de pagamento, o erro aparece ali e a ação não é chamada", () => {
-    tela({ precisaPagador: true });
+  it("formulário vazio: o pagador é conferido no passo de pagamento, o erro aparece ali e a ação não é chamada", () => {
+    tela({ pagadorInicial: {} });
 
     fireEvent.click(screen.getByTestId("escolher-pro"));
     continuar();
@@ -452,7 +457,7 @@ describe("mensagens de erro no passo certo", () => {
   });
 
   it("documento do pagador: máscara ao digitar, colar cru, teto de 14 dígitos e erro inline", () => {
-    tela({ precisaPagador: true });
+    tela({ pagadorInicial: {} });
     fireEvent.click(screen.getByTestId("escolher-pro"));
     continuar();
     const campo = document.getElementById("pagador-plano-pro-documento") as HTMLInputElement;
@@ -481,7 +486,7 @@ describe("mensagens de erro no passo certo", () => {
   });
 
   it("CPF com dígito verificador errado barra o avanço do passo de pagamento", () => {
-    tela({ precisaPagador: true });
+    tela({ pagadorInicial: { ...PAGADOR_INICIAL_COMPLETO, nome: "", documento: "" } });
     fireEvent.click(screen.getByTestId("escolher-pro"));
     continuar();
     fireEvent.change(document.getElementById("pagador-plano-pro-nome") as HTMLElement, { target: { value: "Maria Souza" } });
@@ -495,8 +500,8 @@ describe("mensagens de erro no passo certo", () => {
     expect(iniciarAssinatura).not.toHaveBeenCalled();
   });
 
-  it("primeira compra com o formulário certo: o pagador vai na entrada da ação", async () => {
-    tela({ precisaPagador: true });
+  it("formulário certo: o pagador vai na entrada da ação", async () => {
+    tela({ pagadorInicial: { ...PAGADOR_INICIAL_COMPLETO, nome: "", documento: "" } });
 
     fireEvent.click(screen.getByTestId("escolher-pro"));
     continuar();
@@ -507,7 +512,50 @@ describe("mensagens de erro no passo certo", () => {
     fireEvent.click(screen.getByTestId("assinar-pro"));
 
     await waitFor(() => expect(iniciarAssinatura).toHaveBeenCalledTimes(1));
-    expect(iniciarAssinatura.mock.calls[0]![0]).toMatchObject({ pagador: { nome: "Maria Souza", documento: "529.982.247-25" } });
+    expect(iniciarAssinatura.mock.calls[0]![0]).toMatchObject({
+      pagador: {
+        nome: "Maria Souza",
+        documento: "529.982.247-25",
+        email: "dono@empresa.com",
+        celular: "11999998888",
+        cep: "01310100",
+        rua: "Avenida Paulista",
+        numero: "1000",
+        bairro: "Bela Vista",
+        cidade: "São Paulo",
+        uf: "SP",
+      },
+    });
+  });
+
+  it("o formulário chega pré-preenchido e editável, com todos os campos do cadastro", () => {
+    tela({ pagadorInicial: { nome: "Empresa Ltda", documento: "11.222.333/0001-81", email: "dono@empresa.com" } });
+    fireEvent.click(screen.getByTestId("escolher-pro"));
+    continuar();
+    const campo = (nome: string) => document.getElementById(`pagador-plano-pro-${nome}`) as HTMLInputElement;
+    expect(campo("nome").value).toBe("Empresa Ltda");
+    expect(campo("documento").value).toBe("11.222.333/0001-81");
+    expect(campo("email").value).toBe("dono@empresa.com");
+    for (const nome of ["celular", "cep", "rua", "numero", "complemento", "bairro", "cidade", "uf"]) {
+      expect(campo(nome)).toBeInTheDocument();
+    }
+    expect(campo("complemento").required).toBe(false);
+    expect(campo("cep").required).toBe(true);
+    fireEvent.change(campo("email"), { target: { value: "outro@empresa.com" } });
+    expect(campo("email").value).toBe("outro@empresa.com");
+    fireEvent.change(campo("cep"), { target: { value: "01310100" } });
+    expect(campo("cep").value).toBe("01310-100");
+  });
+
+  it("sem e-mail, celular ou endereço, o passo de pagamento não avança", () => {
+    tela({ pagadorInicial: { nome: "Empresa Ltda", documento: "11.222.333/0001-81", email: "dono@empresa.com" } });
+    fireEvent.click(screen.getByTestId("escolher-pro"));
+    continuar();
+    aceitar();
+    continuar();
+    expect(screen.getByRole("alert")).toHaveTextContent("Informe um celular com DDD.");
+    expect(screen.getByTestId("passo-pagamento")).toBeInTheDocument();
+    expect(iniciarAssinatura).not.toHaveBeenCalled();
   });
 });
 

@@ -34,6 +34,7 @@ import {
   queryDaApi,
 } from "@/lib/metrics/desempenho";
 import { formatarTaxa, resumoDeOrigens } from "@/lib/metrics/origens-rastreadas";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import { ArrowRight } from "@/lib/ui/icons";
 
 /** O padrão da Desempenho: últimos 30 dias, sem funil nem atendente. */
@@ -45,6 +46,7 @@ export function hrefDaDesempenho(filtros: FiltrosDaTela, aba: Aba): string {
 }
 
 export function PainelDoInicio({ currentUserId }: { currentUserId: string }) {
+  const rd = useMarcaDoInicio();
   const [filtros, setFiltros] = useState<FiltrosDaTela>(FILTROS_INICIAIS);
   // A query tem instantes de `new Date()`: sem memo, cada render pediria de novo e o cache nunca assentaria.
   const chave = filtrosParaUrl(filtros);
@@ -59,6 +61,7 @@ export function PainelDoInicio({ currentUserId }: { currentUserId: string }) {
       <div
         className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
         data-testid="inicio-painel-periodo"
+        data-rd-inicio={rd("periodo")}
       >
         <SeletorDePeriodo filtros={filtros} onChange={setFiltros} />
       </div>
@@ -85,9 +88,10 @@ function Secao({
   children: React.ReactNode;
 }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   return (
-    <section aria-labelledby={`inicio-secao-${id}`} className="flex min-w-0 flex-col gap-4" data-testid={`inicio-secao-${id}`}>
-      <h2 id={`inicio-secao-${id}`} className="text-lg font-semibold tracking-tight">
+    <section aria-labelledby={`inicio-secao-${id}`} className="flex min-w-0 flex-col gap-4" data-testid={`inicio-secao-${id}`} data-rd-inicio={rd("secao")}>
+      <h2 id={`inicio-secao-${id}`} className="text-lg font-semibold tracking-tight" data-rd-inicio={rd("secao-titulo")}>
         {titulo}
       </h2>
       {estado === "carregando" ? <p className="text-sm text-muted-foreground">{t("Carregando…")}</p> : null}

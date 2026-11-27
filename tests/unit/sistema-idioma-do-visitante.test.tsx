@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ aceita: "en-US,en;q=0.9", locale: null as string | null }));
 
-vi.mock("@/lib/redesign/chave", () => ({ redesignLigado: () => false }));
+vi.mock("@/lib/redesign/chave", () => ({ redesignNaRequisicao: async () => false }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: {

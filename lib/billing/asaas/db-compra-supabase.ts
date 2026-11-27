@@ -158,7 +158,9 @@ function paraPedidoLinha(
  * de verdade (`createAdminClient()`). Cada método é um RPC ou uma leitura
  * pura; nenhum aqui decide regra de negócio, isso é `compra.ts`.
  */
-export function dbCompraSupabase(admin: SupabaseClient): DbCompra & DbSimulacaoDeCupom {
+export function dbCompraSupabase(
+  admin: SupabaseClient,
+): DbCompra & Required<Pick<DbCompra, "listarPedidosDeAssinaturaVencidos">> & DbSimulacaoDeCupom {
   return {
     async criarPedido(args) {
       const { data, error } = await admin.rpc("fn_billing_criar_pedido" as never, {
@@ -260,6 +262,34 @@ export function dbCompraSupabase(admin: SupabaseClient): DbCompra & DbSimulacaoD
       if (error) return { data: null, error: error as RpcErro };
       const d = data as { ja_registrado: boolean } | null;
       return { data: { jaRegistrado: d?.ja_registrado ?? false }, error: null };
+    },
+
+    async listarPedidosDeAssinaturaVencidos(org, ambiente) {
+      const { data, error } = await admin
+        .from("billing_orders")
+        .select("id, asaas_payment_id, asaas_subscription_id, asaas_installment_id")
+        .eq("organization_id", org)
+        .eq("ambiente", ambiente)
+        .eq("tipo", "assinatura")
+        .eq("status", "vencido")
+        .or("asaas_payment_id.not.is.null,asaas_subscription_id.not.is.null,asaas_installment_id.not.is.null")
+        .limit(20);
+      if (error) return { data: null, error: error as RpcErro };
+      const linhas = (data ?? []) as unknown as Array<{
+        id: string;
+        asaas_payment_id: string | null;
+        asaas_subscription_id: string | null;
+        asaas_installment_id: string | null;
+      }>;
+      return {
+        data: linhas.map((l) => ({
+          id: l.id,
+          asaasPaymentId: l.asaas_payment_id,
+          asaasSubscriptionId: l.asaas_subscription_id,
+          asaasInstallmentId: l.asaas_installment_id,
+        })),
+        error: null,
+      };
     },
 
     async buscarPedidoAbertoPorTipo(org, tipo) {

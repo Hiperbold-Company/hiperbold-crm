@@ -1,5 +1,5 @@
 "use client";
-import { useTransition } from "react";
+import { useTransition, type MouseEvent } from "react";
 import { useUser, useAuth } from "@/hooks/auth/AuthProvider";
 import {
   DropdownMenu,
@@ -22,6 +22,35 @@ import { iniciaisDoNome } from "@/lib/ui/iniciais";
 /** Por letra (`lib/ui/iniciais`): emoji no nome não vira meio caractere. */
 function initials(name: string | null, email: string): string {
   return iniciaisDoNome(name) ?? email.slice(0, 2).toUpperCase();
+}
+
+/**
+ * O clique na porta do modo administrador — a explicação inteira está no
+ * comentário do item, em `UserMenu` abaixo. Exportada para a moldura do
+ * redesign usar a MESMA navegação.
+ */
+export function abrirModoAdministrador(
+  event: MouseEvent,
+  router: { push: (href: string) => void },
+): void {
+  navegarPeloItemDoMenu(event, router, "/admin");
+}
+
+/**
+ * O mesmo conserto para qualquer `<DropdownMenuItem asChild>` com `<Link>`: o
+ * Radix fecha o menu antes de a navegação do Link rodar, então quem navega é o
+ * clique (ver o comentário da porta do admin, abaixo).
+ */
+export function navegarPeloItemDoMenu(
+  event: MouseEvent,
+  router: { push: (href: string) => void },
+  href: string,
+): void {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+    return;
+  }
+  event.preventDefault();
+  router.push(href);
 }
 
 export function UserMenu() {
@@ -103,19 +132,7 @@ export function UserMenu() {
                   com ⌘/Ctrl/Shift/Alt ou com o botão do meio não é nosso, e o
                   navegador abre em aba nova como manda o href.
                 */
-                onClick={(event) => {
-                  if (
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey ||
-                    event.button !== 0
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  router.push("/admin");
-                }}
+                onClick={(event) => abrirModoAdministrador(event, router)}
               >
                 <Link href="/admin" data-testid="porta-modo-administrador">
                   <ShieldCheck size={16} className="mr-2" aria-hidden />

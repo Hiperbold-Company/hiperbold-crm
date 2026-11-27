@@ -72,6 +72,7 @@ import { exigenciaAoAgendar, type ModeloDaAgendada } from "@/lib/mensagens-agend
 import { type Recurso } from "@/lib/inbox/recursos";
 import { lerRespostaRapidaGravada } from "@/lib/inbox/resposta-rapida";
 import type { Message } from "@/lib/types/messaging";
+import { useMarcaDoChat } from "@/components/inbox/redesign/marca";
 
 export interface ComposerHandle {
   focus: () => void;
@@ -230,6 +231,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   ref,
 ) {
   const t = useT();
+  const rd = useMarcaDoChat();
   /** O painel de mensagens (botão de aspas): respostas rápidas e modelos. */
   const [painelAberto, setPainelAberto] = useState(false);
   const botaoDoPainelRef = useRef<HTMLButtonElement>(null);
@@ -1074,7 +1076,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   if (blockedReason) {
     return (
-      <div className="border-t border-border bg-muted/40 px-4 py-3 text-center text-xs text-muted-foreground">
+      <div data-rd-chat={rd("travado")} className="border-t border-border bg-muted/40 px-4 py-3 text-center text-xs text-muted-foreground">
         {blockedReason}
       </div>
     );
@@ -1084,6 +1086,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     <>
       <div
         data-testid="composer"
+        data-rd-chat={rd("compositor")}
+        data-rd-modo={rd("compositor") && mode}
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -1213,9 +1217,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </p>
           </div>
         )}
-        <div className="mb-1.5 flex gap-1">
+        <div data-rd-chat={rd("modos")} className="mb-1.5 flex gap-1">
           <button
             type="button"
+            data-rd-chat={rd("modo-responder")}
             onClick={() => setMode("reply")}
             className={cn(
               "min-h-11 rounded-full px-3 py-1 text-xs font-medium transition-colors lg:min-h-0 lg:px-2.5",
@@ -1228,6 +1233,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </button>
           <button
             type="button"
+            data-rd-chat={rd("modo-nota")}
             onClick={() => setMode("note")}
             className={cn(
               "min-h-11 rounded-full px-3 py-1 text-xs font-medium transition-colors lg:min-h-0 lg:px-2.5",
@@ -1323,7 +1329,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             usuarioId={usuarioId}
           />
         )}
-        <div className="flex items-end gap-2">
+        <div data-rd-chat={rd("caixa")} className="flex items-end gap-2">
           {/* O "+" existe nos DOIS modos desde a F3 da #1863: em "Nota interna"
               ele abre o mesmo menu, com as DUAS primeiras opções — foto/vídeo e
               documento — porque a nota passou a aceitar anexo. A terceira
@@ -1476,6 +1482,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             )}
             disabled={mode === "note" ? isDisabled : respostaBarrada}
             aria-label={t("Mensagem")}
+            data-rd-chat={rd("campo")}
           />
           {text.trim() || mode === "note" ? (
             <Button

@@ -19,6 +19,8 @@ import {
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { idiomaDaTela } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redesignNaRequisicao } from "@/lib/redesign/chave";
+import { marcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 import { FormularioDaMarca } from "./_form";
 
@@ -92,8 +94,9 @@ export default async function Page() {
     REGUA_DO_PRODUTO,
   );
 
+  const rd = marcaDaPlataforma(await redesignNaRequisicao());
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rd-plataforma={rd("formulario")}>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Marca", idioma)}</h1>
         <p className="mt-1 text-sm text-text-muted">

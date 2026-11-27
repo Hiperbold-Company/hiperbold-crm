@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { ArrowRight } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
@@ -9,6 +10,7 @@ import { useMarcaDaInstalacao } from "@/lib/branding/contexto";
 import { useT } from "@/hooks/i18n/useT";
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
 import { destinosDoAdmin } from "@/lib/admin/navegacao";
+import { useMarcaDaPlataforma } from "@/lib/redesign/plataforma";
 
 /**
  * Menu do administrador da instalação.
@@ -36,6 +38,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ userEmail, variant = "desktop", modulosLigados = [] }: AdminSidebarProps) {
   const t = useT();
+  const rd = useMarcaDaPlataforma();
   const isMobile = variant === "mobile";
   const pathname = usePathname();
   // Por PROP do servidor, e nunca `branding()`: aquela função lê fontes
@@ -45,27 +48,49 @@ export function AdminSidebar({ userEmail, variant = "desktop", modulosLigados = 
   // batia com o hidratado, que é hydration mismatch. Ver `lib/branding/contexto.tsx`.
   const marca = useMarcaDaInstalacao();
   const destinos = destinosDoAdmin(modulosLigados);
+  const lista = useRef<HTMLElement>(null);
+  const redesignLigado = rd("menu-lista") !== undefined;
+
+  // Com o redesign, os itens têm 40px e a lista passa da dobra: o item da tela
+  // aberta (Credenciais, Recursos opcionais, Extensões) ficava escondido. Rola SÓ
+  // a lista, e só quando o item começa fora da vista; desligado, nada muda.
+  useEffect(() => {
+    const n = lista.current;
+    if (!redesignLigado || !n) return;
+    const ativo = n.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!ativo) return;
+    const caixa = n.getBoundingClientRect();
+    const item = ativo.getBoundingClientRect();
+    if (item.top < caixa.top || item.bottom > caixa.bottom) {
+      n.scrollTop += item.top - caixa.top - (caixa.height - item.height) / 2;
+    }
+  }, [pathname, redesignLigado]);
 
   return (
     <aside
+      data-rd-plataforma={rd("menu")}
       className={cn(
         "flex flex-col border-r bg-card",
         isMobile ? "h-full w-full" : "hidden w-60 shrink-0 lg:flex",
       )}
     >
-      <div className="flex h-14 items-center gap-3 border-b px-4">
+      <div className="flex h-14 items-center gap-3 border-b px-4" data-rd-plataforma={rd("menu-topo")}>
         {/* O nome já está escrito ao lado — o símbolo é reforço, não legenda. */}
         {marcaEhADoProduto(marca) && (
           <SimboloDoProduto nome={marca.name} decorativo className="h-8 w-8" />
         )}
-        <div className="flex flex-col">
+        <div className="flex flex-col" data-rd-plataforma={rd("menu-marca")}>
           <span className="text-xs uppercase tracking-wider text-muted-foreground">
             {marca.name}
           </span>
           <span className="text-sm font-semibold tracking-tight">{t("Admin Plataforma")}</span>
         </div>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-2" aria-label={t("Navegação plataforma")}>
+      <nav
+        ref={lista}
+        className="flex-1 space-y-1 overflow-y-auto p-2"
+        data-rd-plataforma={rd("menu-lista")}
+        aria-label={t("Navegação plataforma")}>
         {destinos.map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
@@ -75,6 +100,7 @@ export function AdminSidebar({ userEmail, variant = "desktop", modulosLigados = 
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
+              data-rd-plataforma={rd("menu-item")}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                 isActive
@@ -88,7 +114,7 @@ export function AdminSidebar({ userEmail, variant = "desktop", modulosLigados = 
           );
         })}
       </nav>
-      <div className="space-y-2 border-t p-3">
+      <div className="space-y-2 border-t p-3" data-rd-plataforma={rd("menu-rodape")}>
         <Link
           href="/app"
           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"

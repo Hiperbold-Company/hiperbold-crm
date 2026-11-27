@@ -137,6 +137,17 @@ const schema = z.object({
    */
   HELP_CENTER_URL: z.string().optional().default(""),
 
+  /**
+   * Chave do redesign exclusivo da Hiperbold (moldura e base visual novas).
+   * `ligado` desenha a casca nova; qualquer outro valor, ausente inclusive,
+   * desenha a de sempre. Lida só no SERVIDOR (`lib/redesign/chave.ts`) — nunca
+   * `NEXT_PUBLIC_*`. Uso LOCAL apenas: não ligar em produção.
+   *
+   * `.catch("desligado")`: valor torto não pode derrubar o app (o `safeParse`
+   * deste arquivo lança), então lixo resolve para o lado de sempre.
+   */
+  REDESIGN_HIPERBOLD: z.enum(["ligado", "desligado"]).default("desligado").catch("desligado"),
+
   // Laboratório local de extensões: origem HTTP exata em 127.0.0.1. O cliente
   // recusa a exceção se a URL do app não for loopback. Vazio mantém HTTPS público.
   EXTENSIONS_LOCAL_CATALOG_ORIGIN: z.string().optional().default(""),

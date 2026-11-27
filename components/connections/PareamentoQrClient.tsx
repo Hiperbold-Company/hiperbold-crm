@@ -11,6 +11,7 @@ import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDosDialogos } from "@/lib/redesign/dialogos";
 import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 import { AvisoDeLimiteDeConexoes } from "./AvisoDeLimiteDeConexoes";
 
@@ -58,6 +59,7 @@ export function PareamentoQrClient({
   aoConectar?: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   const qc = useQueryClient();
   const [fase, setFase] = useState<Fase>("inicio");
   const [sessao, setSessao] = useState<Andamento | null>(null);
@@ -216,10 +218,10 @@ export function PareamentoQrClient({
 
   return (
     <div className="flex flex-col gap-4" data-testid="pareamento-qr-root">
-      <Card className="flex flex-col gap-4 p-4">
+      <Card className="flex flex-col gap-4 p-4" data-rd-dialogos={rd("secao")}>
         <div>
-          <h3 className="text-sm font-semibold">{t("Conectar WhatsApp (QR Code)")}</h3>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="text-sm font-semibold" data-rd-dialogos={rd("secao-titulo")}>{t("Conectar WhatsApp (QR Code)")}</h3>
+          <p className="text-xs text-muted-foreground" data-rd-dialogos={rd("secao-texto")}>
             {t(
               "O CRM cria a conexão sozinho. Você só lê o QR Code com o celular do número que vai atender seus clientes.",
             )}
@@ -228,7 +230,7 @@ export function PareamentoQrClient({
 
         {fase === "inicio" && (
           <div className="flex flex-col gap-3">
-            <div>
+            <div data-rd-dialogos={rd("acoes")}>
               <Button
                 onClick={() => void comecar(false)}
                 disabled={ocupado || bloqueado}
@@ -252,7 +254,7 @@ export function PareamentoQrClient({
 
         {fase === "qr" && sessao && (
           <div className="flex flex-col gap-4">
-            <ol className="list-decimal space-y-1 pl-5 text-sm">
+            <ol className="list-decimal space-y-1 pl-5 text-sm" data-rd-dialogos={rd("passos")}>
               <li>{t("Abra o WhatsApp no celular.")}</li>
               <li>{t("Vá em Dispositivos conectados.")}</li>
               <li>{t("Toque em Conectar dispositivo e aponte a câmera para o QR Code.")}</li>
@@ -260,7 +262,7 @@ export function PareamentoQrClient({
 
             <div className="flex flex-col items-center gap-3">
               {sessao.codigo ? (
-                <div className="flex flex-col items-center gap-2" data-testid="pareamento-codigo">
+                <div className="flex flex-col items-center gap-2" data-testid="pareamento-codigo" data-rd-dialogos={rd("codigo")}>
                   <p className="text-center text-xs text-muted-foreground">
                     {t(
                       "No WhatsApp, em Dispositivos conectados, escolha conectar com número de telefone e digite este código:",
@@ -277,6 +279,7 @@ export function PareamentoQrClient({
                   alt={t("QR Code para conectar o WhatsApp")}
                   className="h-64 w-64 rounded-md border bg-white p-2"
                   data-testid="pareamento-qr-imagem"
+                  data-rd-dialogos={rd("qr")}
                 />
               ) : parouDeAtualizar ? (
                 <p className="text-sm text-muted-foreground" data-testid="pareamento-qr-expirado">
@@ -292,7 +295,7 @@ export function PareamentoQrClient({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2" data-rd-dialogos={rd("acoes")}>
               {parouDeAtualizar && (
                 <Button onClick={() => void gerarOutro(false)} disabled={ocupado}>
                   {t("Gerar outro")}
@@ -319,7 +322,7 @@ export function PareamentoQrClient({
       </Card>
 
       {aviso && (
-        <Card className="flex flex-col gap-2 border-warning/40 bg-warning-bg p-4">
+        <Card className="flex flex-col gap-2 border-warning/40 bg-warning-bg p-4" data-rd-dialogos={rd("aviso")}>
           <h3 className="text-sm font-semibold">{t("Falta ligar a volta")}</h3>
           <p className="text-xs text-muted-foreground">{aviso}</p>
         </Card>
@@ -347,6 +350,7 @@ export function CodigoNoCelular({
   acao: () => void;
 }) {
   const t = useT();
+  const rd = useMarcaDosDialogos();
   // O exemplo é do país da organização (upstream): só dígitos, como o campo pede.
   const telefoneExemplo = useTelefoneExemplo().replace(/\D/g, "");
   return (
@@ -360,7 +364,7 @@ export function CodigoNoCelular({
         {t("Conectar com código no celular")}
       </button>
       {aberto && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-rd-dialogos={rd("campo")}>
           <Label htmlFor="pareamento-telefone">{t("Número do WhatsApp (com DDI e DDD)")}</Label>
           <div className="flex gap-2">
             <Input

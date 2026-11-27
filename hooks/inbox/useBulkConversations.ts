@@ -11,6 +11,7 @@ export type AcaoEmLote =
   | "close"
   | "archive"
   | "mark-read"
+  | "mark-unread"
   | "pause-ai"
   | "reactivate-bot"
   | "transfer";

@@ -68,7 +68,7 @@ export const BARRA_INFERIOR: PecaDoRodape = {
  * a Agenda —, e uma barra com um buraco no meio é pior que uma barra com outra
  * aba. Contatos e Casos entram nessa ordem como reserva.
  */
-const PREFERIDAS = [
+export const PREFERIDAS = [
   "/app/inbox",
   "/app/kanban",
   "/app/agenda",
@@ -77,7 +77,7 @@ const PREFERIDAS = [
   "/app/ai/cases",
 ] as const;
 
-const VAGAS = 4;
+export const VAGAS = 4;
 
 /**
  * Barra de abas do rodapé no celular.

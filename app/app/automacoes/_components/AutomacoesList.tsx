@@ -26,6 +26,7 @@ import {
 } from "@/hooks/followup/useFollowupFlows";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDasAutomacoes } from "@/lib/redesign/automacoes";
 import { dataDaUltimaExecucao } from "@/lib/automacoes/data-da-lista";
 import { useFusoDaOrganizacao } from "@/hooks/auth/AuthProvider";
 import { ErroComRetry } from "@/components/empty/ErroComRetry";
@@ -74,6 +75,7 @@ export function AutomacoesList({
   falhouNoServidor?: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
   const idioma = useTagDeIdioma();
   const fuso = useFusoDaOrganizacao();
   const { data, isError, refetch, isFetching } = useFollowupFlows({ initialData, surface: "automacao" });
@@ -96,8 +98,10 @@ export function AutomacoesList({
   const lista = filtrarLista(todas, tipo, busca);
   const data_ = (iso: string) => dataDaUltimaExecucao(iso, idioma, fuso);
 
+  // Com a chave ligada, `acoes` e `conteudo` deixam o CSS subir estes botões para a
+  // faixa do título (v49) sem mover elemento nenhum: desligada, nenhum atributo.
   const botaoNova = (
-    <div className="flex w-full items-start gap-2 sm:w-auto">
+    <div className="flex w-full items-start gap-2 sm:w-auto" data-rd-automacoes={rd("acoes")}>
       <AcoesNoCelular
         acoes={[
           { rotulo: t("Importar"), onSelect: () => setImportarAberto(true), desativada: motivoDoBloqueio !== null },
@@ -148,12 +152,13 @@ export function AutomacoesList({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-rd-automacoes={rd("conteudo")}>
       {falhou && todas.length > 0 ? (
         <div
           role="alert"
           data-testid="faixa-erro-automacoes"
           className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-error/40 bg-error-bg px-4 py-2 text-sm text-error-fg"
+          data-rd-automacoes={rd("faixa-erro")}
         >
           <span>{t("Não foi possível carregar as automações")}</span>
           <Button type="button" size="sm" variant="outline" onClick={tentarDeNovo} disabled={isFetching}>
@@ -170,7 +175,7 @@ export function AutomacoesList({
           />
         </Card>
       ) : todas.length === 0 ? (
-        <Card className="flex flex-col items-center gap-3 p-10 text-center">
+        <Card className="flex flex-col items-center gap-3 p-10 text-center" data-rd-automacoes={rd("vazio")}>
           <FlowArrow size={36} aria-hidden className="text-text-muted" />
           <h2 className="font-medium">{t("Nenhuma automação ainda")}</h2>
           <p className="max-w-sm text-sm text-text-muted">
@@ -182,7 +187,7 @@ export function AutomacoesList({
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3" data-rd-automacoes={rd("barra")}>
             <div className="flex flex-wrap items-center gap-2">
               <Input
                 value={busca}
@@ -191,9 +196,10 @@ export function AutomacoesList({
                 aria-label={t("Buscar pelo nome")}
                 className="w-full sm:w-56"
                 data-testid="busca-de-automacoes"
+                data-rd-automacoes={rd("busca")}
               />
               <FiltrosNoCelular ativos={tipo !== "todos" ? 1 : 0}>
-              <div role="group" aria-label={t("Filtrar por tipo")} className="flex flex-wrap gap-1">
+              <div role="group" aria-label={t("Filtrar por tipo")} className="flex flex-wrap gap-1" data-rd-automacoes={rd("filtros")}>
                 {FILTROS_DE_TIPO.map((v) => (
                   <Button
                     key={v}
@@ -213,9 +219,9 @@ export function AutomacoesList({
             {botaoNova}
           </div>
           {lista.length === 0 ? (
-            <p className="text-sm text-text-muted">{t("Nada encontrado com esse filtro.")}</p>
+            <p className="text-sm text-text-muted" data-rd-automacoes={rd("vazio")}>{t("Nada encontrado com esse filtro.")}</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="lista-de-automacoes">
+            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="lista-de-automacoes" data-rd-automacoes={rd("grade")}>
               {lista.map((a) => (
                 <LinhaDaListaUnica
                   key={`${a.tipo}:${a.id}`}
@@ -246,23 +252,24 @@ function LinhaDaListaUnica({
   bloqueado: boolean;
 }) {
   const t = useT();
+  const rd = useMarcaDasAutomacoes();
   return (
     <li data-testid={`linha-${a.tipo}`} data-id={a.id}>
-      <Card className="flex h-full flex-col gap-3 p-4 transition-colors hover:border-accent-400">
-        <Link href={a.href} className="flex flex-1 flex-col gap-2">
+      <Card className="flex h-full flex-col gap-3 p-4 transition-colors hover:border-accent-400" data-rd-automacoes={rd("cartao")}>
+        <Link href={a.href} className="flex flex-1 flex-col gap-2" data-rd-automacoes={rd("cartao-corpo")}>
           <div className="flex items-start justify-between gap-2">
-            <h3 className="min-w-0 flex-1 truncate font-medium" title={a.nome}>
+            <h3 className="min-w-0 flex-1 truncate font-medium" title={a.nome} data-rd-automacoes={rd("cartao-nome")}>
               {a.nome}
             </h3>
             {a.tipo === "regra" ? (
-              <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted">
+              <span className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted" data-rd-automacoes={rd("estado")}>
                 {a.ligado ? t("Ligada") : t("Desligada")}
               </span>
             ) : (
               <FlowStatusBadge status={a.status as FollowupFlowPointerRow["status"]} />
             )}
           </div>
-          <p className="text-xs font-medium text-text-muted" data-testid="tipo-da-linha">
+          <p className="text-xs font-medium text-text-muted" data-testid="tipo-da-linha" data-rd-automacoes={rd("cartao-tipo")}>
             {t(ROTULO_DO_TIPO[a.tipo])}
           </p>
           {a.tipo === "regra" && (
@@ -277,7 +284,7 @@ function LinhaDaListaUnica({
           </p>
         </Link>
         {a.tipo === "automacao" && (
-          <div className="flex items-center justify-between gap-2 border-t border-border pt-2">
+          <div className="flex items-center justify-between gap-2 border-t border-border pt-2" data-rd-automacoes={rd("cartao-rodape")}>
             <Link href={`/app/automacoes/${a.id}/execucoes`} className="text-xs text-accent-600 hover:underline">
               {t("Ver execuções")}
             </Link>
@@ -289,7 +296,7 @@ function LinhaDaListaUnica({
           </div>
         )}
         {a.tipo === "followup" && (
-          <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
+          <div className="flex items-center justify-end gap-2 border-t border-border pt-2" data-rd-automacoes={rd("cartao-rodape")}>
             <DuplicarAutomacaoButton flowId={a.id} tipo="followup" />
           </div>
         )}

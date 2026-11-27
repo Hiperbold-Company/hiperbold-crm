@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { useState } from "react";
 import Link from "next/link";
 
@@ -18,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { BloqueioDoBotao } from "@/lib/billing/planos/estado-do-bloqueio";
@@ -111,6 +112,7 @@ export function FunisClient({
   bloqueioImportacao?: BloqueioDoBotao;
 }) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   /**
    * O funil de clientes só tem efeito com a regra "Clientes pela agenda" ligada
    * (migration 0262): desligada, o roteamento ignora a marca. Botão e selo
@@ -429,7 +431,7 @@ export function FunisClient({
                           `onSuccess`; o `disabled` evita o envio em dobro.
                         */}
                         <AlertDialogAction
-                          className={buttonVariants({ variant: "destructive" })}
+                          variant="destructive"
                           disabled={ocupado}
                           data-testid={`excluir-confirmar-${funil.id}`}
                           onClick={(e) => {
@@ -493,7 +495,7 @@ export function FunisClient({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-rd-pipeline={rd("funis")}>
       {(podeGerenciar || podeImportar) && (
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           {/* A porta da importação fica AQUI, e não numa tela própria: é desta

@@ -17,7 +17,7 @@
  * teste de unidade (`tests/unit/asaas-telas-cliente.test.ts`) sem montar
  * árvore nenhuma.
  */
-import { erroDoDocumento } from "@/lib/documentos/cpf-cnpj";
+import { erroDoDocumento, somenteDigitos } from "@/lib/documentos/cpf-cnpj";
 import { randomId } from "@/lib/random-id";
 
 // ─── URL de redirecionamento (risco 8) ─────────────────────────────────────
@@ -119,13 +119,31 @@ export interface CamposDoFormularioDoPagador {
   documento: string;
   email: string;
   celular: string;
+  cep: string;
+  rua: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
 }
 
+/**
+ * O pagador que vai ao servidor: tudo obrigatório menos o complemento (decisão do dono do produto,
+ * 26/11/2026: a ficha do Asaas não fica mais só com nome e CPF). `cep` e `celular` já vão só com dígitos.
+ */
 export interface DadosDoPagador {
   nome: string;
   documento: string;
-  email?: string;
-  celular?: string;
+  email: string;
+  celular: string;
+  cep: string;
+  rua: string;
+  numero: string;
+  complemento?: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
 }
 
 export type ResultadoDoFormularioDoPagador =
@@ -134,16 +152,66 @@ export type ResultadoDoFormularioDoPagador =
 
 const EMAIL_RAZOAVEL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** As 27 unidades da federação, para conferir a UF no formulário e no servidor. */
+export const UFS_DO_BRASIL = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
+  "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+] as const;
+
+/** A UF em maiúsculas quando é uma das 27; `null` caso contrário. */
+export function ufValida(valor: string): string | null {
+  const uf = valor.trim().toUpperCase();
+  return (UFS_DO_BRASIL as readonly string[]).includes(uf) ? uf : null;
+}
+
+/** O CEP só com os 8 dígitos; `null` quando não tem 8 dígitos. Sem consulta externa: só o formato. */
+export function cepNormalizado(valor: string): string | null {
+  const digitos = somenteDigitos(valor);
+  return digitos.length === 8 ? digitos : null;
+}
+
+/** Máscara de digitação do CEP: `00000-000`. */
+export function formatarCep(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 8);
+  return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+}
+
 /**
- * Monta `DadosDoPagador` a partir dos campos crus do formulário: `nome` e
- * `documento` obrigatórios, `email` e `celular` só entram quando
- * preenchidos (o mesmo `.optional()` do zod em
- * `app/actions/settings/compraDoPlano.ts`).
- *
- * O CPF/CNPJ é conferido aqui pelo DÍGITO VERIFICADOR, com a mesma função pura
- * que o servidor usa (`lib/documentos/cpf-cnpj.ts`): quem digita um documento
- * errado fica no passo, sem gastar uma volta ao servidor.
+ * O celular brasileiro com DDD, só dígitos (10 ou 11), como o Asaas espera em `mobilePhone`. Aceita o
+ * `+55` na frente e tira. `null` quando não é um número com DDD.
  */
+export function celularNormalizado(valor: string): string | null {
+  let digitos = somenteDigitos(valor);
+  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith("55")) digitos = digitos.slice(2);
+  return digitos.length === 10 || digitos.length === 11 ? digitos : null;
+}
+
+/** O formulário aberto já preenchido (dados da empresa e de quem está logado); tudo continua editável. */
+export function camposIniciaisDoPagador(
+  inicial: Partial<CamposDoFormularioDoPagador> | null | undefined,
+): CamposDoFormularioDoPagador {
+  const vazio: CamposDoFormularioDoPagador = {
+    nome: "",
+    documento: "",
+    email: "",
+    celular: "",
+    cep: "",
+    rua: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    uf: "",
+  };
+  if (!inicial) return vazio;
+  const campos = { ...vazio };
+  for (const chave of Object.keys(vazio) as Array<keyof CamposDoFormularioDoPagador>) {
+    const valor = inicial[chave];
+    if (typeof valor === "string") campos[chave] = valor.trim();
+  }
+  return campos;
+}
+
 // ─── Ciclos de venda e economia (D-176) ────────────────────────────────────
 
 /** Os três ciclos à vista que a tela oferece. Cartão renova sozinho no Asaas; Pix paga o período e não renova. */
@@ -309,13 +377,27 @@ export function chaveParaProximaTentativaDeCompra(args: {
   return randomId();
 }
 
+/**
+ * Monta `DadosDoPagador` a partir dos campos crus do formulário. Tudo é
+ * obrigatório menos o complemento, o mesmo que o zod de
+ * `app/actions/settings/compraDoPlano.ts` exige no servidor.
+ *
+ * O CPF/CNPJ é conferido aqui pelo DÍGITO VERIFICADOR, com a mesma função pura
+ * que o servidor usa (`lib/documentos/cpf-cnpj.ts`): quem digita um documento
+ * errado fica no passo, sem gastar uma volta ao servidor. O CEP só tem o
+ * formato conferido (8 dígitos): nenhuma consulta externa.
+ */
 export function montarPagadorDoFormulario(
   campos: CamposDoFormularioDoPagador,
 ): ResultadoDoFormularioDoPagador {
   const nome = campos.nome.trim();
   const documento = campos.documento.trim();
   const email = campos.email.trim();
-  const celular = campos.celular.trim();
+  const rua = campos.rua.trim();
+  const numero = campos.numero.trim();
+  const complemento = campos.complemento.trim();
+  const bairro = campos.bairro.trim();
+  const cidade = campos.cidade.trim();
 
   if (nome.length === 0) {
     return { ok: false, erro: "Informe o nome de quem paga." };
@@ -326,13 +408,31 @@ export function montarPagadorDoFormulario(
     return { ok: false, erro: erroDoDoc };
   }
 
-  if (email.length > 0 && !EMAIL_RAZOAVEL.test(email)) {
-    return { ok: false, erro: "Informe um e-mail válido, ou deixe em branco." };
+  if (!EMAIL_RAZOAVEL.test(email)) {
+    return { ok: false, erro: "Informe um e-mail válido." };
   }
 
-  const pagador: DadosDoPagador = { nome, documento };
-  if (email.length > 0) pagador.email = email;
-  if (celular.length > 0) pagador.celular = celular;
+  const celular = celularNormalizado(campos.celular);
+  if (celular === null) {
+    return { ok: false, erro: "Informe um celular com DDD." };
+  }
+
+  const cep = cepNormalizado(campos.cep);
+  if (cep === null) {
+    return { ok: false, erro: "Informe um CEP com 8 dígitos." };
+  }
+
+  if (rua.length === 0 || numero.length === 0 || bairro.length === 0 || cidade.length === 0) {
+    return { ok: false, erro: "Preencha o endereço completo: rua, número, bairro e cidade." };
+  }
+
+  const uf = ufValida(campos.uf);
+  if (uf === null) {
+    return { ok: false, erro: "Informe a UF (sigla do estado, como SP)." };
+  }
+
+  const pagador: DadosDoPagador = { nome, documento, email, celular, cep, rua, numero, bairro, cidade, uf };
+  if (complemento.length > 0) pagador.complemento = complemento;
 
   return { ok: true, pagador };
 }

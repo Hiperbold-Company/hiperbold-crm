@@ -65,6 +65,7 @@ export interface MensagemMontada {
 const texto = z.string().trim().min(1).max(200);
 const data = z.string().min(1).max(40);
 const centavos = z.number().int().nonnegative();
+const dataCivil = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const ciclo = z.enum(["monthly", "semiannual", "yearly"]);
 const forma = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("cartao") }),
@@ -101,8 +102,17 @@ export const DADOS_DO_EMAIL = {
     faturaUrl: z.string().max(500).nullable(),
     /** A cobrança foi removida pelo CRM no Asaas: o botão leva aos Planos para assinar de novo. Ausente nas linhas antigas da fila. */
     cobrancaCancelada: z.boolean().optional(),
-    /** Nenhum pagamento anterior confirmado: também leva aos Planos e muda o título. Ausente nas linhas antigas da fila. */
+    /** Nenhum pagamento anterior confirmado: muda o título e o texto. Ausente nas linhas antigas da fila. */
     nuncaPagou: z.boolean().optional(),
+    /**
+     * Régua de cobrança do pedido de assinatura não pago (migration 1026, `regua-de-cobranca.ts`): o marco do aviso,
+     * o vencimento e o limite (suspensão ou saída da fatura do Asaas), datas `AAAA-MM-DD`. Os quatro vêm juntos;
+     * ausentes nos outros caminhos e nas linhas antigas da fila.
+     */
+    marco: z.enum(["antes", "no_dia", "depois", "ultimo_dia"]).optional(),
+    venceEm: dataCivil.optional(),
+    limite: z.enum(["suspensao", "remocao"]).optional(),
+    limiteEm: dataCivil.optional(),
   }),
   "COB-06": z.object({}),
   "COB-07": z.object({ plano: texto, acessoAte: data }),
@@ -217,13 +227,10 @@ export function montarEmailDeConta(emailId: string, dados: unknown, ctx: Context
       const d = validarDados(emailId, dados);
       const cobrancaCancelada = d.cobrancaCancelada === true;
       const nuncaPagou = d.nuncaPagou === true;
-      // Cobrança cancelada ou assinatura nunca paga: nunca a fatura do Asaas (ela não existe mais, ou não é o caminho),
-      // mesmo que o dado a traga.
-      const url = cobrancaCancelada || nuncaPagou
-        ? `${ctx.appUrl}${ROTA_DE_ASSINAR}`
-        : d.faturaUrl && FATURA_DO_ASAAS.test(d.faturaUrl)
-          ? d.faturaUrl
-          : plano;
+      // A fatura só vira botão quando passa pela regra do endereço do Asaas e não foi cancelada pelo CRM.
+      const fatura = !cobrancaCancelada && d.faturaUrl && FATURA_DO_ASAAS.test(d.faturaUrl) ? d.faturaUrl : null;
+      // Sem fatura, quem nunca pagou (ou teve a cobrança cancelada) vai aos Planos para assinar; o resto, à tela do plano.
+      const url = fatura ?? (cobrancaCancelada || (nuncaPagou && !d.marco) ? `${ctx.appUrl}${ROTA_DE_ASSINAR}` : plano);
       return buildPagamentoNaoAprovadoEmail({
         ...ctx.base(url),
         plano: d.plano,
@@ -231,6 +238,11 @@ export function montarEmailDeConta(emailId: string, dados: unknown, ctx: Context
         acessoAte: d.acessoAte,
         cobrancaCancelada,
         nuncaPagou,
+        comFatura: fatura !== null,
+        marco: d.marco,
+        venceEm: d.venceEm,
+        limite: d.limite,
+        limiteEm: d.limiteEm,
       });
     }
     case "COB-06": {

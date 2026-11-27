@@ -1,4 +1,5 @@
 "use client";
+import { useMarcaDoPipeline } from "@/lib/redesign/pipeline";
 import { Droppable } from "@hello-pangea/dnd";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useState, type CSSProperties } from "react";
@@ -75,6 +76,7 @@ export function StageColumn({
   linhas,
 }: StageColumnProps) {
   const t = useT();
+  const rd = useMarcaDoPipeline();
   // O TOTAL É POR MOEDA (#1531). Antes ele somava todos os `value_cents` e
   // escrevia o resultado na moeda do primeiro negócio: R$ 5.000 e 5.000 € saíam
   // "R$ 10.000,00", um valor que não existe. Agora cada moeda tem o seu total,
@@ -172,6 +174,7 @@ export function StageColumn({
       */
       className="bg-surface-elevated/40 flex min-h-full w-[85vw] max-w-80 shrink-0 snap-center flex-col rounded-lg border border-border md:w-80"
       data-etapa-do-quadro={stage.id}
+      data-rd-pipeline={rd("coluna")}
     >
       {/* Cabeçalho e total PRESOS no alto do quadro enquanto os cards rolam: com
           uma etapa comprida, é o que diz em que etapa se está olhando. O fundo
@@ -187,6 +190,7 @@ export function StageColumn({
       <div
         className="sticky top-0 z-10 -mx-px -mt-px rounded-t-lg border-x border-t border-border bg-background"
         data-cabecalho-da-etapa
+        data-rd-pipeline={rd("coluna-topo")}
       >
         <div className="bg-surface-elevated/40 rounded-t-lg">
           <div className="group/etapa flex items-center gap-2 border-b border-border px-3 py-2.5">
@@ -264,6 +268,7 @@ export function StageColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
+            data-rd-pipeline={rd("coluna-corpo")}
             className={cn(
               "flex flex-1 flex-col gap-2 p-2 transition-colors",
               snapshot.isDraggingOver && "bg-accent/5",
@@ -296,7 +301,10 @@ export function StageColumn({
             ))}
             {provided.placeholder}
             {leads.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex h-20 items-center justify-center text-2xs text-text-muted">
+              <div
+                className="flex h-20 items-center justify-center text-2xs text-text-muted"
+                data-rd-pipeline={rd("coluna-vazia")}
+              >
                 {t("vazio")}
               </div>
             )}

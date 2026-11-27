@@ -19,6 +19,7 @@ const TooltipContent = React.forwardRef<
     <TooltipPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      data-slot="tooltip-content"
       className={cn(
         // A LARGURA MÁXIMA MORA AQUI, na classe base — não em quem usa o tooltip.
         //

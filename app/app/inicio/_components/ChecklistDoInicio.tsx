@@ -13,14 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useT } from "@/hooks/i18n/useT";
+import { useMarcaDoInicio } from "@/lib/redesign/inicio";
 import type { ContagemDosPassos, PassoDoInicio } from "@/lib/inicio/primeiros-passos";
 import { ArrowRight, CheckCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 export function ProgressoDosPassos({ contagem }: { contagem: ContagemDosPassos }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-rd-inicio={rd("progresso")}>
       <p className="text-sm font-medium" data-testid="inicio-progresso">
         {contagem.obrigatoriosFeitos} {t("de")} {contagem.obrigatoriosTotal} {t("obrigatórios")}
       </p>
@@ -35,12 +37,13 @@ export function ProgressoDosPassos({ contagem }: { contagem: ContagemDosPassos }
 
 export function ListasDePassos({ passos }: { passos: PassoDoInicio[] }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   const obrigatorios = passos.filter((p) => p.tipo === "obrigatorio");
   const opcionais = passos.filter((p) => p.tipo === "opcional");
   return (
     <>
       <section aria-labelledby="inicio-obrigatorios" className="space-y-3">
-        <h2 id="inicio-obrigatorios" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 id="inicio-obrigatorios" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground" data-rd-inicio={rd("secao-titulo")}>
           {t("Obrigatórios")}
         </h2>
         <ul className="space-y-3">
@@ -51,7 +54,7 @@ export function ListasDePassos({ passos }: { passos: PassoDoInicio[] }) {
       </section>
 
       <section aria-labelledby="inicio-opcionais" className="space-y-3">
-        <h2 id="inicio-opcionais" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 id="inicio-opcionais" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground" data-rd-inicio={rd("secao-titulo")}>
           {t("Opcionais")}
         </h2>
         <ul className="space-y-3">
@@ -76,9 +79,10 @@ export function ChecklistDoInicio({ passos, contagem }: { passos: PassoDoInicio[
 
 function CartaoDoPasso({ passo }: { passo: PassoDoInicio }) {
   const t = useT();
+  const rd = useMarcaDoInicio();
   return (
-    <li data-testid={`inicio-passo-${passo.id}`} data-feito={passo.feito ? "sim" : "nao"}>
-      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <li data-testid={`inicio-passo-${passo.id}`} data-feito={passo.feito ? "sim" : "nao"} data-rd-inicio={rd("passo")}>
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" data-rd-inicio={rd("passo-cartao")}>
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
