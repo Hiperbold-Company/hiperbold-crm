@@ -4,6 +4,7 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
 import type { Locale } from "date-fns";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useAdminInbox, type AdminConversationRow } from "@/hooks/useAdminInbox";
 import { useAdminInboxRealtime } from "@/hooks/useAdminInboxRealtime";
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CircleNotch, MagnifyingGlass } from "@/lib/ui/icons";
+import { ApiError } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
@@ -93,8 +95,11 @@ export function InboxList() {
     [debouncedSearch, statusFilter, tenantFilter],
   );
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } =
     useAdminInbox(filters);
+
+  const pedeAcompanhamento =
+    isError && error instanceof ApiError && error.code === "support_session_required";
 
   const rows = useMemo(
     () => data?.pages.flatMap((p) => p.data) ?? [],
@@ -152,13 +157,30 @@ export function InboxList() {
           </div>
         )}
 
-        {isError && (
+        {pedeAcompanhamento && (
+          <div className="p-4 text-center" data-testid="caixa-pede-acompanhamento">
+            <p className="text-sm font-medium">{t("Abra um acompanhamento para ver as conversas")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t(
+                "Por segurança, as conversas de uma empresa só aparecem enquanto um acompanhamento dela estiver aberto. Abra o acompanhamento na página da empresa e volte aqui.",
+              )}
+            </p>
+            <Link
+              href="/admin/tenants"
+              className="mt-3 inline-block text-xs font-medium underline underline-offset-2"
+            >
+              {t("Ir para as empresas")}
+            </Link>
+          </div>
+        )}
+
+        {isError && !pedeAcompanhamento && (
           <p className="p-4 text-center text-xs text-destructive">
             {t("Falha ao carregar conversas.")}
           </p>
         )}
 
-        {!isLoading && rows.length === 0 && (
+        {!isLoading && !pedeAcompanhamento && rows.length === 0 && (
           <p className="p-4 text-center text-xs text-muted-foreground">
             {t("Nenhuma conversa encontrada.")}
           </p>
