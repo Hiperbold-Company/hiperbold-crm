@@ -22,9 +22,10 @@
  *
  * Que estas regras são as do PostgREST de verdade foi medido contra um PostgREST real (v16.2) em
  * 28/10/2026, com os mesmos casos de "qualquer" de `contatos-lote-e-exportacao.test.ts`.
- * ⚠️ NÃO medidas contra PostgREST real (entraram com as condições negativas do filtro de campo):
- * o anti-join `.is(apelido, null)` em junção para-muitos filtrada; `is.null` e `not.<op>` dentro do
- * `or`; `regexMatch`/`regexIMatch` em coluna de junção; o desescape de `\` na regex entre aspas.
+ * As das condições negativas do filtro de campo — o anti-join `.is(apelido, null)` em junção
+ * para-muitos filtrada; `is.null` e `not.<op>` dentro do `or`; `regexMatch`/`regexIMatch` em coluna
+ * de junção; o desescape de `\` na regex entre aspas — foram medidas contra o PostgREST real (v16.2)
+ * em 28/11/2026 por `tests/integration/contatos-filtro-campo-postgrest.test.ts` (opt-in, banco de dev).
  *
  * `fn_excluir_contatos_em_lote` é reimplementada aqui com a mesma regra da migration 0971 — a prova
  * do SQL de verdade é `tests/invariants/excluir-contatos-em-lote.test.ts` (Postgres real).
